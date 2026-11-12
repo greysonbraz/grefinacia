@@ -7,3 +7,15 @@ android/.gradle
 android/local.properties
 android/app/src/main/assets/public
 dist-html
+
+# Segredos e dados pessoais: nunca vão para o GitHub
+*.jks
+*.keystore
+*.p12
+keystore.properties
+.env
+.env.*
+!.env.example
+# backups do app (só o exemplo sintético usado nos testes pode ser versionado)
+*.gfbackup
+!tests/fixtures/*.gfbackup
