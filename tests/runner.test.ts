@@ -54,7 +54,7 @@ describe('runner em segundo plano', () => {
     const newKey = { label: 'DIVIDENDO', rate: 0.25, lastDatePrior: '2026-11-01', paymentDate: iso(future) };
     const old = { label: 'DIVIDENDO', rate: 0.1, lastDatePrior: '2026-01-01', paymentDate: '2026-02-01' };
     const body = { results: [{ symbol: 'ITSA4', data: { cashDividends: [old, newKey] } }] };
-    const cfg = { enabled: true, provider: 'brapi', token: 't', assets: [{ ticker: 'ITSA4', type: 'acao', qty: 100 }], knownKeys: [known] };
+    const cfg = { v: 2, enabled: true, provider: 'brapi', token: 't', assets: [{ ticker: 'ITSA4', type: 'acao', qty: 100 }], knownKeys: [known] };
     const calls: string[] = [];
     const r = await runRunner(cfg, async (url) => (calls.push(url), { status: 200, json: async () => body }));
     expect(calls[0]).toContain('/api/v2/stocks/dividends?symbols=ITSA4');
@@ -69,14 +69,14 @@ describe('runner em segundo plano', () => {
   });
   it('na primeira execução (sem chaves conhecidas) apenas registra, sem notificar', async () => {
     const body = { dividends: [{ symbol: 'MXRF11', label: 'RENDIMENTO', rate: 0.1, lastDatePrior: '2026-11-01', paymentDate: iso(future) }] };
-    const r = await runRunner({ enabled: true, provider: 'brapi', token: '', assets: [{ ticker: 'MXRF11', type: 'fii', qty: 10 }], knownKeys: [] }, async () => ({ status: 200, json: async () => body }));
+    const r = await runRunner({ v: 2, enabled: true, provider: 'brapi', token: '', assets: [{ ticker: 'MXRF11', type: 'fii', qty: 10 }], knownKeys: [] }, async () => ({ status: 200, json: async () => body }));
     expect(r.scheduled).toHaveLength(0);
     expect(JSON.parse(r.kv.config).knownKeys).toHaveLength(1);
   });
   it('desligado ou com falha de rede não gera notificação nem erro', async () => {
     const off = await runRunner({ enabled: false, assets: [], knownKeys: ['x'] }, async () => { throw new Error('x'); });
     expect(off.scheduled).toHaveLength(0);
-    const fail = await runRunner({ enabled: true, provider: 'brapi', token: 't', assets: [{ ticker: 'ITSA4', type: 'acao', qty: 1 }], knownKeys: ['x'] }, async () => { throw new Error('rede'); });
+    const fail = await runRunner({ v: 2, enabled: true, provider: 'brapi', token: 't', assets: [{ ticker: 'ITSA4', type: 'acao', qty: 1 }], knownKeys: ['x'] }, async () => { throw new Error('rede'); });
     expect(fail.scheduled).toHaveLength(0);
   });
 });

@@ -9,6 +9,7 @@ import { biometricAvailable, createCredential } from '../services/security';
 import { notificationPermission, requestNotificationPermission } from '../services/notify';
 import { BackupError, createBackup, readBackup, saveAndShare } from '../services/backup';
 import { isNative } from '../services/platform';
+import { PAID_AI_ENABLED } from '../lib/flags';
 import { Field, Full, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
 import { PinPad } from './Lock';
 
@@ -66,7 +67,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <Field label="Bloquear depois de ficar em segundo plano por"><select value={st.security.lockAfterSec} onChange={(e) => setSec({ lockAfterSec: Number(e.target.value) })}><option value={0}>Imediatamente</option><option value={30}>30 segundos</option><option value={120}>2 minutos</option><option value={600}>10 minutos</option></select></Field>
           <button className="btn ghost" onClick={() => setPin(true)}>Trocar PIN</button>
         </>)}
-        <Note>O PIN é guardado só como hash (PBKDF2-SHA256 com sal). Os dados ficam no armazenamento privado do app, protegido pela criptografia do Android; o backup exportado é criptografado com AES-256.</Note>
+        <Note>O PIN é guardado só como hash (PBKDF2-SHA256 com sal). Os dados ficam no armazenamento privado do app, protegido pela criptografia do Android; tokens e chaves ficam no cofre do sistema (Android Keystore); o backup exportado é criptografado com AES-256.</Note>
       </div>
 
       <div className="section">Notificações</div>
@@ -93,13 +94,18 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       <div className="section">Grefinacia AI</div>
       <div className="card">
-        <Seg value={st.ai.mode} onChange={(mode) => setAi({ mode })} options={[['local', 'Somente local'], ['api', 'IA externa (opcional)']]} />
-        {st.ai.mode === 'api' && (<>
-          <Field label="Chave de API da Anthropic" hint="Fica só neste aparelho. O uso é cobrado na sua conta da Anthropic."><input name="apikey" type="password" value={st.ai.apiKey} onChange={(e) => setAi({ apiKey: e.target.value })} /></Field>
-          <Field label="Modelo"><input value={st.ai.model} onChange={(e) => setAi({ model: e.target.value })} /></Field>
-          <SwitchRow title="Autorizo enviar um resumo dos meus dados" sub="Totais, categorias, carteira, dívidas e metas. Descrições de lançamentos não são enviadas." on={st.ai.consent} onChange={(consent) => setAi({ consent })} />
+        {PAID_AI_ENABLED ? (<>
+          <Seg value={st.ai.mode} onChange={(mode) => setAi({ mode })} options={[['local', 'Somente local'], ['api', 'IA externa (opcional)']]} />
+          {st.ai.mode === 'api' && (<>
+            <Field label="Chave de API da Anthropic" hint="Fica só neste aparelho. O uso é cobrado na sua conta da Anthropic."><input name="apikey" type="password" value={st.ai.apiKey} onChange={(e) => setAi({ apiKey: e.target.value })} /></Field>
+            <Field label="Modelo"><input value={st.ai.model} onChange={(e) => setAi({ model: e.target.value })} /></Field>
+            <SwitchRow title="Autorizo enviar um resumo dos meus dados" sub="Totais, categorias, carteira, dívidas e metas. Descrições de lançamentos não são enviadas." on={st.ai.consent} onChange={(consent) => setAi({ consent })} />
+          </>)}
+          <Note>No modo local nenhum dado sai do aparelho. A IA externa só é usada com chave e autorização; sem isso o chat responde por cálculos locais.</Note>
+        </>) : (<>
+          <div className="kv"><span>Modo</span><b>Local, sem custo</b></div>
+          <Note>A Grefinacia AI responde por cálculos feitos no próprio aparelho: nenhum dado sai dele e não há cobrança. A opção de IA externa paga está desativada nesta versão.</Note>
         </>)}
-        <Note>No modo local nenhum dado sai do aparelho. A IA externa só é usada com chave e autorização; sem isso o chat responde por cálculos locais.</Note>
       </div>
 
       <div className="section">Bancos e pagamentos (Open Finance)</div>
@@ -118,7 +124,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       <div className="section">Privacidade (LGPD)</div>
       <div className="card">
-        <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos) e, se você autorizar, ao serviço de IA.</Note>
+        <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos){PAID_AI_ENABLED ? ' e, se você autorizar, ao serviço de IA' : ''}.</Note>
         <div className="btnrow"><button className="btn danger" onClick={async () => { if (confirm('Apagar todos os dados deste aparelho? Esta ação não pode ser desfeita.')) { await wipeAll(); onClose(); } }}>Apagar todos os meus dados</button></div>
       </div>
       <div className="hint" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, margin: '16px 0' }}>Grefinacia 1.0 · {today.slice(0, 4)}</div>

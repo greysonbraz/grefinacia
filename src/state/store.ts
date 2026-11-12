@@ -14,6 +14,7 @@ import { fetchDividends, fetchQuotes, type FetchError } from '../services/quotes
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
 import { setPrivacyScreen } from '../services/security';
+import { clearSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
 import { formatBRL } from '../lib/money';
 
 export interface State {
@@ -70,7 +71,7 @@ export async function updateSettings(patch: Partial<Settings>): Promise<void> {
   set({ settings });
   if (patch.theme) applyTheme(settings.theme);
   if (patch.security) void setPrivacyScreen(settings.security.enabled && settings.security.hideInRecents);
-  await db.saveSettings(settings);
+  await db.saveSettings(await settingsForDb(settings));
   scheduleAfterChange();
 }
 
@@ -104,7 +105,11 @@ export async function afterChange(): Promise<void> {
 
 // ---------- inicialização ----------
 export async function init(): Promise<void> {
-  const { data, settings } = await db.loadAll();
+  const loaded = await db.loadAll();
+  const data = loaded.data;
+  // segredos (token, chave) vivem no cofre do Android; os que ainda estiverem no banco são movidos agora
+  const { settings, migrated } = await hydrateSecrets(loaded.settings);
+  if (migrated) await db.saveSettings(await settingsForDb(settings));
   applyTheme(settings.theme);
   set({ data, settings, today: todayISO(), locked: settings.security.enabled, ready: true });
   void db.requestPersistentStorage();
@@ -264,13 +269,14 @@ export async function deleteGoal(id: string): Promise<void> {
 export async function restoreAll(data: AppData, settings: Omit<Settings, 'security'>): Promise<void> {
   const full: Settings = { ...DEFAULT_SETTINGS, ...settings, security: state.settings.security, onboarded: true };
   const d = { ...emptyData(), ...data };
-  await db.replaceEverything(d, full);
+  await db.replaceEverything(d, await settingsForDb(full));
   set({ data: d, settings: full });
   applyTheme(full.theme);
   await rollDay();
 }
 export async function wipeAll(): Promise<void> {
   const d = emptyData();
+  await clearSecrets();
   await db.replaceEverything(d, DEFAULT_SETTINGS);
   set({ data: d, settings: DEFAULT_SETTINGS, locked: false });
   applyTheme('dark');
