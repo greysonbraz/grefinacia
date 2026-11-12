@@ -192,7 +192,7 @@ describe('varredura de segredos do repositório', () => {
       { path: 'src/b.ts', content: `const k = "${fake('AIza', 35)}";` },
       { path: 'src/c.ts', content: `x\n${fake('ghp_', 36)}` },
       { path: 'src/d.ts', content: `${fake('sb_secret_', 30)}` },
-      { path: 'cert.txt', content: '-----BEGIN PRIVATE KEY-----' },
+      { path: 'cert.txt', content: '-----BEGIN ' + 'PRIVATE KEY-----' }, // montado em partes para este arquivo não ser acusado
       { path: 'android/release.jks' },
       { path: 'android/keystore.properties', content: 'storePassword=x' },
       { path: '.env', content: 'A=1' },
