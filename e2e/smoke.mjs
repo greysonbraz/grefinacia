@@ -1,5 +1,12 @@
 import { createRequire } from 'node:module';
-const { chromium } = createRequire(process.env.PW_ROOT + '/')('playwright');
+// Playwright: usa o que estiver instalado no projeto (GitHub Actions) ou o caminho indicado em PW_ROOT
+// (máquinas que já têm o Playwright instalado fora do projeto).
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch {
+  ({ chromium } = createRequire(process.env.PW_ROOT + '/')('playwright'));
+}
 import { spawn } from 'node:child_process';
 const srv = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 2500));
