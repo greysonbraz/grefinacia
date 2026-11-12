@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { emptyData, DEFAULT_SETTINGS } from '../src/lib/defaults';
 import type { AppData, Settings } from '../src/lib/types';
 import { PAID_AI_ENABLED } from '../src/lib/flags';
+import { ALLOWED_HOSTS, buildCsp } from '../src/lib/csp';
+import { nativeBridgeMissing } from '../src/services/platform';
 import { brapiDividendsAvailable, fetchDividends } from '../src/services/quotes';
 import { buildRunnerConfig, RUNNER_CONFIG_VERSION } from '../src/services/background';
 import { clearSecrets, extractSecrets, hydrateSecrets, setSecretStoreForTests, settingsForDb, type SecretStore } from '../src/services/secrets';
@@ -209,5 +211,46 @@ describe('varredura de segredos do repositório', () => {
         { path: 'scripts/check-secrets.mjs', content: readFileSync(process.cwd() + '/scripts/check-secrets.mjs', 'utf8') },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe('política de conteúdo (CSP)', () => {
+  const csp = buildCsp();
+  it('só aceita scripts do próprio app: nada embutido, nada de fora, sem eval', () => {
+    expect(csp).toContain("script-src 'self';");
+    expect(csp).not.toContain('unsafe-eval');
+    expect(csp.split(';').find((d) => d.trim().startsWith('script-src'))).not.toContain('unsafe-inline');
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-src 'none'");
+  });
+  it('só fala com as fontes de dados conhecidas; a IA paga fica de fora', () => {
+    expect(ALLOWED_HOSTS).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com']);
+    expect(csp).not.toContain('anthropic');
+    expect(ALLOWED_HOSTS.every((h) => h.startsWith('https://'))).toBe(true);
+  });
+});
+
+describe('configuração do Android', () => {
+  const read = (p: string) => readFileSync(process.cwd() + '/' + p, 'utf8');
+  it('sem backup automático do Google e sem conexão sem criptografia', () => {
+    const manifest = read('android/app/src/main/AndroidManifest.xml');
+    expect(manifest).toContain('android:allowBackup="false"');
+    expect(manifest).toContain('android:usesCleartextTraffic="false"');
+  });
+  it('só compartilha arquivos da pasta de cache do app', () => {
+    const paths = read('android/app/src/main/res/xml/file_paths.xml');
+    expect(paths).toContain('<cache-path');
+    expect(paths).not.toContain('external-path');
+    expect(paths).not.toContain('root-path');
+  });
+  it('o identificador do app não muda (mudar criaria outro app, sem os dados)', () => {
+    expect(read('android/app/build.gradle')).toContain('applicationId "br.com.grefinacia.app"');
+    expect(read('capacitor.config.ts')).toContain("appId: 'br.com.grefinacia.app'");
+  });
+  it('avisa quando a ponte nativa não carregou (WebView antigo)', () => {
+    expect(nativeBridgeMissing({})).toBe(false); // navegador
+    expect(nativeBridgeMissing({ androidBridge: {}, Capacitor: { PluginHeaders: [] } })).toBe(false); // Android normal
+    expect(nativeBridgeMissing({ androidBridge: {} })).toBe(true);
+    expect(nativeBridgeMissing({ androidBridge: {}, Capacitor: {} })).toBe(true);
   });
 });

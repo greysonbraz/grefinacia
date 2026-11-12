@@ -127,7 +127,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos){PAID_AI_ENABLED ? ' e, se você autorizar, ao serviço de IA' : ''}.</Note>
         <div className="btnrow"><button className="btn danger" onClick={async () => { if (confirm('Apagar todos os dados deste aparelho? Esta ação não pode ser desfeita.')) { await wipeAll(); onClose(); } }}>Apagar todos os meus dados</button></div>
       </div>
-      <div className="hint" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, margin: '16px 0' }}>Grefinacia 1.0 · {today.slice(0, 4)}</div>
+      <div className="hint" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, margin: '16px 0' }}>Grefinacia {__APP_VERSION__} ({__APP_BUILD__}) · {today.slice(0, 4)}</div>
 
       {acc && <AccountForm a={acc === 'new' ? null : acc} onClose={() => setAcc(null)} />}
       {card && <CardForm c={card === 'new' ? null : card} onClose={() => setCard(null)} />}
