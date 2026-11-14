@@ -69,7 +69,9 @@ jobs:
             echo "::warning title=APK sem assinatura fixa::Os Secrets ANDROID_KEYSTORE_BASE64 e ANDROID_KEYSTORE_PASSWORD não estão cadastrados. Este APK é só para teste: ele não atualiza por cima de outra versão. Veja docs/SEGURANCA.md."
             exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/grefinacia.jks" || { echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido."; exit 1; }
+          # tolera espaços, quebras de linha e texto colado junto por engano
+          printf '%s' "$KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -di > "$RUNNER_TEMP/grefinacia.jks" 2>/dev/null || true
+          echo "Tamanho da chave recebida: $(wc -c < "$RUNNER_TEMP/grefinacia.jks") bytes (esperado: 2656)"
           if ! keytool -list -keystore "$RUNNER_TEMP/grefinacia.jks" -storepass:env ANDROID_KEYSTORE_PASSWORD > /dev/null 2>&1; then
             echo "::error::Não consegui abrir a chave com ANDROID_KEYSTORE_PASSWORD. Confira os dois Secrets."
             exit 1
