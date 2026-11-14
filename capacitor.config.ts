@@ -12,13 +12,14 @@ const config: CapacitorConfig = {
     // Faz as chamadas fetch() passarem pela camada nativa (sem bloqueio de CORS) — necessário p/ APIs de cotação.
     CapacitorHttp: { enabled: true },
     LocalNotifications: { smallIcon: 'ic_stat_finance', iconColor: '#E4B85C' },
-    // Verificação de novos proventos com o app fechado (mínimo de 15 min; o Android decide o horário exato).
+    // Verificação de novos proventos com o app fechado, a cada ~6 h (o Android decide o horário exato).
+    // Anúncio de provento não muda de hora em hora; menos consultas poupa bateria e a cota das fontes gratuitas.
     BackgroundRunner: {
       label: 'br.com.grefinacia.proventos',
       src: 'runners/runner.js',
       event: 'checkDividends',
       repeat: true,
-      interval: 60,
+      interval: 360,
       autoStart: true,
     },
   },

@@ -1,26 +1,124 @@
 name: Gerar APK
+
+# Roda em todo envio para o main e para os branches de trabalho (claude/...), e também pelo botão "Run workflow".
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
-      - run: npm ci
-      - run: npm test
-      - run: npm run android:sync
-      - run: chmod +x gradlew && ./gradlew assembleDebug
+          cache: gradle
+
+      - name: Definir versão
+        run: |
+          # versionCode sempre crescente (minutos desde 1970): uma versão nova sempre instala por cima da anterior
+          echo "VERSION_CODE=$(( $(date +%s) / 60 ))" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$(node -p "require('./package.json').version")+${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Conferir que nenhum segredo foi parar no repositório
+        run: node scripts/check-secrets.mjs
+
+      - name: Auditar dependências (falha em vulnerabilidade alta ou crítica)
+        run: npm audit --audit-level=high
+
+      - name: Testes de regras e de segurança
+        run: npm test
+
+      - name: Testes de interface no navegador
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+          npm run e2e
+
+      - name: Preparar projeto Android
+        run: npm run android:sync
+
+      - name: Preparar chave de assinatura
+        id: chave
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "tem=nao" >> "$GITHUB_OUTPUT"
+            echo "::warning title=APK sem assinatura fixa::Os Secrets ANDROID_KEYSTORE_BASE64 e ANDROID_KEYSTORE_PASSWORD não estão cadastrados. Este APK é só para teste: ele não atualiza por cima de outra versão. Veja docs/SEGURANCA.md."
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/grefinacia.jks" || { echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido."; exit 1; }
+          if ! keytool -list -keystore "$RUNNER_TEMP/grefinacia.jks" -storepass:env ANDROID_KEYSTORE_PASSWORD > /dev/null 2>&1; then
+            echo "::error::Não consegui abrir a chave com ANDROID_KEYSTORE_PASSWORD. Confira os dois Secrets."
+            exit 1
+          fi
+          echo "tem=sim" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Chave de assinatura (impressões digitais públicas)"
+            echo '```'
+            keytool -list -v -keystore "$RUNNER_TEMP/grefinacia.jks" -storepass:env ANDROID_KEYSTORE_PASSWORD 2>/dev/null | grep -E 'SHA1:|SHA256:'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compilar APK assinado
+        if: steps.chave.outputs.tem == 'sim'
         working-directory: android
-      - uses: actions/upload-artifact@v4
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/grefinacia.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/grefinacia.apk"
+
+      - name: Compilar APK de teste (assinatura descartável)
+        if: steps.chave.outputs.tem != 'sim'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/grefinacia-TESTE.apk"
+
+      - name: Apagar a chave da máquina de build
+        if: always()
+        run: rm -f "$RUNNER_TEMP/grefinacia.jks"
+
+      - name: Publicar APK assinado
+        if: steps.chave.outputs.tem == 'sim'
+        uses: actions/upload-artifact@v4
         with:
-          name: grefinacia-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: grefinacia-apk
+          path: ${{ runner.temp }}/grefinacia.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publicar APK de teste
+        if: steps.chave.outputs.tem != 'sim'
+        uses: actions/upload-artifact@v4
+        with:
+          name: grefinacia-apk-TESTE-sem-assinatura-fixa
+          path: ${{ runner.temp }}/grefinacia-TESTE.apk
+          retention-days: 7
+          if-no-files-found: error

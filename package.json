@@ -1,18 +1,19 @@
 {
   "name": "grefinacia",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Controle financeiro pessoal e investimentos (B3) para Android",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run",
+    "test": "node scripts/check-secrets.mjs && vitest run",
     "preview": "vite preview",
     "android:sync": "npm run build && cap sync android && node scripts/patch-android.mjs",
     "android:open": "cap open android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "e2e": "npm run build && node e2e/smoke.mjs"
+    "e2e": "npm run build && node e2e/smoke.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
@@ -28,6 +29,7 @@
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
     "@capacitor-community/privacy-screen": "^8.0.0",
     "@capacitor/android": "^8.6.0",
     "@capacitor/app": "^8.1.2",

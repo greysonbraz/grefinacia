@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Home as HomeIco, ArrowLeftRight, LineChart, Sparkles, Target } from 'lucide-react';
 import { lock, rollDay, useStore, getState } from '../state/store';
 import { watchAutoLock } from '../services/security';
+import { nativeBridgeMissing } from '../services/platform';
 import { Toast } from './kit';
 import { Home } from './Home';
 import { Transactions } from './Transactions';
@@ -31,6 +32,13 @@ export function App() {
     return () => { stop(); document.removeEventListener('visibilitychange', vis); };
   }, []);
 
+  if (nativeBridgeMissing()) return (
+    <div className="lock" role="alert">
+      <div className="logo">Gre<i>finacia</i></div>
+      <p>Este aparelho precisa atualizar o componente <b>Android System WebView</b> para o app funcionar por completo.</p>
+      <p className="mut">Abra a Play Store, procure por "Android System WebView" (e "Google Chrome"), toque em Atualizar e abra o Grefinacia de novo. Seus dados continuam guardados.</p>
+    </div>
+  );
   if (!ready) return <div className="lock"><div className="logo">Gre<i>finacia</i></div></div>;
   if (!onboarded) return <><Onboarding /><Toast /></>;
   if (locked) return <><LockScreen /><Toast /></>;

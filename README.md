@@ -9,7 +9,7 @@ Os dados ficam só no aparelho (IndexedDB no armazenamento privado do app).
 
 ```bash
 npm install
-npm test                 # 50 testes de cálculo
+npm test                 # testes de cálculo e de segurança
 npm run android:sync     # compila a interface e copia para o projeto Android
 cd android && ./gradlew assembleDebug
 # APK: android/app/build/outputs/apk/debug/app-debug.apk
@@ -31,7 +31,7 @@ Para testar no navegador do computador: `npm run dev`.
 | Dívidas: prioridade, extra mensal, antecipação, portabilidade, avalanche × bola de neve | Funcional |
 | Bolsa (ações, FIIs, ETFs), preço médio, renda fixa com estimativa e IR | Funcional |
 | Dividendos: previsão, calendário, histórico, confirmação de recebimento | Funcional (cadastro manual sempre disponível) |
-| Grefinacia AI | Chat local por cálculo; IA externa opcional com sua chave |
+| Grefinacia AI | Chat local por cálculo (IA externa paga desligada nesta fase) |
 | Fechamento mensal, PDF mensal/anual, planilha CSV | Funcional |
 | PIN, biometria, bloqueio automático, backup AES-256 | Funcional (biometria só no aparelho) |
 | Notificações Android | Agendadas localmente; ver limites abaixo |
@@ -47,7 +47,7 @@ Para testar no navegador do computador: `npm run dev`.
 - **brapi.dev, plano gratuito:** 1 ativo por consulta e **sem dados de dividendos** (exigem Startup ou Pro).
   Alternativas dentro do app: cadastro manual ou Yahoo Finance (não oficial, sem data de pagamento).
 - **Cotações têm atraso**, não são tempo real.
-- **Avisos de "provento anunciado"** dependem de o Android executar a verificação em segundo plano (a cada ~1 h,
+- **Avisos de "provento anunciado"** dependem de o Android executar a verificação em segundo plano (a cada ~6 h,
   sem garantia). Na Samsung, coloque o app como "Não restrito" em Bateria.
 - **Estimativas de dividendos, renda fixa e projeções** são contas sobre histórico ou sobre taxas que você digita.
   Não são valores garantidos.
@@ -65,3 +65,8 @@ src/ui         telas
 public/runners verificação de proventos em segundo plano
 android        projeto Android gerado pelo Capacitor
 ```
+
+## Documentação
+
+- [Planejamento e auditoria](docs/PLANEJAMENTO.md)
+- [Segurança, assinatura do APK e atualização sem perder dados](docs/SEGURANCA.md)
