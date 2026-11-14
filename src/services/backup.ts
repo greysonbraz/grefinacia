@@ -1,8 +1,8 @@
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { AppData, Settings, Transaction } from '../lib/types';
-import { DATA_KEYS } from '../lib/defaults';
 import { isNative } from './platform';
+import { DATA_SCHEMA, ImportError, validateImported } from './validate';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -36,7 +36,7 @@ export interface BackupFile {
 export async function createBackup(data: AppData, settings: Settings, password: string): Promise<string> {
   const { security: _security, ...rest } = settings;
   void _security; // a senha/PIN de bloqueio fica só no aparelho
-  const payload = JSON.stringify({ data, settings: rest });
+  const payload = JSON.stringify({ schema: DATA_SCHEMA, data, settings: rest });
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(password, salt, ITER);
@@ -47,14 +47,26 @@ export async function createBackup(data: AppData, settings: Settings, password: 
 
 export class BackupError extends Error {}
 
+const NOT_A_BACKUP = 'Arquivo inválido: não é um backup do Grefinacia.';
+const NEWER_APP = 'Este backup foi criado por uma versão mais nova do Grefinacia. Atualize o app e tente de novo.';
+/** Limites aceitos para o custo da derivação de chave: evita que um arquivo forjado trave o aparelho. */
+const MIN_ITER = 100_000;
+const MAX_ITER = 5_000_000;
+
+/**
+ * Abre um backup. A criptografia (AES-GCM) já garante que o conteúdo não foi alterado: qualquer byte trocado
+ * faz a abertura falhar. Depois de aberto, a estrutura é conferida antes de qualquer coisa ir para o banco.
+ */
 export async function readBackup(text: string, password: string): Promise<{ data: AppData; settings: Omit<Settings, 'security'> }> {
-  let file: BackupFile;
+  let file: Partial<BackupFile> & { v?: unknown };
   try {
-    file = JSON.parse(text) as BackupFile;
+    file = JSON.parse(text) as Partial<BackupFile>;
   } catch {
-    throw new BackupError('Arquivo inválido: não é um backup do Grefinacia.');
+    throw new BackupError(NOT_A_BACKUP);
   }
-  if (file.app !== 'grefinacia' || file.v !== 1 || !file.data) throw new BackupError('Arquivo inválido: não é um backup do Grefinacia.');
+  if (typeof file !== 'object' || file === null || file.app !== 'grefinacia' || typeof file.data !== 'string' || !file.data) throw new BackupError(NOT_A_BACKUP);
+  if (file.v !== 1) throw new BackupError(typeof file.v === 'number' && file.v > 1 ? NEWER_APP : NOT_A_BACKUP);
+  if (typeof file.salt !== 'string' || typeof file.iv !== 'string' || typeof file.iter !== 'number' || !Number.isInteger(file.iter) || file.iter < MIN_ITER || file.iter > MAX_ITER) throw new BackupError(NOT_A_BACKUP);
   let plain: string;
   try {
     const key = await deriveKey(password, unb64(file.salt), file.iter);
@@ -62,9 +74,12 @@ export async function readBackup(text: string, password: string): Promise<{ data
   } catch {
     throw new BackupError('Senha incorreta ou arquivo corrompido.');
   }
-  const parsed = JSON.parse(plain) as { data: AppData; settings: Omit<Settings, 'security'> };
-  for (const k of DATA_KEYS) if (!Array.isArray(parsed.data[k])) throw new BackupError('Backup incompleto: falta a seção "' + k + '".');
-  return parsed;
+  try {
+    return validateImported(JSON.parse(plain));
+  } catch (e) {
+    if (e instanceof ImportError) throw new BackupError(e.message);
+    throw new BackupError('Backup corrompido: o conteúdo não pôde ser lido.');
+  }
 }
 
 export function transactionsToCSV(txs: Transaction[], catName: (id: string) => string, accountName: (id?: string) => string): string {

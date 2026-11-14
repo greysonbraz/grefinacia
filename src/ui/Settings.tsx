@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { remove, restoreAll, toast, updateSettings, upsert, useStore, wipeAll, afterChange } from '../state/store';
+import { useEffect, useRef, useState } from 'react';
+import { remove, restoreAll, restoreSafetyCopy, toast, updateSettings, upsert, useStore, wipeAll, afterChange } from '../state/store';
+import { listSafetyCopies, MAX_SAFETY_COPIES, type SafetyCopyInfo, type SafetyReason } from '../db/db';
 import type { Account, Card, Settings as S } from '../lib/types';
 import { accountBalance } from '../domain/ledger';
 import { centsToInput, formatBRL, parseMoney } from '../lib/money';
@@ -9,6 +10,7 @@ import { biometricAvailable, createCredential } from '../services/security';
 import { notificationPermission, requestNotificationPermission } from '../services/notify';
 import { BackupError, createBackup, readBackup, saveAndShare } from '../services/backup';
 import { isNative } from '../services/platform';
+import { PAID_AI_ENABLED } from '../lib/flags';
 import { Field, Full, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
 import { PinPad } from './Lock';
 
@@ -66,7 +68,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <Field label="Bloquear depois de ficar em segundo plano por"><select value={st.security.lockAfterSec} onChange={(e) => setSec({ lockAfterSec: Number(e.target.value) })}><option value={0}>Imediatamente</option><option value={30}>30 segundos</option><option value={120}>2 minutos</option><option value={600}>10 minutos</option></select></Field>
           <button className="btn ghost" onClick={() => setPin(true)}>Trocar PIN</button>
         </>)}
-        <Note>O PIN é guardado só como hash (PBKDF2-SHA256 com sal). Os dados ficam no armazenamento privado do app, protegido pela criptografia do Android; o backup exportado é criptografado com AES-256.</Note>
+        <Note>O PIN é guardado só como hash (PBKDF2-SHA256 com sal). Os dados ficam no armazenamento privado do app, protegido pela criptografia do Android; tokens e chaves ficam no cofre do sistema (Android Keystore); o backup exportado é criptografado com AES-256.</Note>
       </div>
 
       <div className="section">Notificações</div>
@@ -93,13 +95,18 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       <div className="section">Grefinacia AI</div>
       <div className="card">
-        <Seg value={st.ai.mode} onChange={(mode) => setAi({ mode })} options={[['local', 'Somente local'], ['api', 'IA externa (opcional)']]} />
-        {st.ai.mode === 'api' && (<>
-          <Field label="Chave de API da Anthropic" hint="Fica só neste aparelho. O uso é cobrado na sua conta da Anthropic."><input name="apikey" type="password" value={st.ai.apiKey} onChange={(e) => setAi({ apiKey: e.target.value })} /></Field>
-          <Field label="Modelo"><input value={st.ai.model} onChange={(e) => setAi({ model: e.target.value })} /></Field>
-          <SwitchRow title="Autorizo enviar um resumo dos meus dados" sub="Totais, categorias, carteira, dívidas e metas. Descrições de lançamentos não são enviadas." on={st.ai.consent} onChange={(consent) => setAi({ consent })} />
+        {PAID_AI_ENABLED ? (<>
+          <Seg value={st.ai.mode} onChange={(mode) => setAi({ mode })} options={[['local', 'Somente local'], ['api', 'IA externa (opcional)']]} />
+          {st.ai.mode === 'api' && (<>
+            <Field label="Chave de API da Anthropic" hint="Fica só neste aparelho. O uso é cobrado na sua conta da Anthropic."><input name="apikey" type="password" value={st.ai.apiKey} onChange={(e) => setAi({ apiKey: e.target.value })} /></Field>
+            <Field label="Modelo"><input value={st.ai.model} onChange={(e) => setAi({ model: e.target.value })} /></Field>
+            <SwitchRow title="Autorizo enviar um resumo dos meus dados" sub="Totais, categorias, carteira, dívidas e metas. Descrições de lançamentos não são enviadas." on={st.ai.consent} onChange={(consent) => setAi({ consent })} />
+          </>)}
+          <Note>No modo local nenhum dado sai do aparelho. A IA externa só é usada com chave e autorização; sem isso o chat responde por cálculos locais.</Note>
+        </>) : (<>
+          <div className="kv"><span>Modo</span><b>Local, sem custo</b></div>
+          <Note>A Grefinacia AI responde por cálculos feitos no próprio aparelho: nenhum dado sai dele e não há cobrança. A opção de IA externa paga está desativada nesta versão.</Note>
         </>)}
-        <Note>No modo local nenhum dado sai do aparelho. A IA externa só é usada com chave e autorização; sem isso o chat responde por cálculos locais.</Note>
       </div>
 
       <div className="section">Bancos e pagamentos (Open Finance)</div>
@@ -115,13 +122,14 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <div className="btnrow"><button className="btn" onClick={() => setBk('create')}>Fazer backup</button><button className="btn ghost" onClick={() => setBk('restore')}>Restaurar</button></div>
         <Note>O backup é um arquivo criptografado com a senha que você escolher. Salve no Google Drive e use "Restaurar" em outro aparelho para levar seus dados. Sincronização automática entre aparelhos não existe nesta versão: ela depende de um servidor.</Note>
       </div>
+      <SafetyCopies />
 
       <div className="section">Privacidade (LGPD)</div>
       <div className="card">
-        <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos) e, se você autorizar, ao serviço de IA.</Note>
+        <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos){PAID_AI_ENABLED ? ' e, se você autorizar, ao serviço de IA' : ''}.</Note>
         <div className="btnrow"><button className="btn danger" onClick={async () => { if (confirm('Apagar todos os dados deste aparelho? Esta ação não pode ser desfeita.')) { await wipeAll(); onClose(); } }}>Apagar todos os meus dados</button></div>
       </div>
-      <div className="hint" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, margin: '16px 0' }}>Grefinacia 1.0 · {today.slice(0, 4)}</div>
+      <div className="hint" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, margin: '16px 0' }}>Grefinacia {__APP_VERSION__} ({__APP_BUILD__}) · {today.slice(0, 4)}</div>
 
       {acc && <AccountForm a={acc === 'new' ? null : acc} onClose={() => setAcc(null)} />}
       {card && <CardForm c={card === 'new' ? null : card} onClose={() => setCard(null)} />}
@@ -129,6 +137,41 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
     </Full>
   );
+}
+
+const COPY_REASON: Record<SafetyReason, string> = { atualizacao: 'Antes de atualizar o app', restauracao: 'Antes de restaurar', importacao: 'Antes de importar' };
+
+/** Cópias que o app guarda sozinho antes de substituir os dados; permitem desfazer uma restauração. */
+function SafetyCopies() {
+  const data = useStore((s) => s.data);
+  const [list, setList] = useState<SafetyCopyInfo[]>([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    listSafetyCopies().then((l) => alive && setList(l)).catch(() => alive && setList([]));
+    return () => { alive = false; };
+  }, [data]);
+  if (list.length === 0) return null;
+  const back = async (id: string) => {
+    if (!confirm('Voltar os dados para esta cópia? O que existe agora também fica guardado como cópia, então dá para desfazer.')) return;
+    setBusy(true);
+    try {
+      const ok = await restoreSafetyCopy(id);
+      toast(ok ? 'Dados restaurados da cópia' : 'Cópia não encontrada', ok ? 'ok' : 'err');
+    } catch { toast('Não foi possível restaurar a cópia', 'err'); } finally { setBusy(false); }
+  };
+  return (<>
+    <div className="section">Cópias automáticas neste aparelho</div>
+    <div className="card" style={{ padding: '4px 14px' }}>
+      {list.map((c) => (
+        <div className="row" key={c.id}>
+          <div className="mid"><div className="t">{COPY_REASON[c.reason]}</div><div className="s">{new Date(c.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {c.records} {c.records === 1 ? 'registro' : 'registros'}</div></div>
+          <button className="btn ghost sm" disabled={busy} onClick={() => void back(c.id)}>Voltar para esta</button>
+        </div>
+      ))}
+      <Note>Antes de restaurar um backup ou de atualizar, o app guarda sozinho uma cópia dos dados (as {MAX_SAFETY_COPIES} mais recentes). Elas ficam só neste aparelho e somem se o app for desinstalado: o backup em arquivo continua sendo a proteção principal.</Note>
+    </div>
+  </>);
 }
 
 function AccountForm({ a, onClose }: { a: Account | null; onClose: () => void }) {
