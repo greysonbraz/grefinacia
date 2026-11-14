@@ -1,6 +1,9 @@
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import type { Settings } from '../lib/types';
+import { extractSecrets, withoutSecrets, withSecrets, type Secrets } from '../lib/secretFields';
 import { isNative } from './platform';
+
+export { extractSecrets, withoutSecrets, withSecrets, type Secrets };
 
 /**
  * Segredos do usuário: token da brapi e chave de IA.
@@ -9,11 +12,6 @@ import { isNative } from './platform';
  * do app. No navegador (desenvolvimento) não existe cofre, então continuam no banco local, como antes.
  * Se o cofre falhar por qualquer motivo, o valor também fica no banco: é melhor do que perder o token.
  */
-export interface Secrets {
-  brapiToken: string;
-  aiApiKey: string;
-}
-
 export interface SecretStore {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
@@ -36,16 +34,6 @@ export function setSecretStoreForTests(store: SecretStore | null | undefined): v
   override = store;
   lastSaved = null;
 }
-
-export const extractSecrets = (s: Settings): Secrets => ({ brapiToken: s.api.brapiToken, aiApiKey: s.ai.apiKey });
-
-export const withoutSecrets = (s: Settings): Settings => ({ ...s, api: { ...s.api, brapiToken: '' }, ai: { ...s.ai, apiKey: '' } });
-
-export const withSecrets = (s: Settings, x: Partial<Secrets>): Settings => ({
-  ...s,
-  api: { ...s.api, brapiToken: x.brapiToken ?? s.api.brapiToken },
-  ai: { ...s.ai, apiKey: x.aiApiKey ?? s.ai.apiKey },
-});
 
 let lastSaved: Secrets | null = null;
 

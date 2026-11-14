@@ -1,4 +1,4 @@
-import { PAID_AI_ENABLED } from './flags';
+import { PAID_AI_ENABLED } from './flags.ts';
 
 /** Endereços com que o app pode falar. Qualquer fonte nova precisa entrar aqui de propósito. */
 export const ALLOWED_HOSTS: string[] = [

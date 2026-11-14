@@ -14,7 +14,7 @@ import { fetchDividends, fetchQuotes, type FetchError } from '../services/quotes
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
 import { setPrivacyScreen } from '../services/security';
-import { clearSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
+import { clearSecrets, extractSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
 import { formatBRL } from '../lib/money';
 
 export interface State {
@@ -266,17 +266,42 @@ export async function deleteGoal(id: string): Promise<void> {
 }
 
 // ---------- backup / reset ----------
-export async function restoreAll(data: AppData, settings: Omit<Settings, 'security'>): Promise<void> {
-  const full: Settings = { ...DEFAULT_SETTINGS, ...settings, security: state.settings.security, onboarded: true };
+/**
+ * Substitui todos os dados do aparelho pelos informados (restauração de backup ou de uma cópia de segurança).
+ * Antes de substituir, guarda uma cópia do que existe agora, para a operação poder ser desfeita.
+ */
+export async function restoreAll(data: AppData, settings: Omit<Settings, 'security'>, reason: db.SafetyReason = 'restauracao'): Promise<void> {
+  await db.createSafetyCopy(reason, state.data, state.settings);
+  // configurações do arquivo completadas com os padrões (backups antigos não têm as opções novas);
+  // o PIN é o deste aparelho, e um token/chave já configurado aqui não é apagado por um arquivo que não o traz
+  const merged = db.mergeSettings(settings as Partial<Settings>);
+  const current = extractSecrets(state.settings);
+  const full: Settings = {
+    ...merged,
+    api: { ...merged.api, brapiToken: merged.api.brapiToken || current.brapiToken },
+    ai: { ...merged.ai, apiKey: merged.ai.apiKey || current.aiApiKey },
+    security: state.settings.security,
+    onboarded: true,
+  };
   const d = { ...emptyData(), ...data };
   await db.replaceEverything(d, await settingsForDb(full));
   set({ data: d, settings: full });
   applyTheme(full.theme);
   await rollDay();
 }
+
+/** Volta os dados para uma das cópias de segurança automáticas. O estado atual também é guardado antes. */
+export async function restoreSafetyCopy(id: string): Promise<boolean> {
+  const copy = await db.getSafetyCopy(id);
+  if (!copy) return false;
+  await restoreAll(copy.data, copy.settings);
+  return true;
+}
+
 export async function wipeAll(): Promise<void> {
   const d = emptyData();
   await clearSecrets();
+  await db.clearSafetyCopies();
   await db.replaceEverything(d, DEFAULT_SETTINGS);
   set({ data: d, settings: DEFAULT_SETTINGS, locked: false });
   applyTheme('dark');

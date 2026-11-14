@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { remove, restoreAll, toast, updateSettings, upsert, useStore, wipeAll, afterChange } from '../state/store';
+import { useEffect, useRef, useState } from 'react';
+import { remove, restoreAll, restoreSafetyCopy, toast, updateSettings, upsert, useStore, wipeAll, afterChange } from '../state/store';
+import { listSafetyCopies, MAX_SAFETY_COPIES, type SafetyCopyInfo, type SafetyReason } from '../db/db';
 import type { Account, Card, Settings as S } from '../lib/types';
 import { accountBalance } from '../domain/ledger';
 import { centsToInput, formatBRL, parseMoney } from '../lib/money';
@@ -121,6 +122,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <div className="btnrow"><button className="btn" onClick={() => setBk('create')}>Fazer backup</button><button className="btn ghost" onClick={() => setBk('restore')}>Restaurar</button></div>
         <Note>O backup é um arquivo criptografado com a senha que você escolher. Salve no Google Drive e use "Restaurar" em outro aparelho para levar seus dados. Sincronização automática entre aparelhos não existe nesta versão: ela depende de um servidor.</Note>
       </div>
+      <SafetyCopies />
 
       <div className="section">Privacidade (LGPD)</div>
       <div className="card">
@@ -135,6 +137,41 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
     </Full>
   );
+}
+
+const COPY_REASON: Record<SafetyReason, string> = { atualizacao: 'Antes de atualizar o app', restauracao: 'Antes de restaurar', importacao: 'Antes de importar' };
+
+/** Cópias que o app guarda sozinho antes de substituir os dados; permitem desfazer uma restauração. */
+function SafetyCopies() {
+  const data = useStore((s) => s.data);
+  const [list, setList] = useState<SafetyCopyInfo[]>([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    listSafetyCopies().then((l) => alive && setList(l)).catch(() => alive && setList([]));
+    return () => { alive = false; };
+  }, [data]);
+  if (list.length === 0) return null;
+  const back = async (id: string) => {
+    if (!confirm('Voltar os dados para esta cópia? O que existe agora também fica guardado como cópia, então dá para desfazer.')) return;
+    setBusy(true);
+    try {
+      const ok = await restoreSafetyCopy(id);
+      toast(ok ? 'Dados restaurados da cópia' : 'Cópia não encontrada', ok ? 'ok' : 'err');
+    } catch { toast('Não foi possível restaurar a cópia', 'err'); } finally { setBusy(false); }
+  };
+  return (<>
+    <div className="section">Cópias automáticas neste aparelho</div>
+    <div className="card" style={{ padding: '4px 14px' }}>
+      {list.map((c) => (
+        <div className="row" key={c.id}>
+          <div className="mid"><div className="t">{COPY_REASON[c.reason]}</div><div className="s">{new Date(c.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {c.records} {c.records === 1 ? 'registro' : 'registros'}</div></div>
+          <button className="btn ghost sm" disabled={busy} onClick={() => void back(c.id)}>Voltar para esta</button>
+        </div>
+      ))}
+      <Note>Antes de restaurar um backup ou de atualizar, o app guarda sozinho uma cópia dos dados (as {MAX_SAFETY_COPIES} mais recentes). Elas ficam só neste aparelho e somem se o app for desinstalado: o backup em arquivo continua sendo a proteção principal.</Note>
+    </div>
+  </>);
 }
 
 function AccountForm({ a, onClose }: { a: Account | null; onClose: () => void }) {
