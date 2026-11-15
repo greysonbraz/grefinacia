@@ -1,6 +1,8 @@
 # Nuvem do Grefinacia (Etapa 5) — login Google e Supabase
 
-Estado: **base pronta, ainda não ligada ao app.** Faltam o projeto Supabase, o login Google e as telas.
+Estado: **projeto Supabase criado e conferido (15/11/2026); app ainda não ligado.** Falta o login Google e as telas.
+
+Conferido de fora, com a chave pública e sem login: as duas tabelas existem e recusam leitura e gravação ("permission denied"). O isolamento entre dois usuários logados ainda não foi testado, porque não há login.
 
 ## Como os dados ficam protegidos
 

@@ -30,6 +30,14 @@ afterEach(() => {
   setSecretStoreForTests(undefined);
 });
 
+describe('nuvem: só a chave pública entra no app', () => {
+  it('chave publishable, nunca a secreta', async () => {
+    const c = await import('../src/lib/cloudConfig');
+    expect(c.SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')).toBe(true);
+    expect(c.SUPABASE_URL).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
+  });
+});
+
 describe('custo zero', () => {
   it('a IA paga fica desligada nesta fase', () => {
     expect(PAID_AI_ENABLED).toBe(false);
@@ -224,7 +232,7 @@ describe('política de conteúdo (CSP)', () => {
     expect(csp).toContain("frame-src 'none'");
   });
   it('só fala com as fontes de dados conhecidas; a IA paga fica de fora', () => {
-    expect(ALLOWED_HOSTS).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com']);
+    expect(ALLOWED_HOSTS).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://slgiagmfbbjifjkapusr.supabase.co']);
     expect(csp).not.toContain('anthropic');
     expect(ALLOWED_HOSTS.every((h) => h.startsWith('https://'))).toBe(true);
   });

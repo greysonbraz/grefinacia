@@ -1,9 +1,11 @@
 import { PAID_AI_ENABLED } from './flags.ts';
+import { SUPABASE_URL } from './cloudConfig.ts';
 
 /** Endereços com que o app pode falar. Qualquer fonte nova precisa entrar aqui de propósito. */
 export const ALLOWED_HOSTS: string[] = [
   'https://brapi.dev', // cotações
   'https://query1.finance.yahoo.com', // cotações e proventos (não oficial)
+  SUPABASE_URL, // nuvem: login e cópia cifrada dos dados
   ...(PAID_AI_ENABLED ? ['https://api.anthropic.com'] : []),
 ];
 
