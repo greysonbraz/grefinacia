@@ -10,7 +10,7 @@ export const DATA_SCHEMA = 1;
 export class ImportError extends Error {}
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const NESTED_SETTINGS = ['salary', 'notifications', 'api', 'ai', 'freedom', 'budgets'];
+const NESTED_SETTINGS = ['salary', 'notifications', 'api', 'ai', 'freedom', 'budgets', 'news'];
 const MAX_DEPTH = 12;
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

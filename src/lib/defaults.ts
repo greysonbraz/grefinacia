@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   api: { quoteProvider: 'brapi', dividendProvider: 'brapi', brapiToken: '', brapiPlan: 'free' },
   ai: { mode: 'local', apiKey: '', model: 'claude-haiku-5-5', consent: false },
   freedom: { yieldPct: 6 },
+  news: { disabledSources: [] },
 };
 
 export function emptyData(): AppData {

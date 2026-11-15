@@ -276,4 +276,5 @@ export interface Settings {
     consent: boolean; // autorização explícita para enviar um resumo dos dados ao serviço de IA
   };
   freedom: { yieldPct: number }; // rendimento anual que você assume para a meta de liberdade financeira
+  news: { disabledSources: string[] }; // fontes de notícias desligadas pelo usuário
 }
