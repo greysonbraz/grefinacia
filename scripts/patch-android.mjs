@@ -7,13 +7,26 @@ const perms = ['android.permission.POST_NOTIFICATIONS', 'android.permission.RECE
 for (const p of perms) if (!m.includes(p)) m = m.replace('</manifest>', `    <uses-permission android:name="${p}" />\n</manifest>`);
 // os dados financeiros não vão para o backup automático do Google: o backup é o arquivo criptografado do app
 m = m.replace('android:allowBackup="true"', 'android:allowBackup="false"');
+// só conexões HTTPS (nada de HTTP sem criptografia)
+if (!m.includes('android:usesCleartextTraffic')) m = m.replace('android:allowBackup="false"', 'android:allowBackup="false"\n        android:usesCleartextTraffic="false"');
 writeFileSync(manifest, m);
 
 const gradle = 'android/app/build.gradle';
 let g = readFileSync(gradle, 'utf8');
-const runnerLibs = "dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'";
-if (!g.includes('background-runner')) g = g.replace(/(flatDir\s*\{\s*\n\s*dirs [^\n]+\n)/, `$1        ${runnerLibs}\n`);
+// mesmo texto (com tabs) que o próprio plugin escreve no "npm install", para não duplicar a linha
+const runnerLibs = "\t\tdirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'";
+if (!g.includes('background-runner')) g = g.replace(/(flatDir\s*\{\s*\n\s*dirs [^\n]+\n)/, `$1${runnerLibs}\n`);
 writeFileSync(gradle, g);
+
+// o app só compartilha arquivos que ele mesmo gera na pasta de cache (backup, CSV, PDF)
+const xml = 'android/app/src/main/res/xml';
+mkdirSync(xml, { recursive: true });
+writeFileSync(`${xml}/file_paths.xml`, `<?xml version="1.0" encoding="utf-8"?>
+<!-- O app só compartilha arquivos que ele mesmo gera na pasta de cache (backup, CSV, PDF). -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="grefinacia_cache" path="." />
+</paths>
+`);
 
 const drawable = 'android/app/src/main/res/drawable';
 mkdirSync(drawable, { recursive: true });

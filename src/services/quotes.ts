@@ -18,6 +18,17 @@ export interface FetchError {
 }
 
 export const BRAPI_FREE_TICKERS = ['PETR4', 'MGLU3', 'VALE3', 'ITUB4'];
+/** Fundos de demonstração: a brapi responde proventos deles mesmo sem token. */
+export const BRAPI_FREE_DIVIDEND_TICKERS = ['MXRF11', 'HGLG11'];
+
+/**
+ * A brapi só entrega proventos nos planos pagos (Startup ou Pro). No plano gratuito a consulta
+ * é recusada e ainda gasta a cota mensal, então nem chamamos.
+ */
+export function brapiDividendsAvailable(ticker: string, api: Pick<Api, 'brapiToken' | 'brapiPlan'>): boolean {
+  if (BRAPI_FREE_DIVIDEND_TICKERS.includes(ticker.toUpperCase())) return true;
+  return api.brapiToken.trim().length > 0 && api.brapiPlan !== 'free';
+}
 const BATCH: Record<Api['brapiPlan'], number> = { free: 1, startup: 10, pro: 20 };
 
 async function getJson(url: string, headers: Record<string, string> = {}): Promise<{ status: number; json: any }> {
@@ -182,9 +193,8 @@ export async function fetchDividends(assets: Asset[], api: Api): Promise<{ event
         if (!json?.chart?.result) throw new Error(`resposta inválida (HTTP ${status})`);
         events.push(...parseYahooDividends(json, a));
       } else {
-        const hasToken = api.brapiToken.trim().length > 0;
-        if (!hasToken && !['MXRF11', 'HGLG11'].includes(a.ticker)) {
-          errors.push({ ticker: a.ticker, message: 'brapi: proventos exigem token e plano Startup ou Pro. No plano gratuito, cadastre manualmente ou use o Yahoo Finance.' });
+        if (!brapiDividendsAvailable(a.ticker, api)) {
+          errors.push({ ticker: a.ticker, message: 'brapi: proventos exigem token e plano Startup ou Pro (se for o seu caso, selecione o plano em Ajustes). No plano gratuito, cadastre manualmente ou use o Yahoo Finance.' });
           continue;
         }
         const url = a.type === 'fii' ? `https://brapi.dev/api/v2/fii/dividends?symbols=${a.ticker}&startDate=${start}` : `https://brapi.dev/api/v2/stocks/dividends?symbols=${a.ticker}&startDate=${start}`;

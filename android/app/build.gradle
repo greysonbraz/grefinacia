@@ -7,8 +7,10 @@ android {
         applicationId "br.com.grefinacia.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // O Android só atualiza por cima se o versionCode for maior ou igual ao instalado.
+        // No GitHub Actions ele vem do relógio (minutos desde 1970), então sempre cresce.
+        versionCode = System.getenv("VERSION_CODE") ? Integer.parseInt(System.getenv("VERSION_CODE")) : (int) (System.currentTimeMillis() / 60000L)
+        versionName = System.getenv("VERSION_NAME") ?: "1.1.0-local"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +18,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Chave de assinatura fixa. Sem ela cada APK sai com uma assinatura diferente e o Android
+    // exige desinstalar (apagando os dados) para trocar de versão. Ver docs/SEGURANCA.md.
+    def keystoreProps = new Properties()
+    def keystorePropsFile = rootProject.file('keystore.properties')
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+    }
+    def releaseStoreFile = keystoreProps['storeFile'] ?: System.getenv('ANDROID_KEYSTORE_PATH')
+    def releaseStorePassword = keystoreProps['storePassword'] ?: System.getenv('ANDROID_KEYSTORE_PASSWORD')
+    def releaseKeyAlias = keystoreProps['keyAlias'] ?: System.getenv('ANDROID_KEY_ALIAS') ?: 'grefinacia'
+    def releaseKeyPassword = keystoreProps['keyPassword'] ?: System.getenv('ANDROID_KEY_PASSWORD') ?: releaseStorePassword
+    def hasReleaseKey = releaseStoreFile && releaseStorePassword
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseKey) {
+                signingConfig = signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -27,7 +55,7 @@ android {
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
-        dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'
+		dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'
     }
 }
 

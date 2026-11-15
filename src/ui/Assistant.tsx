@@ -5,6 +5,7 @@ import { computeOverview } from '../domain/overview';
 import { generateInsights } from '../domain/insights';
 import { answerLocally, buildAiContext, SUGGESTED_QUESTIONS } from '../domain/chat';
 import { askAi } from '../services/ai';
+import { PAID_AI_ENABLED } from '../lib/flags';
 import type { Nav } from './App';
 import { Note, Seg } from './kit';
 
@@ -21,7 +22,7 @@ export function Assistant({ nav }: { nav: Nav }) {
   const end = useRef<HTMLDivElement>(null);
   const o = useMemo(() => computeOverview(data, settings, today), [data, settings, today]);
   const insights = useMemo(() => generateInsights(o, data, settings), [o, data, settings]);
-  const useApi = settings.ai.mode === 'api' && settings.ai.consent && settings.ai.apiKey.trim().length > 0;
+  const useApi = PAID_AI_ENABLED && settings.ai.mode === 'api' && settings.ai.consent && settings.ai.apiKey.trim().length > 0;
 
   const ask = async (q: string) => {
     if (!q.trim() || busy) return;

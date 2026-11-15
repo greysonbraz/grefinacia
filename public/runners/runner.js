@@ -1,6 +1,11 @@
 /* Grefinacia — verificação de novos proventos em segundo plano (Capacitor Background Runner).
- * Roda a cada ~1 h (o Android decide o horário exato; economia de bateria/Samsung pode atrasar).
- * Só avisa de proventos que o app ainda não conhecia e nunca faz operações financeiras. */
+ * Roda a cada ~6 h (o Android decide o horário exato; economia de bateria/Samsung pode atrasar).
+ * Só avisa de proventos que o app ainda não conhecia e nunca faz operações financeiras.
+ * Para não gastar a cota das fontes gratuitas: só consulta os ativos que o app indicou como
+ * consultáveis e nunca mais de uma vez a cada 3 h, mesmo que o Android chame antes. */
+
+var CONFIG_VERSION = 2;
+var MIN_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function isoOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -80,7 +85,12 @@ async function check() {
   var stored = await CapacitorKV.get('config');
   if (!stored || !stored.value) return;
   var cfg = JSON.parse(stored.value);
-  if (!cfg.enabled) return;
+  // configuração gravada por uma versão antiga do app: espera o app abrir e gravar a nova
+  if (!cfg.enabled || cfg.v !== CONFIG_VERSION) return;
+  var last = await CapacitorKV.get('lastCheck');
+  var lastMs = last && last.value ? Number(last.value) : 0;
+  if (lastMs && Date.now() - lastMs < MIN_INTERVAL_MS) return;
+  await CapacitorKV.set('lastCheck', String(Date.now()));
   var known = {};
   (cfg.knownKeys || []).forEach(function (k) { known[k] = true; });
   var firstRun = (cfg.knownKeys || []).length === 0;

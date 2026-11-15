@@ -1,5 +1,12 @@
 import { createRequire } from 'node:module';
-const { chromium } = createRequire(process.env.PW_ROOT + '/')('playwright');
+// Playwright: usa o que estiver instalado no projeto (GitHub Actions) ou o caminho indicado em PW_ROOT
+// (máquinas que já têm o Playwright instalado fora do projeto).
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch {
+  ({ chromium } = createRequire(process.env.PW_ROOT + '/')('playwright'));
+}
 import { spawn } from 'node:child_process';
 const srv = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], { stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 2500));
@@ -7,7 +14,8 @@ const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
 const page = await ctx.newPage();
 const errors = [];
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+let expectCspBlock = false; // durante o teste da CSP, o bloqueio aparece no console e é o resultado esperado
+page.on('console', (m) => m.type() === 'error' && !(expectCspBlock && /Content Security Policy/i.test(m.text())) && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 const ok = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); console.log('FALHOU:', msg); } else console.log('ok:', msg); };
 const shot = (n) => page.screenshot({ path: `shots/${n}.png` });
@@ -166,6 +174,26 @@ try {
   await page.waitForTimeout(500);
   t = await text();
   ok(t.includes('Total de dívidas') && (await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'dados e tema persistem após recarregar');
+  // segurança: a política de conteúdo está no app compilado e bloqueia script embutido e eval
+  const csp = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') ?? '');
+  ok(csp.includes("script-src 'self'") && !csp.includes('unsafe-eval') && csp.includes("object-src 'none'"), 'CSP presente, sem eval e sem plugins');
+  expectCspBlock = true;
+  // as tentativas rodam num setTimeout, fora da chamada de depuração do Playwright (que ignora a CSP para eval)
+  await page.evaluate(() => {
+    setTimeout(() => {
+      const el = document.createElement('script');
+      el.textContent = 'window.__inlineRan = true';
+      document.head.appendChild(el);
+      try { window.__evalRan = (0, eval)('1 + 1') === 2; } catch { window.__evalRan = false; }
+      window.__cspChecked = true;
+    }, 0);
+  });
+  await page.waitForFunction(() => window.__cspChecked === true);
+  const tried = await page.evaluate(() => ({ inline: window.__inlineRan === true, evalRan: window.__evalRan === true }));
+  await page.waitForTimeout(200);
+  expectCspBlock = false;
+  ok(!tried.inline, 'script embutido é bloqueado pela CSP');
+  ok(!tried.evalRan, 'eval é bloqueado pela CSP');
   // overflow horizontal
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'sem rolagem horizontal em 412px');
 } catch (e) { errors.push('EXCEPTION ' + e.message); await shot('erro'); }
