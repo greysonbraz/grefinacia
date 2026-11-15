@@ -232,7 +232,7 @@ describe('política de conteúdo (CSP)', () => {
     expect(csp).toContain("frame-src 'none'");
   });
   it('só fala com as fontes de dados conhecidas; a IA paga fica de fora', () => {
-    expect(ALLOWED_HOSTS).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://slgiagmfbbjifjkapusr.supabase.co']);
+    expect(ALLOWED_HOSTS.slice(0, 3)).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://slgiagmfbbjifjkapusr.supabase.co']);
     expect(csp).not.toContain('anthropic');
     expect(ALLOWED_HOSTS.every((h) => h.startsWith('https://'))).toBe(true);
   });

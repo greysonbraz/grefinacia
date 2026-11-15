@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Settings as Gear, TriangleAlert, CircleCheck, Info, Banknote, Coins, ChevronRight } from 'lucide-react';
+import { Settings as Gear, Newspaper, TriangleAlert, CircleCheck, Info, Banknote, Coins, ChevronRight } from 'lucide-react';
 import { confirmDividend, markPaid, toast, useStore } from '../state/store';
 import { computeOverview } from '../domain/overview';
 import { generateInsights } from '../domain/insights';
@@ -10,6 +10,7 @@ import { addDays, capFirst, lastMonths, monthLong, monthShort, parseISO, formatD
 import { formatBRL, pctChange } from '../lib/money';
 import type { AppData, ISODate } from '../lib/types';
 import type { Nav } from './App';
+import { News } from './News';
 import { ChartBox, cssVar, Delta, Legend, Money, Note, Seg, seriesColors } from './kit';
 
 type Period = 'dia' | 'semana' | 'mes' | 'ano';
@@ -32,6 +33,7 @@ export function Home({ nav }: { nav: Nav }) {
   const settings = useStore((s) => s.settings);
   const today = useStore((s) => s.today);
   const [period, setPeriod] = useState<Period>('mes');
+  const [news, setNews] = useState(false);
   const [chart, setChart] = useState<ChartTab>('patrimonio');
   const o = useMemo(() => computeOverview(data, settings, today), [data, settings, today]);
   const insights = useMemo(() => generateInsights(o, data, settings), [o, data, settings]);
@@ -55,7 +57,10 @@ export function Home({ nav }: { nav: Nav }) {
           <div className="sub">{settings.userName ? `Olá, ${settings.userName}` : 'Olá'}</div>
           <h1>{capFirst(monthLong(o.ym))}</h1>
         </div>
-        <button className="iconbtn" onClick={nav.openSettings} aria-label="Ajustes"><Gear size={19} /></button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="iconbtn" onClick={() => setNews(true)} aria-label="Notícias"><Newspaper size={19} /></button>
+          <button className="iconbtn" onClick={nav.openSettings} aria-label="Ajustes"><Gear size={19} /></button>
+        </div>
       </div>
 
       {o.salaryPending && (
@@ -129,6 +134,7 @@ export function Home({ nav }: { nav: Nav }) {
         </button>
       ))}
       <button className="btn ghost" onClick={() => nav.go('ai')}>Conversar com a Grefinacia AI <ChevronRight size={18} /></button>
+      {news && <News onClose={() => setNews(false)} />}
     </div>
   );
 }
