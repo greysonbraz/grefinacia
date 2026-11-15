@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { AppData, CollectionName, DividendEvent, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
-import { DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
+import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
 import * as db from '../db/db';
@@ -49,6 +49,77 @@ export function applyTheme(theme: Settings['theme']) {
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' ? '#0b0f17' : '#f3f5f9');
 }
 
+// ---------- pendências de sincronização ----------
+import { dirtyKey, emptySyncState, type SyncState } from '../services/sync';
+import { secureRemove } from '../services/secrets';
+import { withoutSecrets } from '../lib/secretFields';
+
+const SYNC_META = 'sync';
+let sync: SyncState = emptySyncState();
+let onLocalChange: (() => void) | null = null;
+/** A nuvem se inscreve aqui para sincronizar pouco depois de cada mudança. */
+export const setLocalChangeListener = (fn: (() => void) | null) => void (onLocalChange = fn);
+export const getSyncState = (): SyncState => sync;
+/** Guarda o resultado de uma sincronização sem perder o que mudou no aparelho enquanto ela rodava. */
+export async function saveSyncState(next: SyncState, startedWith: SyncState): Promise<void> {
+  const dirty = { ...next.dirty };
+  for (const [k, t] of Object.entries(sync.dirty)) if (startedWith.dirty[k] !== t) dirty[k] = t;
+  sync = { cursor: next.cursor, dirty };
+  await db.setMeta(SYNC_META, sync);
+}
+async function markDirty(collection: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const now = Date.now();
+  const dirty = { ...sync.dirty };
+  for (const id of ids) dirty[dirtyKey(collection, id)] = now;
+  sync = { ...sync, dirty };
+  await db.setMeta(SYNC_META, sync);
+  onLocalChange?.();
+}
+/** Marca tudo o que existe no aparelho como pendente (primeira sincronização ou depois de restaurar um backup). */
+export async function markAllDirty(alsoRemoved: { collection: string; id: string }[] = [], at = Date.now()): Promise<void> {
+  const dirty = { ...sync.dirty };
+  for (const name of DATA_KEYS) for (const item of state.data[name] as { id: string }[]) dirty[dirtyKey(name, item.id)] ??= at;
+  dirty[dirtyKey('meta', 'settings')] ??= at;
+  for (const r of alsoRemoved) dirty[dirtyKey(r.collection, r.id)] = Date.now();
+  sync = { ...sync, dirty };
+  await db.setMeta(SYNC_META, sync);
+}
+/** Valor de um registro como ele viaja para a nuvem. */
+export function syncValue(collection: string, id: string): unknown | undefined {
+  if (collection === 'meta') {
+    if (id !== 'settings') return undefined;
+    const { security: _s, ...rest } = withoutSecrets(state.settings);
+    void _s;
+    return rest;
+  }
+  return (state.data[collection as CollectionName] as { id: string }[] | undefined)?.find((x) => x.id === id);
+}
+/** Grava o que veio da nuvem, sem marcar como pendente. */
+export async function applyRemote(upserts: { collection: string; id: string; value: unknown }[], deletes: { collection: string; id: string }[]): Promise<void> {
+  const data = { ...state.data };
+  for (const name of DATA_KEYS) {
+    const ups = upserts.filter((u) => u.collection === name).map((u) => u.value as { id: string });
+    const dels = new Set(deletes.filter((d) => d.collection === name).map((d) => d.id));
+    if (ups.length === 0 && dels.size === 0) continue;
+    const ids = new Set(ups.map((u) => u.id));
+    (data[name] as { id: string }[]) = [...(state.data[name] as { id: string }[]).filter((x) => !ids.has(x.id) && !dels.has(x.id)), ...ups];
+    await db.putItems(name, ups);
+    await db.deleteItems(name, [...dels]);
+  }
+  let settings = state.settings;
+  const remoteSettings = upserts.find((u) => u.collection === 'meta' && u.id === 'settings')?.value as Partial<Settings> | undefined;
+  if (remoteSettings) {
+    const merged = db.mergeSettings(remoteSettings);
+    // o PIN e os segredos são de cada aparelho
+    settings = { ...merged, security: state.settings.security, onboarded: true, api: { ...merged.api, brapiToken: state.settings.api.brapiToken }, ai: { ...merged.ai, apiKey: state.settings.ai.apiKey } };
+    await db.saveSettings(await settingsForDb(settings));
+    applyTheme(settings.theme);
+  }
+  set({ data, settings });
+  scheduleAfterChange();
+}
+
 // ---------- persistência genérica ----------
 export async function upsert<K extends CollectionName>(name: K, items: AppData[K][number] | AppData[K][number][]): Promise<void> {
   const list = (Array.isArray(items) ? items : [items]) as { id: string }[];
@@ -57,6 +128,7 @@ export async function upsert<K extends CollectionName>(name: K, items: AppData[K
   const merged = [...(state.data[name] as { id: string }[]).filter((x) => !ids.has(x.id)), ...list];
   set({ data: { ...state.data, [name]: merged } });
   await db.putItems(name, list);
+  await markDirty(name, list.map((i) => i.id));
   scheduleAfterChange();
 }
 export async function remove(name: CollectionName, ids: string | string[]): Promise<void> {
@@ -64,6 +136,7 @@ export async function remove(name: CollectionName, ids: string | string[]): Prom
   const s = new Set(list);
   set({ data: { ...state.data, [name]: (state.data[name] as { id: string }[]).filter((x) => !s.has(x.id)) } });
   await db.deleteItems(name, list);
+  await markDirty(name, list);
   scheduleAfterChange();
 }
 export async function updateSettings(patch: Partial<Settings>): Promise<void> {
@@ -72,6 +145,7 @@ export async function updateSettings(patch: Partial<Settings>): Promise<void> {
   if (patch.theme) applyTheme(settings.theme);
   if (patch.security) void setPrivacyScreen(settings.security.enabled && settings.security.hideInRecents);
   await db.saveSettings(await settingsForDb(settings));
+  await markDirty('meta', ['settings']);
   scheduleAfterChange();
 }
 
@@ -110,6 +184,7 @@ export async function init(): Promise<void> {
   // segredos (token, chave) vivem no cofre do Android; os que ainda estiverem no banco são movidos agora
   const { settings, migrated } = await hydrateSecrets(loaded.settings);
   if (migrated) await db.saveSettings(await settingsForDb(settings));
+  sync = (await db.getMeta<SyncState>(SYNC_META)) ?? emptySyncState();
   applyTheme(settings.theme);
   set({ data, settings, today: todayISO(), locked: settings.security.enabled, ready: true });
   void db.requestPersistentStorage();
@@ -284,8 +359,14 @@ export async function restoreAll(data: AppData, settings: Omit<Settings, 'securi
     onboarded: true,
   };
   const d = { ...emptyData(), ...data };
+  // para a sincronização: o que sumiu com a restauração precisa ser apagado também nos outros aparelhos
+  const removed = DATA_KEYS.flatMap((name) => {
+    const kept = new Set((d[name] as { id: string }[]).map((x) => x.id));
+    return (state.data[name] as { id: string }[]).filter((x) => !kept.has(x.id)).map((x) => ({ collection: name as string, id: x.id }));
+  });
   await db.replaceEverything(d, await settingsForDb(full));
   set({ data: d, settings: full });
+  await markAllDirty(removed);
   applyTheme(full.theme);
   await rollDay();
 }
@@ -302,7 +383,12 @@ export async function wipeAll(): Promise<void> {
   const d = emptyData();
   await clearSecrets();
   await db.clearSafetyCopies();
+  // sai da nuvem neste aparelho (a cópia da nuvem não é apagada) e zera o controle de sincronização
+  await secureRemove('cloud_session');
+  await secureRemove('vault_key');
+  sync = emptySyncState();
   await db.replaceEverything(d, DEFAULT_SETTINGS);
+  await db.setMeta(SYNC_META, sync);
   set({ data: d, settings: DEFAULT_SETTINGS, locked: false });
   applyTheme('dark');
 }

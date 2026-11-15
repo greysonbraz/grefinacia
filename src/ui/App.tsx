@@ -3,6 +3,7 @@ import { Home as HomeIco, ArrowLeftRight, LineChart, Sparkles, Target } from 'lu
 import { lock, rollDay, useStore, getState } from '../state/store';
 import { watchAutoLock } from '../services/security';
 import { nativeBridgeMissing } from '../services/platform';
+import { startAutoSync } from '../state/cloud';
 import { Toast } from './kit';
 import { Home } from './Home';
 import { Transactions } from './Transactions';
@@ -31,6 +32,8 @@ export function App() {
     document.addEventListener('visibilitychange', vis);
     return () => { stop(); document.removeEventListener('visibilitychange', vis); };
   }, []);
+
+  useEffect(() => (ready ? startAutoSync() : undefined), [ready]);
 
   if (nativeBridgeMissing()) return (
     <div className="lock" role="alert">

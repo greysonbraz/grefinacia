@@ -1,6 +1,7 @@
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/cloudConfig';
 import { secureGet, secureRemove, secureSet } from './secrets';
 import type { SealedRecord, VaultMeta } from './vault';
+import type { RemoteRow } from './sync';
 
 /**
  * Cliente mínimo do Supabase (login e tabelas do cofre), direto pela API REST.
@@ -138,4 +139,23 @@ export async function deleteRows(s: CloudSession, refs: { collection: string; id
 export async function deleteAllCloudData(s: CloudSession): Promise<void> {
   await call(`/rest/v1/vault_records?user_id=eq.${s.userId}`, { method: 'DELETE', token: s.accessToken, headers: { Prefer: 'return=minimal' } });
   await call(`/rest/v1/vault_meta?user_id=eq.${s.userId}`, { method: 'DELETE', token: s.accessToken, headers: { Prefer: 'return=minimal' } });
+}
+
+/** Linhas alteradas depois do cursor (inclui as marcadas como apagadas), da mais antiga para a mais nova. */
+export async function changesSince(s: CloudSession, cursor: string | null): Promise<RemoteRow[]> {
+  const all: RemoteRow[] = [];
+  const filter = cursor ? `&updated_at=gt.${encodeURIComponent(cursor)}` : '';
+  for (let offset = 0; ; offset += PAGE) {
+    const res = await call(`/rest/v1/vault_records?select=collection,id,iv,payload,deleted,updated_at${filter}&order=updated_at,collection,id&limit=${PAGE}&offset=${offset}`, { token: s.accessToken });
+    const page = (await res.json()) as RemoteRow[];
+    all.push(...page);
+    if (page.length < PAGE) return all;
+  }
+}
+
+export async function upsertSyncRows(s: CloudSession, rows: Omit<RemoteRow, 'updated_at'>[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const body = rows.slice(i, i + BATCH).map((r) => ({ user_id: s.userId, collection: r.collection, id: r.id, iv: r.iv, payload: r.payload, deleted: r.deleted }));
+    await call('/rest/v1/vault_records?on_conflict=user_id,collection,id', { method: 'POST', token: s.accessToken, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(body) });
+  }
 }

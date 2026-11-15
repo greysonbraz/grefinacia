@@ -11,7 +11,7 @@ import { notificationPermission, requestNotificationPermission } from '../servic
 import { BackupError, createBackup, readBackup, saveAndShare } from '../services/backup';
 import { isNative } from '../services/platform';
 import { PAID_AI_ENABLED } from '../lib/flags';
-import { cloudBackupNow, cloudDeleteAll, cloudHasVault, cloudLogin, cloudLogout, cloudRestore, cloudStatus, cloudUnlock, type CloudStatus } from '../state/cloud';
+import { cloudDeleteAll, cloudHasVault, cloudLogin, cloudLogout, cloudStatus, cloudSync, cloudUnlock, lastSyncAt, type CloudStatus } from '../state/cloud';
 import { MIN_PASSPHRASE } from '../services/vault';
 import { Field, Full, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
 import { PinPad } from './Lock';
@@ -185,16 +185,17 @@ function CloudCard() {
         <div className="btnrow"><button className="btn" disabled={busy || !pw} onClick={() => void unlock()}>{busy ? 'Aguarde…' : 'Continuar'}</button><button className="btn ghost" disabled={busy} onClick={() => void run(async () => { await cloudLogout(); })}>Sair</button></div>
       </>) : (<>
         <div className="kv"><span>Conta</span><b>{st.email}</b></div>
-        <div className="btnrow"><button className="btn" disabled={busy} onClick={() => void run(async () => { const r = await cloudBackupNow(); return `Cópia enviada: ${r.sent} registros`; })}>{busy ? 'Aguarde…' : 'Enviar cópia agora'}</button><button className="btn ghost" disabled={busy} onClick={() => { if (confirm('Trocar os dados deste aparelho pela cópia da nuvem? O que existe agora fica guardado numa cópia automática.')) void run(async () => ((await cloudRestore()) ? 'Dados trazidos da nuvem' : 'Ainda não há cópia na nuvem')); }}>Trazer da nuvem</button></div>
+        <div className="kv"><span>Última sincronização</span><b>{lastSyncAt() ? new Date(lastSyncAt()).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'ainda não'}</b></div>
+        <div className="btnrow"><button className="btn" disabled={busy} onClick={() => void run(async () => { const r = await cloudSync(); return `Sincronizado: ${r.pushed} enviados, ${r.pulled} recebidos` + (r.skipped ? `, ${r.skipped} ilegíveis` : ''); })}>{busy ? 'Aguarde…' : 'Sincronizar agora'}</button></div>
         <div className="btnrow"><button className="btn ghost sm" disabled={busy} onClick={() => void run(async () => { await cloudLogout(); })}>Sair da conta</button><button className="btn danger sm" disabled={busy} onClick={() => { if (confirm('Apagar a cópia da nuvem? Os dados deste aparelho continuam.')) void run(async () => { await cloudDeleteAll(); return 'Cópia da nuvem apagada'; }); }}>Apagar cópia da nuvem</button></div>
-        <Note>Os dados são cifrados neste aparelho antes de subir; o servidor só guarda texto cifrado. O PIN, o token da brapi e as chaves não sobem. Envio automático e sincronização entre aparelhos chegam na próxima versão.</Note>
+        <Note>Os dados são cifrados neste aparelho antes de subir; o servidor só guarda texto cifrado. O PIN, o token da brapi e as chaves não sobem. A sincronização roda sozinha ao abrir o app e pouco depois de cada alteração; em outro aparelho, entre com a mesma conta e a mesma senha. Se o mesmo lançamento for alterado em dois aparelhos, vale a alteração mais recente.</Note>
       </>)}
       {err && <div className="neg" role="alert">{err}</div>}
     </div>
   </>);
 }
 
-const COPY_REASON: Record<SafetyReason, string> = { atualizacao: 'Antes de atualizar o app', restauracao: 'Antes de restaurar', importacao: 'Antes de importar' };
+const COPY_REASON: Record<SafetyReason, string> = { atualizacao: 'Antes de atualizar o app', restauracao: 'Antes de restaurar', importacao: 'Antes de importar', sincronizacao: 'Antes da primeira sincronização' };
 
 /** Cópias que o app guarda sozinho antes de substituir os dados; permitem desfazer uma restauração. */
 function SafetyCopies() {

@@ -15,7 +15,7 @@ const SAFETY = 'safety';
 /** Quantas cópias automáticas ficam guardadas; a mais antiga sai quando entra uma nova. */
 export const MAX_SAFETY_COPIES = 3;
 
-export type SafetyReason = 'atualizacao' | 'restauracao' | 'importacao';
+export type SafetyReason = 'atualizacao' | 'restauracao' | 'importacao' | 'sincronizacao';
 
 /** Retrato completo dos dados, guardado no próprio aparelho antes de uma operação que substitui ou transforma tudo. */
 export interface SafetyCopy {
@@ -109,6 +109,16 @@ export async function deleteItems(name: CollectionName, ids: string[]): Promise<
 export async function saveSettings(settings: Settings): Promise<void> {
   const db = await getDB();
   await db.put('meta', settings, 'settings');
+}
+
+/** Lê/grava um valor avulso (ex.: estado da sincronização) na gaveta de configurações. */
+export async function getMeta<T>(key: string): Promise<T | undefined> {
+  const db = await getDB();
+  return (await db.get('meta', key)) as T | undefined;
+}
+export async function setMeta(key: string, value: unknown): Promise<void> {
+  const db = await getDB();
+  await db.put('meta', value, key);
 }
 
 /** Apaga tudo e grava o conteúdo informado (restauração de backup / recomeçar do zero). */
