@@ -36,7 +36,8 @@ export function emptyData(): AppData {
     debts: [],
     snapshots: [],
     firedAlerts: [],
+    transfers: [],
   };
 }
 
-export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts'];
+export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers'];

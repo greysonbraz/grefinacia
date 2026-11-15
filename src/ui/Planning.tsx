@@ -10,7 +10,7 @@ import { annualFromMonthly, debtTotals, presentValue, simulateAnticipation, simu
 import { financialFreedom, monthlyClosing } from '../domain/reports';
 import { simulateGrowth } from '../domain/fixedincome';
 import { exportClosingPdf } from '../services/reports';
-import { saveAndShare, transactionsToCSV } from '../services/backup';
+import { exportOpenJson, saveAndShare, transactionsToCSV } from '../services/backup';
 import { centsToInput, formatBRL, formatPct, parseDecimal, parseMoney } from '../lib/money';
 import { formatDateBR, monthLong, monthOf } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -436,6 +436,7 @@ function Relatorios() {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const [ym, setYm] = useState(monthOf(today));
+  const settings = useStore((s) => s.settings);
   const c = useMemo(() => monthlyClosing(data, ym, today), [data, ym, today]);
   const run = async (f: () => Promise<unknown>, ok: string) => { try { await f(); toast(ok); } catch (e) { toast('Não foi possível gerar o arquivo: ' + (e instanceof Error ? e.message : 'erro'), 'err'); } };
   return (
@@ -456,7 +457,8 @@ function Relatorios() {
       </div>
       <button className="btn" style={{ marginBottom: 10 }} onClick={() => run(() => exportClosingPdf(data, ym, today), 'PDF gerado')}><FileText size={18} /> Relatório mensal em PDF</button>
       <button className="btn ghost" style={{ marginBottom: 10 }} onClick={() => run(() => exportClosingPdf(data, ym, today, true), 'PDF gerado')}><FileText size={18} /> Relatório anual em PDF (12 meses)</button>
-      <button className="btn ghost" onClick={() => run(() => saveAndShare(`grefinacia-movimentacoes-${ym}.csv`, transactionsToCSV(data.transactions, (id) => data.categories.find((x) => x.id === id)?.name ?? id, (id) => data.accounts.find((a) => a.id === id)?.name ?? ''), 'text/csv'), 'Planilha gerada')}><SheetIco size={18} /> Planilha (CSV) de todas as movimentações</button>
+      <button className="btn ghost" style={{ marginBottom: 10 }} onClick={() => run(() => saveAndShare(`grefinacia-movimentacoes-${ym}.csv`, transactionsToCSV(data.transactions, (id) => data.categories.find((x) => x.id === id)?.name ?? id, (id) => data.accounts.find((a) => a.id === id)?.name ?? ''), 'text/csv'), 'Planilha gerada')}><SheetIco size={18} /> Planilha (CSV) de todas as movimentações</button>
+      <button className="btn ghost" onClick={() => { if (confirm('O arquivo JSON sai sem criptografia: quem tiver o arquivo consegue ler seus dados. Para guardar com segurança, use o backup em Ajustes. Exportar mesmo assim?')) void run(() => saveAndShare(`grefinacia-dados-${today}.json`, exportOpenJson(data, settings), 'application/json'), 'Arquivo gerado'); }}>Exportar todos os dados em JSON</button>
       <Note>Juros pagos somam as despesas na categoria "Juros e encargos" (o botão "Registrar pagamento de parcela" das dívidas já separa os juros). Este fechamento é uma ferramenta de organização pessoal e não substitui um contador habilitado.</Note>
     </>
   );

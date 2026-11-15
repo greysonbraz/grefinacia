@@ -34,7 +34,7 @@ export const dirtyKey = (collection: string, id: string): string => collection +
 const splitKey = (k: string): { collection: string; id: string } => ({ collection: k.slice(0, k.indexOf('\n')), id: k.slice(k.indexOf('\n') + 1) });
 
 /** Coleções que viajam. Retratos de patrimônio e controle de alertas são recriados por cada aparelho. */
-export const SYNCED = new Set(['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'meta']);
+export const SYNCED = new Set(['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'transfers', 'meta']);
 
 export interface SyncResult {
   state: SyncState;

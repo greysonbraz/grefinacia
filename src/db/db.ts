@@ -9,8 +9,9 @@ const DB_NAME = 'grefinacia';
  * nunca apaga nem recria uma gaveta existente. Assim atualizar o app nunca perde dados.
  *   1 — coleções de dados + meta
  *   2 — + "safety" (cópias de segurança automáticas guardadas no aparelho)
+ *   3 — + "transfers" (transferências entre contas)
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 const SAFETY = 'safety';
 /** Quantas cópias automáticas ficam guardadas; a mais antiga sai quando entra uma nova. */
 export const MAX_SAFETY_COPIES = 3;
@@ -136,7 +137,7 @@ export async function replaceEverything(data: AppData, settings: Settings): Prom
 // ---------- cópias de segurança automáticas ----------
 
 /** Registros que a pessoa cadastrou (não conta categorias padrão, retratos de patrimônio nem controle de alertas). */
-const countRecords = (d: AppData): number => d.accounts.length + d.cards.length + d.transactions.length + d.recurrences.length + d.goals.length + d.goalMoves.length + d.assets.length + d.operations.length + d.fixedIncomes.length + d.dividends.length + d.debts.length;
+const countRecords = (d: AppData): number => d.accounts.length + d.cards.length + d.transactions.length + d.recurrences.length + d.goals.length + d.goalMoves.length + d.assets.length + d.operations.length + d.fixedIncomes.length + d.dividends.length + d.debts.length + d.transfers.length;
 
 /**
  * Guarda no aparelho um retrato completo dos dados, para poder desfazer uma restauração, importação ou atualização.
