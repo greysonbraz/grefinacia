@@ -93,3 +93,31 @@ export async function clearSecrets(): Promise<void> {
     /* cofre indisponível: nada a apagar */
   }
 }
+
+// ---------- valores avulsos no cofre (sessão da nuvem, chave do cofre de dados) ----------
+const volatile = new Map<string, string>(); // sem cofre (navegador): só em memória, some ao fechar
+
+export async function secureGet(key: string): Promise<string | null> {
+  const store = getStore();
+  if (!store) return volatile.get(key) ?? null;
+  try {
+    return await store.get(key);
+  } catch {
+    return null;
+  }
+}
+export async function secureSet(key: string, value: string): Promise<void> {
+  const store = getStore();
+  if (!store) return void volatile.set(key, value);
+  await store.set(key, value);
+}
+export async function secureRemove(key: string): Promise<void> {
+  volatile.delete(key);
+  const store = getStore();
+  if (!store) return;
+  try {
+    await store.remove(key);
+  } catch {
+    /* nada a remover */
+  }
+}
