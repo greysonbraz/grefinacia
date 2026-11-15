@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { remove, restoreAll, restoreSafetyCopy, toast, updateSettings, upsert, useStore, wipeAll, afterChange } from '../state/store';
 import { listSafetyCopies, MAX_SAFETY_COPIES, type SafetyCopyInfo, type SafetyReason } from '../db/db';
-import type { Account, Card, Settings as S } from '../lib/types';
-import { accountBalance } from '../domain/ledger';
+import type { Account, Card, Category, Settings as S, TxType } from '../lib/types';
+import { accountBalance, cardUsedCents } from '../domain/ledger';
+import { DEFAULT_CATEGORIES } from '../lib/categories';
 import { centsToInput, formatBRL, parseMoney } from '../lib/money';
 import { formatDateBR } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -13,7 +14,7 @@ import { isNative } from '../services/platform';
 import { PAID_AI_ENABLED } from '../lib/flags';
 import { cloudDeleteAll, cloudHasVault, cloudLogin, cloudLogout, cloudStatus, cloudSync, cloudUnlock, lastSyncAt, type CloudStatus } from '../state/cloud';
 import { MIN_PASSPHRASE } from '../services/vault';
-import { Field, Full, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
+import { Field, Full, Ico, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
 import { PinPad } from './Lock';
 
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
@@ -35,6 +36,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const today = useStore((s) => s.today);
   const [acc, setAcc] = useState<Account | 'new' | null>(null);
   const [card, setCard] = useState<Card | 'new' | null>(null);
+  const [cat, setCat] = useState<Category | 'new' | null>(null);
+  const [transfer, setTransfer] = useState(false);
+  const accName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? 'conta removida';
   const [pin, setPin] = useState(false);
   const [bk, setBk] = useState<'create' | 'restore' | null>(null);
   const [perm, setPerm] = useState<string>('');
@@ -54,11 +58,30 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ padding: '4px 14px' }}>
         {data.accounts.map((a) => (<button className="row" key={a.id} onClick={() => setAcc(a)}><div className="mid"><div className="t">{a.name}</div><div className="s">Saldo inicial {formatBRL(a.initialCents)} em {formatDateBR(a.initialDate)}</div></div><div className="end num">{formatBRL(accountBalance(a, data))}</div></button>))}
         <button className="row link" onClick={() => setAcc('new')}>+ Adicionar conta</button>
+        {data.accounts.length > 1 && <button className="row link" onClick={() => setTransfer(true)}>Transferir entre contas</button>}
       </div>
+      {data.transfers.length > 0 && (<>
+        <div className="section">Últimas transferências</div>
+        <div className="card" style={{ padding: '4px 14px' }}>
+          {[...data.transfers].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 5).map((t) => (
+            <div className="row" key={t.id}>
+              <div className="mid"><div className="t">{accName(t.fromAccountId)} → {accName(t.toAccountId)}</div><div className="s">{formatDateBR(t.date)}{t.note ? ' · ' + t.note : ''}</div></div>
+              <div className="end num">{formatBRL(t.amountCents)}</div>
+              <button className="btn danger sm" onClick={async () => { if (confirm('Desfazer esta transferência?')) { await remove('transfers', t.id); toast('Transferência desfeita'); } }}>Desfazer</button>
+            </div>
+          ))}
+        </div>
+      </>)}
       <div className="section">Cartões de crédito</div>
       <div className="card" style={{ padding: '4px 14px' }}>
-        {data.cards.map((c) => (<button className="row" key={c.id} onClick={() => setCard(c)}><div className="mid"><div className="t">{c.name}</div><div className="s">Fecha dia {c.closingDay} · vence dia {c.dueDay}</div></div></button>))}
+        {data.cards.map((c) => (<button className="row" key={c.id} onClick={() => setCard(c)}><div className="mid"><div className="t">{c.name}</div><div className="s">Fecha dia {c.closingDay} · vence dia {c.dueDay}{c.limitCents ? ` · usado ${formatBRL(cardUsedCents(c.id, data))} de ${formatBRL(c.limitCents)}` : ''}</div></div></button>))}
         <button className="row link" onClick={() => setCard('new')}>+ Adicionar cartão</button>
+      </div>
+      <div className="section">Categorias</div>
+      <div className="card" style={{ padding: '4px 14px' }}>
+        {data.categories.filter((c) => !DEFAULT_IDS.has(c.id)).map((c) => (<button className="row" key={c.id} onClick={() => setCat(c)}><div className="ic"><Ico name={c.icon} /></div><div className="mid"><div className="t">{c.name}</div><div className="s">{c.type === 'income' ? 'Receita' : 'Despesa'} · criada por você</div></div></button>))}
+        <button className="row link" onClick={() => setCat('new')}>+ Criar categoria</button>
+        <div className="hint" style={{ padding: '8px 0' }}>Além das {DEFAULT_CATEGORIES.length} categorias que já vêm com o app.</div>
       </div>
 
       <div className="section">Segurança</div>
@@ -136,6 +159,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       {acc && <AccountForm a={acc === 'new' ? null : acc} onClose={() => setAcc(null)} />}
       {card && <CardForm c={card === 'new' ? null : card} onClose={() => setCard(null)} />}
+      {cat && <CategoryForm c={cat === 'new' ? null : cat} onClose={() => setCat(null)} />}
+      {transfer && <TransferForm onClose={() => setTransfer(false)} />}
       {pin && <PinSheet onClose={() => setPin(false)} />}
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
     </Full>
@@ -193,6 +218,76 @@ function CloudCard() {
       {err && <div className="neg" role="alert">{err}</div>}
     </div>
   </>);
+}
+
+const DEFAULT_IDS = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
+const CATEGORY_ICONS = ['Tag', 'Home', 'Car', 'ShoppingCart', 'Utensils', 'HeartPulse', 'GraduationCap', 'Gamepad2', 'Plane', 'PawPrint', 'Baby', 'Dumbbell', 'Smartphone', 'Wrench', 'Briefcase', 'Gift', 'Coins', 'Wallet'];
+
+function CategoryForm({ c, onClose }: { c: Category | null; onClose: () => void }) {
+  const data = useStore((s) => s.data);
+  const [name, setName] = useState(c?.name ?? '');
+  const [type, setType] = useState<TxType>(c?.type ?? 'expense');
+  const [icon, setIcon] = useState(c?.icon ?? 'Tag');
+  const inUse = c ? data.transactions.some((t) => t.categoryId === c.id) || data.recurrences.some((r) => r.categoryId === c.id) : false;
+  const save = async () => {
+    const n = name.trim();
+    if (!n) return toast('Informe o nome da categoria', 'err');
+    if (data.categories.some((x) => x.id !== c?.id && x.type === type && x.name.toLowerCase() === n.toLowerCase())) return toast('Já existe uma categoria com esse nome', 'err');
+    await upsert('categories', { id: c?.id ?? uid('cat_'), name: n, icon, type });
+    toast('Categoria salva');
+    onClose();
+  };
+  return (
+    <Sheet title={c ? 'Editar categoria' : 'Nova categoria'} onClose={onClose}>
+      {!c && <Seg value={type} onChange={setType} options={[['expense', 'Despesa'], ['income', 'Receita']]} />}
+      <Field label="Nome"><input name="categoria" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Pets" /></Field>
+      <Field label="Ícone">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {CATEGORY_ICONS.map((i) => (<button key={i} type="button" className="iconbtn" aria-label={i} aria-pressed={icon === i} style={icon === i ? { borderColor: 'var(--gold)', color: 'var(--gold)' } : undefined} onClick={() => setIcon(i)}><Ico name={i} /></button>))}
+        </div>
+      </Field>
+      <div className="btnrow">
+        <button className="btn" onClick={() => void save()}>Salvar</button>
+        {c && <button className="btn danger" disabled={inUse} onClick={async () => { await remove('categories', c.id); toast('Categoria removida'); onClose(); }}>Excluir</button>}
+      </div>
+      {c && inUse && <Note>Esta categoria tem lançamentos. Para excluir, mude a categoria desses lançamentos antes.</Note>}
+    </Sheet>
+  );
+}
+
+function TransferForm({ onClose }: { onClose: () => void }) {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const accounts = data.accounts.filter((a) => !a.archived);
+  const [from, setFrom] = useState(accounts[0]?.id ?? '');
+  const [to, setTo] = useState(accounts[1]?.id ?? '');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(today);
+  const [note, setNote] = useState('');
+  const save = async () => {
+    const cents = parseMoney(amount);
+    if (!cents || cents <= 0) return toast('Informe um valor maior que zero', 'err');
+    if (!from || !to || from === to) return toast('Escolha duas contas diferentes', 'err');
+    await upsert('transfers', { id: uid('tr_'), fromAccountId: from, toAccountId: to, amountCents: cents, date, note: note.trim() || undefined, createdAt: Date.now() });
+    toast('Transferência registrada');
+    onClose();
+  };
+  const fromAcc = accounts.find((a) => a.id === from);
+  return (
+    <Sheet title="Transferir entre contas" onClose={onClose}>
+      <div className="two">
+        <Field label="De"><select name="de" value={from} onChange={(e) => setFrom(e.target.value)}>{accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}</select></Field>
+        <Field label="Para"><select name="para" value={to} onChange={(e) => setTo(e.target.value)}>{accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}</select></Field>
+      </div>
+      <div className="two">
+        <Field label="Valor (R$)" hint={fromAcc ? `Saldo: ${formatBRL(accountBalance(fromAcc, data))}` : undefined}><MoneyInput name="valor_transferencia" value={amount} onChange={setAmount} /></Field>
+        <Field label="Data"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+      </div>
+      <Field label="Observação (opcional)"><input value={note} maxLength={60} onChange={(e) => setNote(e.target.value)} /></Field>
+      <div className="btnrow"><button className="btn" onClick={() => void save()}>Transferir</button></div>
+      <Note>Transferência só muda o dinheiro de conta: não entra como receita nem como despesa, e o app não movimenta dinheiro de verdade.</Note>
+    </Sheet>
+  );
 }
 
 const COPY_REASON: Record<SafetyReason, string> = { atualizacao: 'Antes de atualizar o app', restauracao: 'Antes de restaurar', importacao: 'Antes de importar', sincronizacao: 'Antes da primeira sincronização' };
@@ -259,6 +354,7 @@ function CardForm({ c, onClose }: { c: Card | null; onClose: () => void }) {
   const [closing, setClosing] = useState(String(c?.closingDay ?? 25));
   const [due, setDue] = useState(String(c?.dueDay ?? 5));
   const [accountId, setAccountId] = useState(c?.accountId ?? accounts[0]?.id ?? '');
+  const [limit, setLimit] = useState(c?.limitCents ? centsToInput(c.limitCents) : '');
   const d = (v: string) => Math.min(Math.max(Number(v) || 1, 1), 31);
   return (
     <Sheet title={c ? 'Editar cartão' : 'Novo cartão'} onClose={onClose}>
@@ -267,9 +363,10 @@ function CardForm({ c, onClose }: { c: Card | null; onClose: () => void }) {
         <Field label="Dia do fechamento"><input name="fechamento" inputMode="numeric" value={closing} onChange={(e) => setClosing(e.target.value.replace(/\D/g, ''))} /></Field>
         <Field label="Dia do vencimento"><input name="vencimento" inputMode="numeric" value={due} onChange={(e) => setDue(e.target.value.replace(/\D/g, ''))} /></Field>
       </div>
+      <Field label="Limite do cartão (R$, opcional)" hint="Usado para mostrar quanto do limite está tomado."><MoneyInput name="limite" value={limit} onChange={setLimit} /></Field>
       <Field label="Conta que paga a fatura"><select value={accountId} onChange={(e) => setAccountId(e.target.value)}>{accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}</select></Field>
       <div className="btnrow">
-        <button className="btn" onClick={async () => { if (!name.trim()) return toast('Informe o nome do cartão', 'err'); await upsert('cards', { id: c?.id ?? uid('c_'), name: name.trim(), closingDay: d(closing), dueDay: d(due), accountId: accountId || undefined }); toast('Cartão salvo'); onClose(); }}>Salvar</button>
+        <button className="btn" onClick={async () => { if (!name.trim()) return toast('Informe o nome do cartão', 'err'); await upsert('cards', { id: c?.id ?? uid('c_'), name: name.trim(), closingDay: d(closing), dueDay: d(due), accountId: accountId || undefined, limitCents: parseMoney(limit) || undefined }); toast('Cartão salvo'); onClose(); }}>Salvar</button>
         {c && <button className="btn danger" onClick={async () => { await remove('cards', c.id); toast('Cartão removido'); onClose(); }}>Excluir</button>}
       </div>
     </Sheet>

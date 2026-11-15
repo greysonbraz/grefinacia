@@ -3,6 +3,7 @@ import { Plus, Search, Repeat, CreditCard } from 'lucide-react';
 import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
 import type { PaymentMethod, Transaction, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
+import { formatBoletoLine, parseBoleto } from '../domain/boleto';
 import { centsToInput, formatBRL, parseMoney } from '../lib/money';
 import { formatDateBR, formatDayMonth, lastMonths, monthOf, monthShort, weekdayShort } from '../lib/dates';
 import { buildInstallments, effectiveDue, monthSummary, openInvoices } from '../domain/ledger';
@@ -147,6 +148,8 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
   const [categoryId, setCategoryId] = useState(tx?.categoryId ?? 'mercado');
   const [date, setDate] = useState(tx?.date ?? today);
   const [method, setMethod] = useState<PaymentMethod>(tx?.paymentMethod ?? 'pix');
+  const [boleto, setBoleto] = useState(tx?.boletoLine ? formatBoletoLine(tx.boletoLine) : '');
+  const [boletoMsg, setBoletoMsg] = useState<string | null>(null);
   const [accountId, setAccountId] = useState(tx?.accountId ?? defaultAccountId() ?? '');
   const [cardId, setCardId] = useState(tx?.cardId ?? data.cards[0]?.id ?? '');
   const [paid, setPaid] = useState(tx ? tx.status === 'paid' : true);
@@ -159,13 +162,28 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
   const changeType = (t: TxType) => { setType(t); const k = t === 'income' ? 'outro_rendimento' : 'variavel'; setKind(k); setCategoryId(KIND_DEFAULT_CATEGORY[k]); if (t === 'income') setMethod('pix'); };
   const changeKind = (k: TxKind) => { setKind(k); if (!tx) setCategoryId(KIND_DEFAULT_CATEGORY[k]); if (k === 'cartao') setMethod('credito'); if (k === 'fixa' || k === 'assinatura') setRepeat(true); };
 
+  /** Lê a linha digitável e preenche valor e vencimento. Nada é consultado fora do aparelho. */
+  const readBoleto = (raw: string) => {
+    setBoleto(raw);
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length < 47) return setBoletoMsg(digits.length ? `${digits.length} de 47 números` : null);
+    const r = parseBoleto(raw, today);
+    if (!r.ok) return setBoletoMsg(r.error);
+    if (r.boleto.amountCents) setAmount(centsToInput(r.boleto.amountCents));
+    if (r.boleto.dueDate) setDate(r.boleto.dueDate);
+    setMethod('boleto');
+    setPaid(false);
+    setBoletoMsg(`Boleto lido${r.boleto.amountCents ? ': ' + formatBRL(r.boleto.amountCents) : ' (sem valor na linha)'}${r.boleto.dueDate ? ', vence em ' + formatDateBR(r.boleto.dueDate) : ''}. Confira com o boleto antes de pagar.`);
+  };
+  const boletoLine = () => { const r = parseBoleto(boleto, today); return r.ok ? r.boleto.line : undefined; };
+
   const save = async () => {
     const cents = parseMoney(amount);
     if (!desc.trim()) return setErr('Informe uma descrição.');
     if (!cents || cents <= 0) return setErr('Informe um valor maior que zero.');
     if (credit && !cardId) return setErr('Cadastre um cartão em Ajustes → Contas e cartões.');
     const card = credit ? data.cards.find((c) => c.id === cardId) : undefined;
-    const base = { type, kind, description: desc.trim(), amountCents: cents, categoryId, paymentMethod: method, accountId: credit ? undefined : accountId || undefined, cardId: credit ? cardId : undefined };
+    const base = { type, kind, description: desc.trim(), amountCents: cents, categoryId, paymentMethod: method, accountId: credit ? undefined : accountId || undefined, cardId: credit ? cardId : undefined, boletoLine: type === 'expense' && !credit ? boletoLine() : undefined };
     if (tx) {
       await saveTransaction({ ...tx, ...base, date, status: credit ? tx.status : paid ? 'paid' : 'pending', paidDate: paid ? tx.paidDate ?? date : undefined, dueDate: type === 'expense' && !credit ? (paid ? tx.dueDate : date) : tx.dueDate });
     } else if (kind === 'parcelada') {
@@ -194,6 +212,9 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
         <Field label={kind === 'parcelada' && !tx ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}><MoneyInput name="valor" value={amount} onChange={setAmount} /></Field>
         <Field label={kind === 'parcelada' && !tx ? '1ª parcela em' : 'Data'}><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
       </div>
+      {type === 'expense' && !credit && kind !== 'parcelada' && (
+        <Field label="Linha digitável do boleto (opcional)" hint={boletoMsg ?? 'Cole os números do boleto: o app preenche valor e vencimento.'}><input name="boleto" inputMode="numeric" value={boleto} onChange={(e) => readBoleto(e.target.value)} placeholder="47 ou 48 números" /></Field>
+      )}
       {kind === 'parcelada' && !tx && <Field label="Número de parcelas"><input inputMode="numeric" value={parcels} onChange={(e) => setParcels(e.target.value.replace(/\D/g, ''))} /></Field>}
       <Field label="Categoria"><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>{cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>
       <div className="two">

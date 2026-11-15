@@ -2,6 +2,7 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { AppData, Settings, Transaction } from '../lib/types';
 import { isNative } from './platform';
+import { withoutSecrets } from '../lib/secretFields';
 import { DATA_SCHEMA, ImportError, validateImported } from './validate';
 
 const enc = new TextEncoder();
@@ -80,6 +81,16 @@ export async function readBackup(text: string, password: string): Promise<{ data
     if (e instanceof ImportError) throw new BackupError(e.message);
     throw new BackupError('Backup corrompido: o conteúdo não pôde ser lido.');
   }
+}
+
+/**
+ * Exportação aberta (sem criptografia) de todos os dados em JSON, para usar em planilhas ou outros programas.
+ * Não leva o PIN nem tokens/chaves. Quem tiver o arquivo lê tudo: guarde com cuidado.
+ */
+export function exportOpenJson(data: AppData, settings: Settings): string {
+  const { security: _security, ...rest } = withoutSecrets(settings);
+  void _security;
+  return JSON.stringify({ app: 'grefinacia', formato: 'exportacao-aberta', schema: DATA_SCHEMA, exportadoEm: new Date().toISOString(), aviso: 'Valores em centavos. Arquivo sem criptografia.', data, settings: rest }, null, 2);
 }
 
 export function transactionsToCSV(txs: Transaction[], catName: (id: string) => string, accountName: (id?: string) => string): string {

@@ -28,6 +28,17 @@ export interface Card {
   accountId?: string; // conta usada para pagar a fatura
 }
 
+/** Dinheiro que só mudou de conta: não é receita nem despesa. */
+export interface Transfer {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amountCents: Cents; // sempre positivo
+  date: ISODate;
+  note?: string;
+  createdAt: number;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -55,6 +66,7 @@ export interface Transaction {
   source?: 'dividend' | 'salary' | 'manual';
   refId?: string; // id do provento, etc.
   notes?: string;
+  boletoLine?: string; // linha digitável (só dígitos), quando a conta é um boleto
   createdAt: number;
 }
 
@@ -214,6 +226,7 @@ export interface AppData {
   debts: Debt[];
   snapshots: Snapshot[];
   firedAlerts: FiredAlert[];
+  transfers: Transfer[];
 }
 
 export type CollectionName = keyof AppData;

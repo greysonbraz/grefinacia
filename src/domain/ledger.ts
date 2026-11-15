@@ -27,6 +27,11 @@ export function accountBalance(account: Account, data: AppData, asOf?: ISODate):
   for (const m of data.goalMoves) {
     if (m.accountId === account.id && inRange(m.date)) b -= m.amountCents;
   }
+  for (const t of data.transfers ?? []) {
+    if (!inRange(t.date)) continue;
+    if (t.fromAccountId === account.id) b -= t.amountCents;
+    if (t.toAccountId === account.id) b += t.amountCents;
+  }
   for (const o of data.operations) {
     if (o.accountId !== account.id || !inRange(o.date)) continue;
     const gross = Math.round(o.quantity * o.priceCents);
@@ -203,4 +208,9 @@ export function projectedMonthEndBalance(data: AppData, today: ISODate): Cents {
     if (t.type === 'expense' && t.status === 'pending' && effectiveDue(t) < makeDate(ym, 1)) b -= t.amountCents;
   }
   return b;
+}
+
+/** Quanto do limite do cartão está tomado: tudo o que foi comprado no crédito e ainda não foi pago. */
+export function cardUsedCents(cardId: string, data: AppData): Cents {
+  return data.transactions.filter((t) => t.cardId === cardId && t.type === 'expense' && t.status === 'pending').reduce((s, t) => s + t.amountCents, 0);
 }
