@@ -103,3 +103,7 @@ export async function openRecord<T = unknown>(key: CryptoKey, ref: RecordRef, se
     throw new VaultError(`Registro da nuvem ilegível (${ref.collection}/${ref.id}): foi alterado ou pertence a outro cofre.`);
   }
 }
+
+/** Chave de dados em texto, para guardar no cofre do aparelho e não pedir a senha a cada abertura. */
+export const exportVaultKey = async (key: CryptoKey): Promise<string> => b64(await crypto.subtle.exportKey('raw', key));
+export const importVaultKey = (raw: string): Promise<CryptoKey> => importDataKey(unb64(raw));

@@ -11,6 +11,8 @@ import { notificationPermission, requestNotificationPermission } from '../servic
 import { BackupError, createBackup, readBackup, saveAndShare } from '../services/backup';
 import { isNative } from '../services/platform';
 import { PAID_AI_ENABLED } from '../lib/flags';
+import { cloudBackupNow, cloudDeleteAll, cloudHasVault, cloudLogin, cloudLogout, cloudRestore, cloudStatus, cloudUnlock, type CloudStatus } from '../state/cloud';
+import { MIN_PASSPHRASE } from '../services/vault';
 import { Field, Full, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
 import { PinPad } from './Lock';
 
@@ -123,6 +125,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Note>O backup é um arquivo criptografado com a senha que você escolher. Salve no Google Drive e use "Restaurar" em outro aparelho para levar seus dados. Sincronização automática entre aparelhos não existe nesta versão: ela depende de um servidor.</Note>
       </div>
       <SafetyCopies />
+      <CloudCard />
 
       <div className="section">Privacidade (LGPD)</div>
       <div className="card">
@@ -137,6 +140,58 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
     </Full>
   );
+}
+
+/** Conta Google e cópia cifrada na nuvem. Opcional: sem isto o app funciona igual. */
+function CloudCard() {
+  const [st, setSt] = useState<CloudStatus | null>(null);
+  const [hasVault, setHasVault] = useState<boolean | null>(null);
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const refresh = async () => {
+    const s = await cloudStatus();
+    setSt(s);
+    if (s.email && !s.unlocked) setHasVault(await cloudHasVault().catch(() => null));
+  };
+  useEffect(() => { void refresh(); }, []);
+  const run = async (fn: () => Promise<string | void>) => {
+    setBusy(true); setErr(null);
+    try { const msg = await fn(); if (msg) toast(msg); await refresh(); }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Não foi possível concluir.'); }
+    finally { setBusy(false); }
+  };
+  const unlock = () => run(async () => {
+    if (hasVault === false) {
+      if (pw.length < MIN_PASSPHRASE) throw new Error(`Use pelo menos ${MIN_PASSPHRASE} caracteres.`);
+      if (pw !== pw2) throw new Error('As senhas não conferem.');
+    }
+    await cloudUnlock(pw); setPw(''); setPw2('');
+    return 'Nuvem pronta neste aparelho';
+  });
+  if (!st) return null;
+  return (<>
+    <div className="section">Conta e nuvem</div>
+    <div className="card">
+      {!st.email ? (<>
+        <div className="kv"><span>Conta</span><b>Não conectada</b></div>
+        <div className="btnrow"><button className="btn" disabled={busy} onClick={() => void run(async () => { await cloudLogin(); return 'Conectado'; })}>{busy ? 'Aguarde…' : 'Entrar com Google'}</button></div>
+        <Note>Opcional. Serve para guardar uma cópia cifrada dos seus dados na nuvem e levá-los a outro aparelho. Sem entrar, o app funciona igual e nada sai do celular.</Note>
+      </>) : !st.unlocked ? (<>
+        <div className="kv"><span>Conta</span><b>{st.email}</b></div>
+        <Field label={hasVault === false ? 'Crie uma senha de sincronização' : 'Senha de sincronização'} hint={hasVault === false ? 'Ela cifra seus dados antes de saírem do aparelho. Se você esquecê-la, a cópia da nuvem não pode ser aberta por ninguém.' : 'A mesma que você criou no primeiro aparelho.'}><input name="senha_sync" type="password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+        {hasVault === false && <Field label="Repita a senha"><input name="senha_sync2" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} /></Field>}
+        <div className="btnrow"><button className="btn" disabled={busy || !pw} onClick={() => void unlock()}>{busy ? 'Aguarde…' : 'Continuar'}</button><button className="btn ghost" disabled={busy} onClick={() => void run(async () => { await cloudLogout(); })}>Sair</button></div>
+      </>) : (<>
+        <div className="kv"><span>Conta</span><b>{st.email}</b></div>
+        <div className="btnrow"><button className="btn" disabled={busy} onClick={() => void run(async () => { const r = await cloudBackupNow(); return `Cópia enviada: ${r.sent} registros`; })}>{busy ? 'Aguarde…' : 'Enviar cópia agora'}</button><button className="btn ghost" disabled={busy} onClick={() => { if (confirm('Trocar os dados deste aparelho pela cópia da nuvem? O que existe agora fica guardado numa cópia automática.')) void run(async () => ((await cloudRestore()) ? 'Dados trazidos da nuvem' : 'Ainda não há cópia na nuvem')); }}>Trazer da nuvem</button></div>
+        <div className="btnrow"><button className="btn ghost sm" disabled={busy} onClick={() => void run(async () => { await cloudLogout(); })}>Sair da conta</button><button className="btn danger sm" disabled={busy} onClick={() => { if (confirm('Apagar a cópia da nuvem? Os dados deste aparelho continuam.')) void run(async () => { await cloudDeleteAll(); return 'Cópia da nuvem apagada'; }); }}>Apagar cópia da nuvem</button></div>
+        <Note>Os dados são cifrados neste aparelho antes de subir; o servidor só guarda texto cifrado. O PIN, o token da brapi e as chaves não sobem. Envio automático e sincronização entre aparelhos chegam na próxima versão.</Note>
+      </>)}
+      {err && <div className="neg" role="alert">{err}</div>}
+    </div>
+  </>);
 }
 
 const COPY_REASON: Record<SafetyReason, string> = { atualizacao: 'Antes de atualizar o app', restauracao: 'Antes de restaurar', importacao: 'Antes de importar' };
