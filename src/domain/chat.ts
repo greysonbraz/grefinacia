@@ -12,6 +12,8 @@ import { monthShortYear } from '../lib/dates';
 export interface ChatAnswer {
   text: string;
   calc?: string[]; // passo a passo dos cálculos
+  /** As regras locais não reconheceram a pergunta: a IA do aparelho (se ligada) pode responder. */
+  fallback?: boolean;
 }
 
 export const SUGGESTED_QUESTIONS = [
@@ -147,7 +149,7 @@ export function answerLocally(question: string, o: Overview, data: AppData, sett
     return { text: `Seu patrimônio é ${formatBRL(o.netWorth.totalCents)}${o.debtCents > 0 ? `; descontando ${formatBRL(o.debtCents)} de dívidas, o líquido é ${formatBRL(o.netWorth.totalCents - o.debtCents)}` : ''}.`, calc: [`Contas: ${formatBRL(o.netWorth.accountsCents)}`, `Reservas: ${formatBRL(o.netWorth.goalsCents)}`, `Renda fixa: ${formatBRL(o.netWorth.fixedIncomeCents)}`, `Bolsa: ${formatBRL(o.netWorth.equityMarketCents)}`, ...(o.netWorth.cryptoCents ? [`Cripto: ${formatBRL(o.netWorth.cryptoCents)}`] : [])] };
   }
   const top = generateInsights(o, data, settings).slice(0, 3);
-  return { text: 'No modo local eu respondo sobre: quanto você pode gastar, quanto economizou, quanto pode investir, despesas para reduzir, previsão do saldo nos próximos meses, gastos fora do padrão, assinaturas, cobranças em dobro, sua carteira, comparar empréstimos, reserva de emergência, dívidas, dividendos, patrimônio e se uma compra cabe no orçamento.' + (top.length ? ' O que mais chama atenção agora:' : ''), calc: top.map((i) => i.title) };
+  return { fallback: true, text: 'No modo local eu respondo sobre: quanto você pode gastar, quanto economizou, quanto pode investir, despesas para reduzir, previsão do saldo nos próximos meses, gastos fora do padrão, assinaturas, cobranças em dobro, sua carteira, comparar empréstimos, reserva de emergência, dívidas, dividendos, patrimônio e se uma compra cabe no orçamento.' + (top.length ? ' O que mais chama atenção agora:' : ''), calc: top.map((i) => i.title) };
 }
 
 /** Resumo (só agregados, sem descrições de lançamentos) enviado ao serviço de IA quando o usuário autoriza. */

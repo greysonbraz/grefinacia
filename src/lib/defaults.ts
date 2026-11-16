@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
     types: { salary: true, billsDue: true, overdue: true, dividendAnnounced: true, dividendSoon: true, dividendReceived: true, overBudget: true, lowBalance: true, goalReached: true, backup: true },
   },
   api: { quoteProvider: 'brapi', dividendProvider: 'brapi', brapiToken: '', brapiPlan: 'free' },
-  ai: { mode: 'local', apiKey: '', model: 'claude-haiku-5-5', consent: false },
+  ai: { mode: 'local', apiKey: '', model: 'claude-haiku-5-5', consent: false, nano: false },
   freedom: { yieldPct: 6 },
   news: { disabledSources: [] },
   analysis: { ignoredDuplicates: [] },

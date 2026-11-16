@@ -218,7 +218,7 @@ Em cada etapa eu entrego: código, testes, um APK no GitHub para você instalar,
 - Criptomoedas: carteira, preço médio, rentabilidade, variação e histórico.
 
 ### Etapa 8 — IA gratuita
-**8a concluída em 16/11/2026** (ver `docs/PROGRESSO.md`); 8b aguarda decisão.
+**8a concluída em 16/11/2026; 8b (Gemini Nano no aparelho) em 16/11/2026** (ver `docs/PROGRESSO.md`). Ollama ficou de fora.
 - 8a: motor local ampliado — gastos fora do padrão, assinaturas esquecidas, cobranças duplicadas, previsão de caixa de 3 a 12 meses, comparador de empréstimos (CET, Price × SAC, custo total), análise de carteira.
 - 8b (experimental): linguagem natural com Gemini Nano e/ou Ollama.
 

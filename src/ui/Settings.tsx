@@ -17,6 +17,7 @@ import { MIN_PASSPHRASE } from '../services/vault';
 import { Field, Full, Ico, MoneyInput, Note, Progress, Seg, Sheet, SwitchRow } from './kit';
 import { brapiQuota, getUsage } from '../services/usage';
 import { PinPad } from './Lock';
+import { nanoDownload, nanoStatus, NANO_STATE_LABEL, type NanoStatus } from '../services/nano';
 import { ImportStatement } from './Import';
 
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
@@ -134,7 +135,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <Note>No modo local nenhum dado sai do aparelho. A IA externa só é usada com chave e autorização; sem isso o chat responde por cálculos locais.</Note>
         </>) : (<>
           <div className="kv"><span>Modo</span><b>Local, sem custo</b></div>
-          <Note>A Grefinacia AI responde por cálculos feitos no próprio aparelho: nenhum dado sai dele e não há cobrança. A opção de IA externa paga está desativada nesta versão.</Note>
+          <Note>A Grefinacia AI responde por cálculos feitos no próprio aparelho, sem cobrança{st.ai.nano ? '' : ': nenhum dado sai dele'}. A opção de IA externa paga está desativada nesta versão.</Note>
+          <NanoBox on={st.ai.nano} onChange={(nano) => setAi({ nano })} />
         </>)}
       </div>
 
@@ -157,7 +159,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       <div className="section">Privacidade (LGPD)</div>
       <div className="card">
-        <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos){PAID_AI_ENABLED ? ' e, se você autorizar, ao serviço de IA' : ''}.</Note>
+        <Note>Seus dados financeiros ficam somente neste aparelho. O app não tem servidor próprio, não usa seus dados para treinar modelos e só se conecta às fontes de cotação que você escolher (enviando apenas os códigos dos ativos){PAID_AI_ENABLED ? ' e, se você autorizar, ao serviço de IA' : ''}.{st.ai.nano ? ' Com a IA no aparelho (Gemini Nano) ligada, o Google recebe métricas de uso do ML Kit, não o conteúdo das perguntas.' : ''}</Note>
         <div className="btnrow"><button className="btn danger" onClick={async () => { if (confirm('Apagar todos os dados deste aparelho? Esta ação não pode ser desfeita.')) { await wipeAll(); onClose(); } }}>Apagar todos os meus dados</button></div>
       </div>
       <div className="hint" style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, margin: '16px 0' }}>Grefinacia {__APP_VERSION__} ({__APP_BUILD__}) · {today.slice(0, 4)}</div>
@@ -454,6 +456,43 @@ function QuotaBox({ plan }: { plan: S['api']['brapiPlan'] }) {
       <Note>
         {q.exhausted ? 'A cota da brapi deste mês acabou: o app não consulta mais até o dia 1º. ' : q.low ? 'A cota da brapi está no fim: o histórico de preços só é buscado quando você pede. ' : ''}
         Contagem deste aparelho, com o app aberto. Outro aparelho com o mesmo token e a verificação de proventos em segundo plano não entram, então o uso real pode ser um pouco maior. CoinGecko e Banco Central são gratuitos e sem cota mensal neste uso.
+      </Note>
+    </div>
+  );
+}
+
+/** Gemini Nano no aparelho (experimental): ligar, ver o estado e baixar o modelo. */
+function NanoBox({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  const [st, setSt] = useState<NanoStatus | null>(null);
+  const [mb, setMb] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { if (on) void nanoStatus(true).then(setSt); }, [on]);
+  const download = async () => {
+    setErr(null);
+    setMb(0);
+    try {
+      setSt(await nanoDownload((b) => setMb(Math.round(b / 1048576))));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falhou. Tente de novo no Wi-Fi.');
+      setSt(await nanoStatus(true));
+    } finally {
+      setMb(null);
+    }
+  };
+  return (
+    <div style={{ marginTop: 10 }}>
+      <SwitchRow title="IA no aparelho (Gemini Nano)" sub="Experimental. Responde perguntas livres que as regras não entendem." on={on} onChange={onChange} />
+      {on && (<>
+        <div className="kv"><span>Estado</span><b>{st ? NANO_STATE_LABEL[st.state] : 'Verificando…'}</b></div>
+        {st?.state === 'baixar' && mb === null && <button className="btn ghost" onClick={download}>Baixar o modelo</button>}
+        {mb !== null && <div className="hint">Baixando… {mb} MB</div>}
+        {st?.state === 'baixando' && mb === null && <button className="btn ghost" onClick={async () => setSt(await nanoStatus(true))}>Verificar de novo</button>}
+        {err && <div className="neg" role="alert">{err}</div>}
+        {st?.state === 'indisponivel' && <Note>Pode ser que o Android ainda esteja preparando o serviço de IA (AICore): com internet, isso leva de minutos a horas. Reiniciar o celular costuma ajudar. Celulares com bootloader desbloqueado não são aceitos.</Note>}
+      </>)}
+      <Note>
+        Roda no próprio celular, sem custo. O texto das perguntas e dos seus dados não sai do aparelho. Ao usar, a biblioteca do Google (ML Kit) envia ao Google métricas de uso: modelo do aparelho, identificadores de instalação, tempo de resposta, tamanho das mensagens e erros.
+        É um recurso em teste do Google (beta), pode errar e mudar. As contas exatas continuam vindo das regras do app; a IA só entra quando elas não reconhecem a pergunta. Não é conselho financeiro profissional.
       </Note>
     </div>
   );

@@ -352,6 +352,7 @@ export interface Settings {
     apiKey: string;
     model: string;
     consent: boolean; // autorização explícita para enviar um resumo dos dados ao serviço de IA
+    nano: boolean; // usar o Gemini Nano do próprio aparelho para perguntas livres (experimental, desligado por padrão)
   };
   freedom: { yieldPct: number }; // rendimento anual que você assume para a meta de liberdade financeira
   news: { disabledSources: string[] }; // fontes de notícias desligadas pelo usuário

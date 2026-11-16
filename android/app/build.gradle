@@ -65,6 +65,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // IA no aparelho (Gemini Nano, via AICore). Opcional: só é usada se a pessoa ligar em Ajustes. Beta do Google.
+    implementation "com.google.mlkit:genai-prompt:1.0.0-beta5"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

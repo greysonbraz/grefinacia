@@ -9,6 +9,8 @@ import { PAID_AI_ENABLED } from '../lib/flags';
 import type { Nav } from './App';
 import { Note, Seg } from './kit';
 import { Xray } from './Xray';
+import { askNano } from '../services/nano';
+import { nanoContext } from '../domain/nanoPrompt';
 
 interface Msg { role: 'user' | 'assistant'; content: string; calc?: string[]; via?: string }
 
@@ -38,6 +40,15 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
     } else {
       const l = answerLocally(q, o, data, settings);
       reply = { role: 'assistant', content: l.text, calc: l.calc };
+      // pergunta que as regras não reconhecem: a IA do aparelho responde, se você ligou em Ajustes
+      if (l.fallback && settings.ai.nano) {
+        try {
+          const n = await askNano(q, nanoContext(o, data, settings));
+          reply = { role: 'assistant', content: n.text, via: 'Gemini Nano, no aparelho. Pode errar: confira os números nas telas do app.' + (n.dropped.length ? ' Parte dos dados ficou de fora por falta de espaço.' : '') };
+        } catch (e) {
+          reply = { ...reply, via: `Resposta local (Gemini Nano: ${e instanceof Error ? e.message : 'indisponível'})` };
+        }
+      }
     }
     setMsgs((m) => [...m, reply]);
     setBusy(false);
@@ -46,7 +57,7 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
 
   return (
     <div className="screen" style={{ paddingBottom: view === 'chat' ? 150 : 110 }}>
-      <div className="head"><div><h1>Grefinacia AI</h1><div className="sub">{useApi ? 'IA externa ligada, com sua autorização' : 'Modo local: nada sai do aparelho'}</div></div></div>
+      <div className="head"><div><h1>Grefinacia AI</h1><div className="sub">{useApi ? 'IA externa ligada, com sua autorização' : settings.ai.nano ? 'Regras locais + Gemini Nano no aparelho' : 'Modo local: nada sai do aparelho'}</div></div></div>
       <Seg value={view} onChange={setView} options={[['chat', 'Conversa'], ['analises', `Alertas (${insights.length})`], ['raiox', 'Raio-X']]} />
       {view === 'raiox' ? (
         <>
@@ -81,7 +92,7 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
                 {m.via && <div className="calc">{m.via}</div>}
               </div>
             ))}
-            {busy && <div className="msg ai mut">Calculando…</div>}
+            {busy && <div className="msg ai mut">{settings.ai.nano ? 'Pensando…' : 'Calculando…'}</div>}
             <div ref={end} />
           </div>
           <form className="composer" onSubmit={(e) => { e.preventDefault(); void ask(text); }}>

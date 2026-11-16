@@ -229,6 +229,12 @@ try {
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await seg('Claro');
   ok((await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'tema claro aplicado');
+  await page.getByRole('switch', { name: 'IA no aparelho (Gemini Nano)' }).scrollIntoViewIfNeeded();
+  await page.getByRole('switch', { name: 'IA no aparelho (Gemini Nano)' }).click();
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Só funciona no app Android') && t.includes('métricas de uso'), 'Gemini Nano: opção com aviso de métricas; no navegador avisa que é só no Android');
+  await shot('12-gemini-nano');
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await page.waitForTimeout(500);
   await shot('12-inicio-claro');
