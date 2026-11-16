@@ -47,7 +47,9 @@ Use quando sair uma versão nova. Marque cada item; se algo falhar, anote o núm
 |---|---|---|
 | 5.1 | Bolsa → atualizar | Cotações com selo verde ("há N min"); Desempenho com Carteira, CDI e IPCA |
 | 5.2 | Cripto → + → Bitcoin, quantidade 0,001, total pago → Salvar → atualizar | Preço da CoinGecko, lucro ou prejuízo, gráfico no detalhe |
-| 5.3 | Ajustes → Cotações e proventos | Contador da brapi aumentou |
+| 5.3 | Ajustes → Cotações e proventos | Contador da brapi aumentou; fonte dos proventos "Automática" |
+| 5.4 | Investimentos → Dividendos (com FIIs ou ações na carteira) | "Proventos atualizados em …" sem tocar em nada; proventos aparecem com status |
+| 5.5 | Importe um extrato com crédito de dividendo/JCP/rendimento | O provento passa para "Pago" sozinho, sem lançamento duplicado |
 
 ## 6. Importar extrato
 

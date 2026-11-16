@@ -11,7 +11,8 @@ import { cancelEvent, dividendRows, mergeEvents, reactivateEvent } from '../doma
 import { findReceiptFor, matchReceipts } from '../domain/passiveIncome';
 import { computePositions, operationsAreValid, quantityAt } from '../domain/portfolio';
 import { goalProgress } from '../domain/goals';
-import { fetchDividends, fetchQuotes, type FetchError } from '../services/quotes';
+import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError } from '../services/quotes';
+import { isNative } from '../services/platform';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
 import { setPrivacyScreen } from '../services/security';
@@ -29,9 +30,21 @@ export interface State {
   today: ISODate;
   locked: boolean;
   toast: { id: number; text: string; tone: 'ok' | 'err' } | null;
+  /** Saúde da fonte de proventos neste aparelho (não sincroniza). */
+  divHealth: DivHealth;
 }
 
-let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS, today: todayISO(), locked: false, toast: null };
+export interface DivHealth {
+  lastAttempt?: string; // última busca (automática ou pelo botão)
+  lastOkAt?: string; // última busca em que a fonte respondeu
+  downSince?: string; // desde quando a fonte não responde (nenhum ativo veio)
+  lastError?: string;
+}
+const DIV_HEALTH_META = 'divHealth';
+/** Busca automática de proventos: no máximo a cada 20 h, só no app Android (no navegador os sites recusam). */
+export const AUTO_DIVIDEND_HOURS = 20;
+
+let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS, today: todayISO(), locked: false, toast: null, divHealth: {} };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch };
@@ -209,7 +222,32 @@ export async function init(): Promise<void> {
   void db.requestPersistentStorage();
   void setPrivacyScreen(settings.security.enabled && settings.security.hideInRecents);
   await ensureChannels().catch(() => undefined);
+  set({ divHealth: (await db.getMeta<DivHealth>(DIV_HEALTH_META)) ?? {} });
+  // uma vez: quem estava na brapi gratuita (que não traz proventos) passa para a fonte automática
+  if (!(await db.getMeta<boolean>('divAutoV1'))) {
+    const api = state.settings.api;
+    if (api.dividendProvider === 'brapi' && (api.brapiPlan === 'free' || !api.brapiToken.trim())) await updateSettings({ api: { ...api, dividendProvider: 'auto' } });
+    await db.setMeta('divAutoV1', true);
+  }
   await rollDay();
+  if (isNative()) void autoRefreshDividends();
+}
+
+/**
+ * Atualiza os proventos sozinho ao abrir o app, no máximo a cada 20 h, sem aviso na tela.
+ * Se a fonte estiver fora, guarda desde quando e tenta de novo depois; os proventos já salvos continuam.
+ */
+export async function autoRefreshDividends(now = Date.now()): Promise<boolean> {
+  const api = state.settings.api;
+  if (api.dividendProvider === 'manual' || !state.data.assets.length) return false;
+  const last = state.divHealth.lastAttempt ? Date.parse(state.divHealth.lastAttempt) : 0;
+  if (now - last < AUTO_DIVIDEND_HOURS * 3_600_000) return false;
+  try {
+    await refreshDividends();
+  } catch {
+    /* a busca já registra a falha */
+  }
+  return true;
 }
 /** Roda ao abrir o app e quando o dia muda: gera recorrências do mês e recalcula alertas. */
 export async function rollDay(): Promise<void> {
@@ -425,11 +463,24 @@ export async function deleteCryptoAsset(id: string): Promise<void> {
 }
 
 export async function refreshDividends(): Promise<{ added: number; errors: FetchError[] }> {
-  const { events, errors } = await fetchDividends(state.data.assets, state.settings.api);
+  const attempt = new Date().toISOString();
+  let fetched: { events: DividendEvent[]; errors: FetchError[] };
+  try {
+    fetched = await fetchDividends(state.data.assets, state.settings.api);
+  } catch (e) {
+    fetched = { events: [], errors: state.data.assets.map((a) => ({ ticker: a.ticker, message: e instanceof Error ? e.message : 'falha na busca' })) };
+  }
+  const { events, errors } = fetched;
+  // fonte fora do ar = nenhum ativo respondeu; os proventos já salvos não são tocados
+  const allFailed = state.data.assets.length > 0 && errors.length >= state.data.assets.length && events.length === 0 && resolveDividendProvider(state.settings.api) !== 'manual';
+  const health: DivHealth = allFailed ? { ...state.divHealth, lastAttempt: attempt, downSince: state.divHealth.downSince ?? attempt, lastError: errors[0]?.message } : { lastAttempt: attempt, lastOkAt: attempt };
+  set({ divHealth: health });
+  await db.setMeta(DIV_HEALTH_META, health).catch(() => undefined);
+  if (allFailed) return { added: 0, errors };
   const firstTime = !state.settings.api.lastDividendRefresh;
   const failed = new Set(errors.map((e) => e.ticker));
   const covered = state.data.assets.filter((a) => !failed.has(a.ticker)).map((a) => a.id);
-  const sourceName = events[0]?.sourceName ?? (state.settings.api.dividendProvider === 'yahoo' ? 'Yahoo Finance (não oficial)' : 'brapi.dev');
+  const sourceName = events[0]?.sourceName ?? (resolveDividendProvider(state.settings.api) === 'yahoo' ? 'Yahoo Finance (não oficial)' : 'brapi.dev');
   const res = mergeEvents(state.data.dividends, events, { coveredAssetIds: covered, sourceName, today: state.today });
   if (res.toUpsert.length) await upsert('dividends', res.toUpsert);
   await updateSettings({ api: { ...state.settings.api, lastDividendRefresh: nowISOTime() } });

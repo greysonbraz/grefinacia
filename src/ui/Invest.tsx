@@ -10,7 +10,8 @@ import { addMonthsYM, daysInMonth, formatDateBR, formatDayMonth, monthLong, mont
 import { uid } from '../lib/ids';
 import { ChartBox, cssVar, Empty, Field, Full, Legend, MoneyInput, MonthNav, Note, QuoteStamp, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 import { Cripto, PerformanceCard, PriceChart } from './Market';
-import { DividendHistory, PassivePanel, TotalReturnCard } from './Proventos';
+import { DividendHistory, PassivePanel, SourceHealth, TotalReturnCard } from './Proventos';
+import { resolveDividendProvider } from '../services/quotes';
 import { historyId } from '../domain/market';
 
 const TYPE_LABEL: Record<AssetType, string> = { acao: 'Ação', fii: 'FII', etf: 'ETF' };
@@ -311,6 +312,7 @@ function Dividendos() {
         <button className="btn ghost" onClick={() => setAdd(true)} disabled={data.assets.length === 0}><Plus size={16} /> Cadastrar</button>
       </div>
       {errors.map((e) => (<div className="note neg" key={e} style={{ marginBottom: 8 }}>{e}</div>))}
+      <SourceHealth />
       <PassivePanel />
 
       <div className="card">
@@ -343,7 +345,7 @@ function Dividendos() {
       </div>
 
       <DividendHistory />
-      <Note>{api.dividendProvider === 'brapi' ? 'Fonte: brapi.dev. Proventos pela API exigem plano Startup ou Pro; no plano gratuito, cadastre manualmente ou escolha outra fonte em Ajustes.' : api.dividendProvider === 'yahoo' ? 'Fonte: Yahoo Finance (não oficial): traz só valor e data ex, sem data de pagamento e sem separar JCP.' : 'Busca automática desligada: os proventos são os que você cadastrar.'} O pagamento só conta como recebido depois de confirmado: pelo extrato importado (o app reconhece o crédito com o código do ativo ou a palavra "dividendo", "JCP" ou "rendimento") ou pelo botão "Recebi". Data de pagamento passada não basta.</Note>
+      <Note>{DIV_SOURCE_NOTE[resolveDividendProvider(api)]}{api.dividendProvider === 'auto' ? ' (escolhida automaticamente pelo seu plano da brapi).' : ''} O pagamento só conta como recebido depois de confirmado: pelo extrato importado (o app reconhece o crédito com o código do ativo ou a palavra "dividendo", "JCP" ou "rendimento") ou pelo botão "Recebi". Data de pagamento passada não basta.</Note>
       {add && <DivForm onClose={() => setAdd(false)} />}
     </>
   );
@@ -387,3 +389,9 @@ function DivForm({ onClose }: { onClose: () => void }) {
     </Sheet>
   );
 }
+
+const DIV_SOURCE_NOTE: Record<'brapi' | 'yahoo' | 'manual', string> = {
+  brapi: 'Fonte: brapi.dev (plano pago): valor, tipo, data-com e data de pagamento.',
+  yahoo: 'Fonte: Yahoo Finance (não oficial): valor e data-ex, sem data de pagamento e sem separar JCP de dividendo.',
+  manual: 'Busca automática desligada: os proventos são os que você cadastrar.',
+};

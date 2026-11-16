@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b), nº 10 (10). Etapa 11a (proventos) no branch `claude/etapa-11-proventos` (versão 1.7.0, 235 testes), feito em cima da 10.
+Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b), nº 10 (10), nº 11 (11a). Etapa 11b no branch `claude/etapa-11b-fontes` (versão 1.8.0, 241 testes), feito em cima da 11a.
 
 ## Concluído e no `main`
 
@@ -22,7 +22,15 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardand
 | 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | PR nº 8 (testada com extrato do Inter) |
 | 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | PR nº 9 ("tudo ok") |
 | 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | PR nº 10 |
-| 11a | Proventos: status completos, só confirmado conta como recebido, confirmação pelo extrato, histórico de correções, painel de renda passiva, rentabilidade total, alertas novos | `claude/etapa-11-proventos` |
+| 11a | Proventos: status completos, só confirmado conta como recebido, confirmação pelo extrato, histórico de correções, painel de renda passiva, rentabilidade total, alertas novos | PR nº 11 |
+| 11b | Fonte automática de proventos (brapi no pago, Yahoo no grátis), busca sozinha 1×/dia, aviso de fonte fora do ar; B3 decidida contra | `claude/etapa-11b-fontes` |
+
+Detalhes da Etapa 11b:
+- **Achado:** a fonte padrão era a brapi, que no plano grátis não traz proventos, e a busca só acontecia ao tocar no botão. Na prática, nada era buscado sozinho.
+- **Fonte "Automática"** (padrão): brapi com token e plano pago; senão Yahoo. Migração única para quem estava na brapi grátis.
+- **Busca sozinha** ao abrir o app Android, no máximo a cada 20 h; a verificação com o app fechado recebe a fonte já resolvida.
+- **Fonte fora do ar:** guarda desde quando, avisa na aba Dividendos, não mexe nos proventos salvos.
+- **B3:** não usada. Dados e termos de uso atrás de proteção anti-robô; sem termos confirmados.
 
 Detalhes da Etapa 11a (documentação completa em `docs/INVESTIMENTOS.md`):
 - **Auditoria antes:** o resumo por ativo, o gráfico de renda passiva, o fechamento do mês e a liberdade financeira contavam como recebido todo provento com data de pagamento passada. Corrigido: só confirmado conta.
@@ -110,9 +118,8 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 ## Próximo passo
 
-1. Dono faz o merge dos PRs na ordem nº 7 → 8 → 9 → 10, e depois o da Etapa 11a.
-2. Dono instala o APK da 11a e confere a aba Dividendos (painel, histórico, "Recebi") e a rentabilidade total na aba Bolsa; se tiver extrato com crédito de proventos, importa e vê a confirmação automática.
-3. Decisão pendente (11b): usar a lista pública de proventos da B3 no modo de melhor esforço (traz JCP/dividendo e data-com; intermitente; termos de uso não confirmados) ou ficar só com o Yahoo.
+1. Dono instala o APK 1.8.0 (branch `claude/etapa-11b-fontes`, contém todas as etapas) e testa: aba Dividendos (atualização sozinha, painel, histórico, "Recebi"), Bolsa (rentabilidade total) e o roteiro `docs/ROTEIRO-TESTE.md`.
+2. Dono faz (ou pede) os merges na ordem nº 7 → 8 → 9 → 10 → 11 → PR da 11b.
 
 ## Serviços em uso (todos gratuitos)
 

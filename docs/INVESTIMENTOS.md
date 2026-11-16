@@ -64,9 +64,9 @@ provento alterado · provento sumiu da fonte. Cada um pode ser desligado em Ajus
 
 | Fonte | Oficial? | Traz | Situação no app |
 |---|---|---|---|
-| Yahoo Finance | Não | Data-ex e valor, ações e FIIs. Sem data de pagamento, sem separar JCP | Em uso (escolha em Ajustes) |
-| brapi.dev | Não | Datas completas e tipo | Só nos planos pagos; no grátis não consulta |
-| B3: lista de proventos de ações (site público) | Dado oficial; endereço interno do site, sem contrato | Tipo (JCP/dividendo), valor, aprovação, data-com. Sem pagamento, sem FIIs | **Não usado.** Respondeu de forma intermitente (proteção anti-robô). Decisão do dono pendente (Etapa 11b) |
+| Yahoo Finance | Não | Data-ex e valor, ações e FIIs. Sem data de pagamento, sem separar JCP | **Em uso** pela fonte "Automática" no plano grátis da brapi |
+| brapi.dev | Não | Datas completas e tipo | Usada pela "Automática" só com token e plano pago; no grátis não consulta |
+| B3: lista de proventos de ações (site público) | Dado oficial; endereço interno do site, sem contrato | Tipo (JCP/dividendo), valor, aprovação, data-com. Sem pagamento, sem FIIs | **Não usado.** Respondeu de forma intermitente (proteção anti-robô). Decidido na 11b: **não usar**. Os dados ficam atrás de proteção anti-robô e a página de termos de uso também bloqueia leitura automática; sem termos confirmados, o app não depende disso |
 | B3: ficha da empresa/fundo | Idem | Datas completas | **Bloqueado** para acesso automático; o app não contorna |
 | Fundos.NET (informes de rendimento de FII) | Oficial | Data-base, pagamento, valor | **Bloqueado** para acesso automático |
 | CVM: informe mensal de FII (dados abertos, ODbL) | Oficial | Total distribuído no mês e dividend yield, sem datas; ~1 mês de atraso | Não usado ainda; serve para conferência mensal |
@@ -75,7 +75,14 @@ provento alterado · provento sumiu da fonte. Cada um pode ser desligado em Ajus
 **Nenhuma fonte gratuita confirma que o dinheiro caiu na sua conta.** Só a Área do Investidor da B3 sabe, e ela não tem API
 gratuita para pessoa física. Por isso "Pago" vem do seu extrato importado ou do seu "Recebi".
 
-**Fonte fora do ar:** o app mantém os proventos que já tinha, mostra a mensagem de erro da fonte e tenta de novo depois.
+**Fonte "Automática" (padrão, Etapa 11b):** brapi se você tiver token e plano pago; senão, Yahoo. Quem estava na brapi
+grátis (que não traz proventos) foi passado para a automática uma única vez.
+
+**Atualização sozinha:** no app Android, os proventos são buscados ao abrir, no máximo a cada 20 h, sem aviso na tela.
+A aba Dividendos mostra quando foi a última atualização.
+
+**Fonte fora do ar:** quando nenhum ativo responde, o app guarda desde quando, mostra o aviso na aba Dividendos, **não mexe**
+nos proventos já salvos (nem marca como "sumiu da fonte") e tenta de novo na próxima abertura depois de 20 h.
 A busca automática com o app fechado roda a cada ~6 h (o Android decide o horário); no plano grátis da brapi ela não consulta nada.
 
 ## Onde está cada coisa
