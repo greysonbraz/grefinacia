@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AppData, CollectionName, DividendEvent, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
+import type { AppData, CollectionName, CryptoOperation, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -8,7 +8,7 @@ import { materializeRecurrences, cardInvoiceDue } from '../domain/ledger';
 import { makeSnapshot } from '../domain/networth';
 import { evaluateAlerts, planNotifications, salaryReceivedAlert, type ImmediateAlert } from '../domain/notifications';
 import { dividendRows, mergeEvents } from '../domain/dividends';
-import { operationsAreValid, quantityAt } from '../domain/portfolio';
+import { computePositions, operationsAreValid, quantityAt } from '../domain/portfolio';
 import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, type FetchError } from '../services/quotes';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
@@ -16,6 +16,10 @@ import { syncRunnerConfig } from '../services/background';
 import { setPrivacyScreen } from '../services/security';
 import { clearSecrets, extractSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
 import { formatBRL } from '../lib/money';
+import { historyId, localDate, mergePoints } from '../domain/market';
+import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, type IndexName } from '../services/market';
+import { brapiQuota, initUsage, type Usage } from '../services/usage';
+import { addDays, addMonths } from '../lib/dates';
 
 export interface State {
   ready: boolean;
@@ -50,11 +54,14 @@ export function applyTheme(theme: Settings['theme']) {
 }
 
 // ---------- pendências de sincronização ----------
-import { dirtyKey, emptySyncState, type SyncState } from '../services/sync';
+import { dirtyKey, emptySyncState, SYNCED, type SyncState } from '../services/sync';
 import { secureRemove } from '../services/secrets';
 import { withoutSecrets } from '../lib/secretFields';
 
 const SYNC_META = 'sync';
+/** Sobe quando entra coleção nova em SYNCED. 2: cripto (Etapa 7). */
+export const SYNC_COLLECTIONS_VERSION = 2;
+const SYNC_COLLECTIONS_META = 'syncCollections';
 let sync: SyncState = emptySyncState();
 let onLocalChange: (() => void) | null = null;
 /** A nuvem se inscreve aqui para sincronizar pouco depois de cada mudança. */
@@ -79,7 +86,7 @@ async function markDirty(collection: string, ids: string[]): Promise<void> {
 /** Marca tudo o que existe no aparelho como pendente (primeira sincronização ou depois de restaurar um backup). */
 export async function markAllDirty(alsoRemoved: { collection: string; id: string }[] = [], at = Date.now()): Promise<void> {
   const dirty = { ...sync.dirty };
-  for (const name of DATA_KEYS) for (const item of state.data[name] as { id: string }[]) dirty[dirtyKey(name, item.id)] ??= at;
+  for (const name of DATA_KEYS) if (SYNCED.has(name)) for (const item of state.data[name] as { id: string }[]) dirty[dirtyKey(name, item.id)] ??= at;
   dirty[dirtyKey('meta', 'settings')] ??= at;
   for (const r of alsoRemoved) dirty[dirtyKey(r.collection, r.id)] = Date.now();
   sync = { ...sync, dirty };
@@ -185,6 +192,16 @@ export async function init(): Promise<void> {
   const { settings, migrated } = await hydrateSecrets(loaded.settings);
   if (migrated) await db.saveSettings(await settingsForDb(settings));
   sync = (await db.getMeta<SyncState>(SYNC_META)) ?? emptySyncState();
+  // coleções novas na sincronização: um aparelho na versão antiga pulava esses registros e já avançou a leitura;
+  // relê a nuvem desde o início uma vez (nada se perde: o que mudou aqui continua pendente e vale o mais recente)
+  if (((await db.getMeta<number>(SYNC_COLLECTIONS_META)) ?? 1) < SYNC_COLLECTIONS_VERSION) {
+    if (sync.cursor !== null) {
+      sync = { ...sync, cursor: null };
+      await db.setMeta(SYNC_META, sync);
+    }
+    await db.setMeta(SYNC_COLLECTIONS_META, SYNC_COLLECTIONS_VERSION);
+  }
+  initUsage(await db.getMeta<Usage>('usage'), (u) => void db.setMeta('usage', u).catch(() => undefined));
   applyTheme(settings.theme);
   set({ data, settings, today: todayISO(), locked: settings.security.enabled, ready: true });
   void db.requestPersistentStorage();
@@ -290,8 +307,119 @@ export async function refreshQuotes(): Promise<{ updated: number; errors: FetchE
     return { ...a, name: a.name ?? q.name, quote: { priceCents: q.priceCents, time: q.time, fetchedAt, source, changePct: q.changePct } };
   });
   if (updated.length) await upsert('assets', updated);
+  await addQuotePoints('b3', quotes.map((q) => ({ symbol: q.ticker, priceCents: q.priceCents, time: q.time })), source);
   await updateSettings({ api: { ...state.settings.api, lastQuoteRefresh: fetchedAt } });
   return { updated: updated.length, errors };
+}
+
+// ---------- histórico de preços e índices (fica só neste aparelho) ----------
+
+/** Grava séries de histórico sem marcar sincronização: cada aparelho monta o seu a partir das fontes. */
+async function saveHistoryLocal(records: MarketHistory[]): Promise<void> {
+  if (!records.length) return;
+  const ids = new Set(records.map((r) => r.id));
+  set({ data: { ...state.data, marketHistory: [...state.data.marketHistory.filter((h) => !ids.has(h.id)), ...records] } });
+  await db.putItems('marketHistory', records);
+}
+const findHistory = (id: string) => state.data.marketHistory.find((h) => h.id === id);
+
+function mergedHistory(kind: MarketHistory['kind'], symbol: string, points: HistoryPoint[], source: string, fetched: boolean): MarketHistory {
+  const id = historyId(kind, symbol);
+  const old = findHistory(id);
+  return { id, kind, symbol, unit: kind === 'indice' ? 'pct' : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
+}
+
+/** Cada cotação buscada vira um ponto do dia no histórico (sem gastar consulta a mais). */
+async function addQuotePoints(kind: 'b3' | 'cripto', items: { symbol: string; priceCents: number; time: string }[], source: string): Promise<void> {
+  await saveHistoryLocal(items.map((q) => mergedHistory(kind, q.symbol, [[localDate(q.time), q.priceCents]], findHistory(historyId(kind, q.symbol))?.source ?? source, false)));
+}
+
+const fetchedToday = (id: string) => (findHistory(id)?.updatedAt ?? '').slice(0, 10) === state.today;
+
+/** Primeira data que o comparativo pode precisar: a operação mais antiga (no máximo 10 anos atrás). */
+function indexStart(): ISODate {
+  const first = [...state.data.operations, ...state.data.cryptoOps].reduce<ISODate>((m, o) => (o.date < m ? o.date : m), addMonths(state.today, -12));
+  const limit = addMonths(state.today, -120);
+  return first < limit ? limit : first;
+}
+
+/** CDI e IPCA do Banco Central: busca só o que falta (com uma folga para revisões recentes). */
+export async function refreshIndices(force = false): Promise<FetchError[]> {
+  const errors: FetchError[] = [];
+  const out: MarketHistory[] = [];
+  const start = indexStart();
+  for (const name of ['CDI', 'IPCA'] as IndexName[]) {
+    const id = historyId('indice', name);
+    const old = findHistory(id);
+    if (!force && fetchedToday(id) && old && old.points[0]?.[0] <= addDays(start, 31)) continue;
+    const covered = old && old.points.length && old.points[0][0] <= addDays(start, 31);
+    const from = covered ? addMonths(old.points[old.points.length - 1][0], -2) : start;
+    const r = await fetchBcbSeries(name, from, state.today);
+    if ('message' in r) errors.push(r);
+    else out.push(mergedHistory('indice', name, r.points, r.source, true));
+  }
+  await saveHistoryLocal(out);
+  return errors;
+}
+
+/** Histórico de preços dos ativos em carteira (bolsa ou cripto) e dos índices. Uma consulta por ativo, no máximo uma vez por dia. */
+export async function refreshHistory(scope: 'b3' | 'cripto', force = false): Promise<{ updated: number; errors: FetchError[] }> {
+  const errors: FetchError[] = [];
+  const out: MarketHistory[] = [];
+  if (scope === 'b3') {
+    const held = computePositions(state.data.assets, state.data.operations).filter((p) => p.quantity > 0);
+    // na reserva final da cota da brapi, o histórico só é buscado quando você pede
+    const api = state.settings.api;
+    const save = !force && api.quoteProvider === 'brapi' && brapiQuota(api.brapiPlan).low;
+    for (const p of save ? [] : held) {
+      if (!force && fetchedToday(historyId('b3', p.asset.ticker))) continue;
+      const r = await fetchB3History(p.asset.ticker, state.settings.api);
+      if ('message' in r) errors.push(r);
+      else out.push(mergedHistory('b3', p.asset.ticker, r.points, r.source, true));
+    }
+  } else {
+    const held = computePositions(state.data.cryptoAssets, state.data.cryptoOps).filter((p) => p.quantity > 0);
+    for (const p of held) {
+      if (!force && fetchedToday(historyId('cripto', p.asset.coinId))) continue;
+      const r = await fetchCryptoHistory(p.asset.coinId);
+      if ('message' in r) errors.push({ ...r, ticker: p.asset.symbol });
+      else out.push(mergedHistory('cripto', p.asset.coinId, r.points, r.source, true));
+    }
+  }
+  await saveHistoryLocal(out);
+  errors.push(...(await refreshIndices(force)));
+  return { updated: out.length, errors };
+}
+
+// ---------- cripto ----------
+export async function refreshCryptoQuotes(): Promise<{ updated: number; errors: FetchError[] }> {
+  const assets = state.data.cryptoAssets;
+  if (!assets.length) return { updated: 0, errors: [] };
+  const { quotes, errors } = await fetchCryptoQuotes(assets.map((a) => a.coinId));
+  const fetchedAt = nowISOTime();
+  const updated = assets.flatMap((a) => {
+    const q = quotes.find((x) => x.coinId === a.coinId);
+    return q ? [{ ...a, quote: { priceCents: q.priceCents, time: q.time, fetchedAt, source: 'CoinGecko', changePct: q.changePct } }] : [];
+  });
+  if (updated.length) await upsert('cryptoAssets', updated);
+  await addQuotePoints('cripto', quotes.map((q) => ({ symbol: q.coinId, priceCents: q.priceCents, time: q.time })), 'CoinGecko');
+  return { updated: updated.length, errors: errors.map((e) => ({ ...e, ticker: assets.find((a) => a.coinId === e.ticker)?.symbol ?? e.ticker })) };
+}
+
+export async function saveCryptoOperation(op: CryptoOperation): Promise<string | null> {
+  const all = [...state.data.cryptoOps.filter((o) => o.id !== op.id), op];
+  if (!operationsAreValid(all).ok) return 'Venda maior que a quantidade em carteira nessa data.';
+  await upsert('cryptoOps', op);
+  return null;
+}
+export async function deleteCryptoOperation(id: string): Promise<string | null> {
+  if (!operationsAreValid(state.data.cryptoOps.filter((o) => o.id !== id)).ok) return 'Não dá para excluir: há uma venda posterior que depende desta compra.';
+  await remove('cryptoOps', id);
+  return null;
+}
+export async function deleteCryptoAsset(id: string): Promise<void> {
+  await remove('cryptoOps', state.data.cryptoOps.filter((o) => o.assetId === id).map((o) => o.id));
+  await remove('cryptoAssets', id);
 }
 
 export async function refreshDividends(): Promise<{ added: number; errors: FetchError[] }> {

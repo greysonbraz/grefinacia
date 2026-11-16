@@ -10,8 +10,9 @@ const DB_NAME = 'grefinacia';
  *   1 — coleções de dados + meta
  *   2 — + "safety" (cópias de segurança automáticas guardadas no aparelho)
  *   3 — + "transfers" (transferências entre contas)
+ *   4 — + "cryptoAssets", "cryptoOps" (carteira de cripto) e "marketHistory" (histórico de preços e índices)
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 const SAFETY = 'safety';
 /** Quantas cópias automáticas ficam guardadas; a mais antiga sai quando entra uma nova. */
 export const MAX_SAFETY_COPIES = 3;
@@ -79,7 +80,7 @@ export async function loadAll(): Promise<{ data: AppData; settings: Settings; ha
     const items = await db.getAll(name);
     if (items.length > 0) {
       (data[name] as unknown[]) = items;
-      if (name !== 'categories') hadData = true;
+      if (name !== 'categories' && name !== 'marketHistory') hadData = true;
     }
   }
   const saved = (await db.get('meta', 'settings')) as Partial<Settings> | undefined;
@@ -137,7 +138,7 @@ export async function replaceEverything(data: AppData, settings: Settings): Prom
 // ---------- cópias de segurança automáticas ----------
 
 /** Registros que a pessoa cadastrou (não conta categorias padrão, retratos de patrimônio nem controle de alertas). */
-const countRecords = (d: AppData): number => d.accounts.length + d.cards.length + d.transactions.length + d.recurrences.length + d.goals.length + d.goalMoves.length + d.assets.length + d.operations.length + d.fixedIncomes.length + d.dividends.length + d.debts.length + d.transfers.length;
+const countRecords = (d: AppData): number => d.accounts.length + d.cards.length + d.transactions.length + d.recurrences.length + d.goals.length + d.goalMoves.length + d.assets.length + d.operations.length + d.fixedIncomes.length + d.dividends.length + d.debts.length + d.transfers.length + (d.cryptoAssets?.length ?? 0) + (d.cryptoOps?.length ?? 0);
 
 /**
  * Guarda no aparelho um retrato completo dos dados, para poder desfazer uma restauração, importação ou atualização.

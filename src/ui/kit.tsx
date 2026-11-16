@@ -3,6 +3,7 @@ import { Chart, LineController, BarController, DoughnutController, LineElement, 
 import * as L from 'lucide-react';
 import { formatBRL, formatCompact, formatPct } from '../lib/money';
 import { addMonthsYM, capFirst, monthLong } from '../lib/dates';
+import { quoteFreshness } from '../domain/market';
 import { useStore } from '../state/store';
 
 Chart.register(LineController, BarController, DoughnutController, LineElement, PointElement, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Filler);
@@ -109,6 +110,16 @@ export function Empty({ title, text, action, onAction }: { title: string; text: 
     </div>
   );
 }
+/** Selo da cotação: fonte, horário e há quanto tempo (verde até 1 h; amarelo até 4 dias; vermelho depois). */
+export function QuoteStamp({ quote, compact }: { quote?: { time: string; source: string }; compact?: boolean }) {
+  if (!quote) return <span className="badge warn">sem cotação</span>;
+  const f = quoteFreshness(quote.time);
+  const when = new Date(quote.time).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const cls = 'badge ' + (f.tone === 'ok' ? 'good' : f.tone === 'warn' ? 'warn' : 'bad');
+  const title = `${quote.source}, cotação de ${when} (${f.age}). Fontes gratuitas têm atraso; não é tempo real.`;
+  return compact ? <span className={cls} title={title} aria-label={title}>{f.age}</span> : <span className={cls} title={title}>{quote.source} · {when} · {f.age}</span>;
+}
+
 export function Note({ children }: { children: ReactNode }) {
   return <div className="note"><L.Info size={14} /><span>{children}</span></div>;
 }
@@ -127,10 +138,10 @@ export function cssVar(name: string): string {
 export const seriesColors = () => ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8'].map(cssVar);
 
 export type ChartKind = 'line' | 'bar' | 'doughnut';
-export interface Series { label: string; data: number[]; color?: string; fill?: boolean; dashed?: boolean }
+export interface Series { label: string; data: (number | null)[]; color?: string; fill?: boolean; dashed?: boolean }
 
-/** Gráfico interativo (toque para ver valores). Valores em centavos. */
-export function ChartBox({ kind, labels, series, small, stacked, colors }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[] }) {
+/** Gráfico interativo (toque para ver valores). Valores em centavos, ou em % com `format="pct"`. */
+export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl' }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const theme = useStore((s) => s.settings.theme);
   useEffect(() => {
@@ -155,14 +166,14 @@ export function ChartBox({ kind, labels, series, small, stacked, colors }: { kin
         interaction: { mode: kind === 'doughnut' ? 'nearest' : 'index', intersect: kind === 'doughnut' },
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: cssVar('--surface2'), titleColor: cssVar('--text'), bodyColor: cssVar('--text'), borderColor: line, borderWidth: 1, padding: 10, cornerRadius: 10, boxPadding: 4, callbacks: { label: (ctx: any) => ` ${kind === 'doughnut' ? ctx.label : ctx.dataset.label}: ${formatBRL(Number(ctx.raw))}` } },
+          tooltip: { backgroundColor: cssVar('--surface2'), titleColor: cssVar('--text'), bodyColor: cssVar('--text'), borderColor: line, borderWidth: 1, padding: 10, cornerRadius: 10, boxPadding: 4, callbacks: { label: (ctx: any) => ` ${kind === 'doughnut' ? ctx.label : ctx.dataset.label}: ${format === 'pct' ? formatPct(Number(ctx.raw), true) : formatBRL(Number(ctx.raw))}` } },
         },
-        ...(kind === 'doughnut' ? { cutout: '68%' } : { scales: { x: { stacked, grid: { display: false }, ticks: { color: text, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 8 }, border: { color: line } }, y: { stacked, grid: { color: line + '80' }, border: { display: false }, ticks: { color: text, font: { size: 11 }, maxTicksLimit: 5, callback: (v: string | number) => formatCompact(Number(v)) } } } }),
+        ...(kind === 'doughnut' ? { cutout: '68%' } : { scales: { x: { stacked, grid: { display: false }, ticks: { color: text, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 8 }, border: { color: line } }, y: { stacked, grid: { color: line + '80' }, border: { display: false }, ticks: { color: text, font: { size: 11 }, maxTicksLimit: 5, callback: (v: string | number) => (format === 'pct' ? formatPct(Number(v)) : formatCompact(Number(v))) } } } }),
       } as never,
     };
     const chart = new Chart(ref.current, cfg);
     return () => chart.destroy();
-  }, [kind, JSON.stringify(labels), JSON.stringify(series), theme, stacked, JSON.stringify(colors)]);
+  }, [kind, JSON.stringify(labels), JSON.stringify(series), theme, stacked, JSON.stringify(colors), format]);
   return <div className={'chartbox' + (small ? ' sm' : '')}><canvas ref={ref} role="img" aria-label={series.map((s) => s.label).join(', ')} /></div>;
 }
 export function Legend({ items }: { items: { label: string; color: string; value?: string; dashed?: boolean }[] }) {

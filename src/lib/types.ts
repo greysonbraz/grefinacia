@@ -140,6 +140,47 @@ export interface Operation {
   createdAt: number;
 }
 
+/** Criptomoeda acompanhada pela CoinGecko (coinId é o identificador de lá, ex.: "bitcoin"). */
+export interface CryptoAsset {
+  id: string;
+  coinId: string;
+  symbol: string; // ex.: BTC
+  name: string;
+  quote?: Quote;
+  manualPriceCents?: Cents;
+}
+
+/** Compra ou venda de cripto. A quantidade aceita frações (até 8 casas). */
+export interface CryptoOperation {
+  id: string;
+  assetId: string;
+  side: 'buy' | 'sell';
+  quantity: number;
+  priceCents: Cents; // preço de 1 unidade inteira da moeda, em reais
+  feesCents: Cents;
+  date: ISODate;
+  broker: string; // corretora ou exchange
+  accountId?: string;
+  createdAt: number;
+}
+
+/** Ponto de uma série: data e valor (centavos para preços; % para índices). */
+export type HistoryPoint = [ISODate, number];
+
+/**
+ * Histórico guardado no aparelho: preços de fechamento de um ativo ou valores de um índice (CDI, IPCA).
+ * Cresce com o tempo: cada busca e cada cotação acrescentam pontos, então o histórico passa do limite da fonte.
+ */
+export interface MarketHistory {
+  id: string; // ex.: "b3:PETR4", "cripto:bitcoin", "indice:CDI"
+  kind: 'b3' | 'cripto' | 'indice';
+  symbol: string;
+  unit: 'cents' | 'pct';
+  points: HistoryPoint[]; // ordenado por data
+  source: string;
+  updatedAt: string; // última busca na fonte (ISO)
+}
+
 export interface FixedIncome {
   id: string;
   name: string; // ex.: "CDB Banco X 110% CDI"
@@ -204,6 +245,7 @@ export interface Snapshot {
   equityCostCents: Cents;
   totalCents: Cents;
   debtCents?: Cents;
+  cryptoCents?: Cents;
 }
 
 export interface FiredAlert {
@@ -227,6 +269,9 @@ export interface AppData {
   snapshots: Snapshot[];
   firedAlerts: FiredAlert[];
   transfers: Transfer[];
+  cryptoAssets: CryptoAsset[];
+  cryptoOps: CryptoOperation[];
+  marketHistory: MarketHistory[];
 }
 
 export type CollectionName = keyof AppData;

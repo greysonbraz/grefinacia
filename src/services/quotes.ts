@@ -2,6 +2,7 @@ import type { Asset, DividendEvent, DividendKind, ISODate, Settings } from '../l
 import { addDays, parseISO, toISO, todayISO, addMonths } from '../lib/dates';
 import { makeEventKey } from '../domain/dividends';
 import { uid } from '../lib/ids';
+import { brapiQuota, countRequest } from './usage';
 
 type Api = Settings['api'];
 
@@ -31,7 +32,7 @@ export function brapiDividendsAvailable(ticker: string, api: Pick<Api, 'brapiTok
 }
 const BATCH: Record<Api['brapiPlan'], number> = { free: 1, startup: 10, pro: 20 };
 
-async function getJson(url: string, headers: Record<string, string> = {}): Promise<{ status: number; json: any }> {
+export async function getJson(url: string, headers: Record<string, string> = {}): Promise<{ status: number; json: any }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
   try {
@@ -57,7 +58,15 @@ function httpMessage(status: number, json: any, provider: string): string {
   return `${provider}: erro ${status}.`;
 }
 
-const authHeader = (api: Api): Record<string, string> => (api.brapiToken ? { Authorization: `Bearer ${api.brapiToken.trim()}` } : {});
+/** Mensagem quando a cota do mês acabou; null se ainda dá para consultar (e já conta a consulta). */
+export function takeBrapiRequest(api: Pick<Api, 'brapiPlan'>): string | null {
+  const q = brapiQuota(api.brapiPlan);
+  if (q.exhausted) return `brapi: as ${q.limit.toLocaleString('pt-BR')} consultas do mês acabaram neste aparelho. Voltam no dia 1º; até lá, use o preço manual ou o Yahoo Finance.`;
+  countRequest('brapi');
+  return null;
+}
+
+export const authHeader = (api: Api): Record<string, string> => (api.brapiToken ? { Authorization: `Bearer ${api.brapiToken.trim()}` } : {});
 const toCents = (n: number) => Math.round(n * 100 + 1e-9);
 
 // ============================ COTAÇÕES ============================
@@ -71,6 +80,7 @@ export async function fetchQuotes(tickers: string[], api: Api): Promise<{ quotes
   if (api.quoteProvider === 'yahoo') {
     for (const t of list) {
       try {
+        countRequest('yahoo');
         const { status, json } = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${t}.SA?range=1d&interval=1d`);
         const meta = json?.chart?.result?.[0]?.meta;
         if (!meta || typeof meta.regularMarketPrice !== 'number') throw new Error(status === 404 ? 'ativo não encontrado' : `resposta sem preço (HTTP ${status})`);
@@ -90,6 +100,11 @@ export async function fetchQuotes(tickers: string[], api: Api): Promise<{ quotes
   const size = hasToken ? BATCH[api.brapiPlan] : 1;
   for (let i = 0; i < allowed.length; i += size) {
     const chunk = allowed.slice(i, i + size);
+    const blocked = takeBrapiRequest(api);
+    if (blocked) {
+      for (const t of chunk) errors.push({ ticker: t, message: blocked });
+      continue;
+    }
     try {
       const { status, json } = await getJson(`https://brapi.dev/api/quote/${chunk.join(',')}`, authHeader(api));
       if (status !== 200 || !Array.isArray(json?.results)) {
@@ -108,7 +123,7 @@ export async function fetchQuotes(tickers: string[], api: Api): Promise<{ quotes
   return { quotes, errors };
 }
 
-function explain(e: unknown): string {
+export function explain(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (/abort/i.test(msg)) return 'tempo esgotado.';
   if (/failed to fetch|networkerror|load failed/i.test(msg)) return 'sem conexão ou bloqueado pelo navegador (no app Android funciona).';
@@ -189,12 +204,18 @@ export async function fetchDividends(assets: Asset[], api: Api): Promise<{ event
   for (const a of assets) {
     try {
       if (api.dividendProvider === 'yahoo') {
+        countRequest('yahoo');
         const { status, json } = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${a.ticker}.SA?range=2y&interval=1d&events=div`);
         if (!json?.chart?.result) throw new Error(`resposta inválida (HTTP ${status})`);
         events.push(...parseYahooDividends(json, a));
       } else {
         if (!brapiDividendsAvailable(a.ticker, api)) {
           errors.push({ ticker: a.ticker, message: 'brapi: proventos exigem token e plano Startup ou Pro (se for o seu caso, selecione o plano em Ajustes). No plano gratuito, cadastre manualmente ou use o Yahoo Finance.' });
+          continue;
+        }
+        const blocked = takeBrapiRequest(api);
+        if (blocked) {
+          errors.push({ ticker: a.ticker, message: blocked });
           continue;
         }
         const url = a.type === 'fii' ? `https://brapi.dev/api/v2/fii/dividends?symbols=${a.ticker}&startDate=${start}` : `https://brapi.dev/api/v2/stocks/dividends?symbols=${a.ticker}&startDate=${start}`;

@@ -130,6 +130,7 @@ Limites conferidos por busca em 12/11/2026. **Não consegui abrir as páginas of
 | **Banco Central (SGS)** | Selic, CDI, IPCA, dólar | Oficial e aberto. Consultas por período de até 10 anos; "últimos N" até 20 valores | Não | — |
 | **Mercado Bitcoin (API pública)** | Cripto em reais | Dados públicos sem chave; limite oficial não confirmado | Não | Erro 429 |
 | **CoinGecko Demo** | Cripto (alternativa) | 10.000 chamadas/mês; exige chave demo gratuita. Taxa por minuto: a documentação diz ~30, a página de preços diz 100 | Não | Bloqueia. Existe "cobrança de excedente" desligada por padrão; nunca ativar |
+| **CoinGecko pública (sem chave)** — *escolhida na Etapa 7* | Cripto em reais: preço, variação 24 h, histórico, busca | Sem chave e sem conta. Limite por minuto conforme o endereço de internet; histórico de até 365 dias (docs.coingecko.com, conferido em 16/11/2026). O Mercado Bitcoin recusou acesso automático (erro 403) | Não | Erro 429: o app pede para esperar um minuto |
 | **RSS** | Notícias | Sem custo. Uso previsto: título, resumo e link para o site original | — | — |
 | **Gemini Nano no aparelho (ML Kit GenAI)** | IA local em linguagem natural | Roda no celular; só com o app aberto; cota por app; depende do modelo do aparelho; API ainda em beta | Não | — |
 | **Ollama** | IA local no seu computador | Gratuito; exige o PC ligado na mesma rede | Não | — |
@@ -211,6 +212,7 @@ Em cada etapa eu entrego: código, testes, um APK no GitHub para você instalar,
 - Exportação JSON aberta e CSV de todas as coleções.
 
 ### Etapa 7 — Investimentos, cotações e cripto
+**Concluída em 16/11/2026** (ver `docs/PROGRESSO.md`). Cripto pela CoinGecko pública em vez do Mercado Bitcoin.
 - Selo de atraso, horário e fonte em toda cotação; contador de cota da brapi.
 - Histórico de preços guardado no aparelho; desempenho da carteira comparado a CDI e IPCA (Banco Central).
 - Criptomoedas: carteira, preço médio, rentabilidade, variação e histórico.

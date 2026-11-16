@@ -45,6 +45,7 @@ export function Home({ nav }: { nav: Nav }) {
     { label: 'Reservas', cents: Math.max(nw.goalsCents, 0), color: cssVar('--s3') },
     { label: 'Renda fixa', cents: nw.fixedIncomeCents, color: cssVar('--s4') },
     { label: 'Bolsa', cents: nw.equityMarketCents, color: cssVar('--s7') },
+    { label: 'Cripto', cents: nw.cryptoCents, color: cssVar('--s8') },
   ].filter((c) => c.cents > 0);
   const compTotal = comp.reduce((s, c) => s + c.cents, 0);
   const planInvestLeft = Math.min(Math.max(o.spend.plan.investCents - Math.max(o.cur.investedCents, 0), 0), Math.max(o.projectedEndBalanceCents, 0));

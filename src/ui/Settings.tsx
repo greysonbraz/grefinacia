@@ -14,7 +14,8 @@ import { isNative } from '../services/platform';
 import { PAID_AI_ENABLED } from '../lib/flags';
 import { cloudDeleteAll, cloudHasVault, cloudLogin, cloudLogout, cloudStatus, cloudSync, cloudUnlock, lastSyncAt, type CloudStatus } from '../state/cloud';
 import { MIN_PASSPHRASE } from '../services/vault';
-import { Field, Full, Ico, MoneyInput, Note, Seg, Sheet, SwitchRow } from './kit';
+import { Field, Full, Ico, MoneyInput, Note, Progress, Seg, Sheet, SwitchRow } from './kit';
+import { brapiQuota, getUsage } from '../services/usage';
 import { PinPad } from './Lock';
 
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
@@ -116,6 +117,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <Field label="Token da brapi.dev" hint="Crie grátis em brapi.dev/dashboard. Sem token só funcionam PETR4, VALE3, ITUB4 e MGLU3."><input name="token" value={st.api.brapiToken} onChange={(e) => setApi({ brapiToken: e.target.value })} autoCapitalize="off" autoCorrect="off" /></Field>
         <Field label="Seu plano na brapi"><select value={st.api.brapiPlan} onChange={(e) => setApi({ brapiPlan: e.target.value as never })}><option value="free">Gratuito (1 ativo por consulta, sem proventos)</option><option value="startup">Startup</option><option value="pro">Pro</option></select></Field>
         <Note>Cotações têm atraso (não são tempo real). O Yahoo Finance é uma fonte não oficial, pode parar de funcionar e só responde no app Android.</Note>
+        <QuotaBox plan={st.api.brapiPlan} />
       </div>
 
       <div className="section">Grefinacia AI</div>
@@ -432,5 +434,23 @@ function BackupSheet({ mode, onClose }: { mode: 'create' | 'restore'; onClose: (
       {err && <div className="neg" role="alert">{err}</div>}
       <div className="btnrow"><button className="btn" disabled={busy} onClick={mode === 'create' ? create : restore}>{busy ? 'Aguarde…' : mode === 'create' ? 'Criar e salvar' : 'Restaurar'}</button></div>
     </Sheet>
+  );
+}
+
+/** Consultas feitas neste mês pelas fontes gratuitas, contadas neste aparelho. */
+function QuotaBox({ plan }: { plan: S['api']['brapiPlan'] }) {
+  const u = getUsage();
+  const q = brapiQuota(plan, u);
+  const n = (x: number) => x.toLocaleString('pt-BR');
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="kv"><span>Consultas à brapi neste mês</span><b className={'num ' + (q.exhausted ? 'neg' : q.low ? 'warn' : '')}>{n(q.used)} de {n(q.limit)}</b></div>
+      <Progress pct={Math.min(q.pct, 100)} tone={q.low ? 'over' : undefined} />
+      <div className="kv"><span>CoinGecko · Banco Central · Yahoo</span><b className="num">{n(u.counts.coingecko)} · {n(u.counts.bcb)} · {n(u.counts.yahoo)}</b></div>
+      <Note>
+        {q.exhausted ? 'A cota da brapi deste mês acabou: o app não consulta mais até o dia 1º. ' : q.low ? 'A cota da brapi está no fim: o histórico de preços só é buscado quando você pede. ' : ''}
+        Contagem deste aparelho, com o app aberto. Outro aparelho com o mesmo token e a verificação de proventos em segundo plano não entram, então o uso real pode ser um pouco maior. CoinGecko e Banco Central são gratuitos e sem cota mensal neste uso.
+      </Note>
+    </div>
   );
 }

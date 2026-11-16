@@ -32,7 +32,7 @@ export function accountBalance(account: Account, data: AppData, asOf?: ISODate):
     if (t.fromAccountId === account.id) b -= t.amountCents;
     if (t.toAccountId === account.id) b += t.amountCents;
   }
-  for (const o of data.operations) {
+  for (const o of [...data.operations, ...(data.cryptoOps ?? [])]) {
     if (o.accountId !== account.id || !inRange(o.date)) continue;
     const gross = Math.round(o.quantity * o.priceCents);
     b += o.side === 'buy' ? -(gross + o.feesCents) : gross - o.feesCents;
@@ -58,7 +58,7 @@ export interface MonthSummary {
   netCents: Cents;
   byCategory: Record<string, Cents>;
   byKind: Record<string, Cents>;
-  investedCents: Cents; // aportes em ações/FIIs/renda fixa no mês
+  investedCents: Cents; // aportes em ações/FIIs/cripto/renda fixa no mês
   savedCents: Cents; // depósitos líquidos em reservas no mês
 }
 
@@ -76,7 +76,7 @@ export function monthSummary(data: AppData, ym: YearMonth): MonthSummary {
       s.byKind[t.kind] = (s.byKind[t.kind] ?? 0) + t.amountCents;
     }
   }
-  for (const o of data.operations) {
+  for (const o of [...data.operations, ...(data.cryptoOps ?? [])]) {
     if (monthOf(o.date) !== ym) continue;
     const gross = Math.round(o.quantity * o.priceCents);
     s.investedCents += o.side === 'buy' ? gross + o.feesCents : -(gross - o.feesCents);
