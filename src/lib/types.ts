@@ -249,8 +249,16 @@ export interface DividendEvent {
   sourceName?: string;
   official: boolean; // pagamento oficialmente anunciado
   quantityOverride?: number;
-  receivedAt?: ISODate;
+  receivedAt?: ISODate; // pagamento CONFIRMADO (por você ou pelo extrato); só isto conta como dinheiro recebido
   receivedTxId?: string;
+  confirmedBy?: 'manual' | 'extrato';
+  /** Cancelado pela fonte ou por você. O registro não é apagado: fica no histórico, fora dos totais. */
+  cancelledAt?: string;
+  cancelReason?: string;
+  /** A fonte deixou de trazer o evento (pode ter sido corrigido ou cancelado). Não cancela sozinho: pede conferência. */
+  missingSince?: string;
+  /** Histórico de correções (valor, datas, cancelamento), da mais antiga para a mais nova. */
+  revisions?: { at: string; source: string; text: string }[];
   key: string; // chave p/ evitar duplicidade
 }
 
@@ -308,6 +316,8 @@ export interface NotificationPrefs {
     dividendAnnounced: boolean;
     dividendSoon: boolean;
     dividendReceived: boolean;
+    dividendDataCom: boolean; // data-com chegando (último dia para ter direito)
+    dividendChanged: boolean; // provento confirmado, alterado ou cancelado
     overBudget: boolean;
     lowBalance: boolean;
     goalReached: boolean;

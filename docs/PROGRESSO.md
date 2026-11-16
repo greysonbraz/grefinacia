@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aprovados no aparelho, aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b). Etapa 10 no branch `claude/etapa-10-testes` (versão 1.6.0, 218 testes), feito em cima da 8b.
+Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b), nº 10 (10). Etapa 11a (proventos) no branch `claude/etapa-11-proventos` (versão 1.7.0, 235 testes), feito em cima da 10.
 
 ## Concluído e no `main`
 
@@ -21,7 +21,18 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aprovados
 | 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | PR nº 7 (testada pelo dono) |
 | 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | PR nº 8 (testada com extrato do Inter) |
 | 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | PR nº 9 ("tudo ok") |
-| 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | `claude/etapa-10-testes` |
+| 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | PR nº 10 |
+| 11a | Proventos: status completos, só confirmado conta como recebido, confirmação pelo extrato, histórico de correções, painel de renda passiva, rentabilidade total, alertas novos | `claude/etapa-11-proventos` |
+
+Detalhes da Etapa 11a (documentação completa em `docs/INVESTIMENTOS.md`):
+- **Auditoria antes:** o resumo por ativo, o gráfico de renda passiva, o fechamento do mês e a liberdade financeira contavam como recebido todo provento com data de pagamento passada. Corrigido: só confirmado conta.
+- **Status:** anunciado, aguardando data-com, direito adquirido, pagamento previsto, aguardando confirmação, pago, cancelado (+ selo "alterado").
+- **Confirmação pelo extrato** importado (código do ativo ou palavra de provento + valor + data), ligando ao lançamento existente; "Recebi" também liga em vez de duplicar; crédito apagado desfaz a confirmação.
+- **Histórico de correções** (valor, data, sumiço da fonte); cancelar em vez de apagar; confirmado não muda de valor.
+- **Painel:** recebido no mês, no ano, total, média mensal, aguardando confirmação, próximos 6 meses (anunciado e estimado), por ativo, por tipo, gráfico de 12 meses para trás e 6 para frente.
+- **Rentabilidade total** na aba Bolsa: valorização + vendas + proventos recebidos − custos, com patrimônio, recebido e futuros separados.
+- **Avisos novos:** data-com chegando, provento confirmado, alterado, sumiu da fonte.
+- **Fontes:** avaliadas B3, Fundos.NET, CVM, Yahoo, brapi e Alpha Vantage. Nenhuma fonte gratuita, oficial e liberada traz data de pagamento; nenhuma confirma o crédito na conta. Alpha Vantage descartada (sem B3). B3 em modo de melhor esforço aguarda decisão do dono (11b).
 
 Detalhes da Etapa 10:
 - **Testes:** 218 (23 novos): PIN (hash, sal, limite de tentativas), cliente da nuvem (chaves, erros, sessão, lotes, codificação na URL), nomes das coleções no SQL, todas as perguntas sugeridas do chat. `npm run test:coverage` mostra a cobertura (regras de cálculo entre 80% e 100%; telas cobertas pela navegação automática).
@@ -99,9 +110,9 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 ## Próximo passo
 
-1. Dono faz o merge dos PRs na ordem nº 7 → nº 8 → nº 9, e depois o da Etapa 10.
-2. Dono instala o APK da Etapa 10 e segue `docs/ROTEIRO-TESTE.md` (pelo menos os itens 1, 2, 5, 6 e 7).
-3. Com as etapas do plano concluídas, o próximo passo é decisão do dono: melhorias pedidas no uso, leitor de código de barras pela câmera, leitura de PDF de algum banco, ou Ollama.
+1. Dono faz o merge dos PRs na ordem nº 7 → 8 → 9 → 10, e depois o da Etapa 11a.
+2. Dono instala o APK da 11a e confere a aba Dividendos (painel, histórico, "Recebi") e a rentabilidade total na aba Bolsa; se tiver extrato com crédito de proventos, importa e vê a confirmação automática.
+3. Decisão pendente (11b): usar a lista pública de proventos da B3 no modo de melhor esforço (traz JCP/dividendo e data-com; intermitente; termos de uso não confirmados) ou ficar só com o Yahoo.
 
 ## Serviços em uso (todos gratuitos)
 

@@ -7,7 +7,8 @@ import * as db from '../db/db';
 import { materializeRecurrences, cardInvoiceDue } from '../domain/ledger';
 import { makeSnapshot } from '../domain/networth';
 import { evaluateAlerts, planNotifications, salaryReceivedAlert, type ImmediateAlert } from '../domain/notifications';
-import { dividendRows, mergeEvents } from '../domain/dividends';
+import { cancelEvent, dividendRows, mergeEvents, reactivateEvent } from '../domain/dividends';
+import { findReceiptFor, matchReceipts } from '../domain/passiveIncome';
 import { computePositions, operationsAreValid, quantityAt } from '../domain/portfolio';
 import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, type FetchError } from '../services/quotes';
@@ -174,6 +175,7 @@ export async function afterChange(): Promise<void> {
     const { data, settings, today } = state;
     await syncScheduled(planNotifications(data, settings, new Date(), today));
     for (const a of evaluateAlerts(data, settings, today)) await fireOnce(a);
+    await reconcileDividends();
     // metas que deixaram de estar concluídas podem avisar de novo no futuro
     const snap = makeSnapshot(state.data, today);
     set({ data: { ...state.data, snapshots: [...state.data.snapshots.filter((s) => s.id !== snap.id), snap] } });
@@ -425,7 +427,10 @@ export async function deleteCryptoAsset(id: string): Promise<void> {
 export async function refreshDividends(): Promise<{ added: number; errors: FetchError[] }> {
   const { events, errors } = await fetchDividends(state.data.assets, state.settings.api);
   const firstTime = !state.settings.api.lastDividendRefresh;
-  const res = mergeEvents(state.data.dividends, events);
+  const failed = new Set(errors.map((e) => e.ticker));
+  const covered = state.data.assets.filter((a) => !failed.has(a.ticker)).map((a) => a.id);
+  const sourceName = events[0]?.sourceName ?? (state.settings.api.dividendProvider === 'yahoo' ? 'Yahoo Finance (não oficial)' : 'brapi.dev');
+  const res = mergeEvents(state.data.dividends, events, { coveredAssetIds: covered, sourceName, today: state.today });
   if (res.toUpsert.length) await upsert('dividends', res.toUpsert);
   await updateSettings({ api: { ...state.settings.api, lastDividendRefresh: nowISOTime() } });
   const prefs = state.settings.notifications;
@@ -443,17 +448,68 @@ export async function refreshDividends(): Promise<{ added: number; errors: Fetch
     for (const e of res.added) await notify(e, (t) => `${t} anunciou ${e.kind === 'rendimento' ? 'rendimentos' : e.kind === 'jcp' ? 'JCP' : 'dividendos'}`);
     for (const e of res.dateAnnounced) await notify(e, (t) => `${t}: data de pagamento divulgada`);
   }
+  if (!firstTime && prefs.enabled && prefs.types.dividendChanged) {
+    const tk = (id: string) => state.data.assets.find((a) => a.id === id)?.ticker ?? '';
+    for (const c of res.changed) await fireOnce({ key: `div-chg:${c.event.id}:${c.text}`, title: `${tk(c.event.assetId)}: provento alterado`, body: `A fonte corrigiu: ${c.text}.`, channel: 'dividendos' });
+    for (const e of res.missing) await fireOnce({ key: `div-miss:${e.id}`, title: `${tk(e.assetId)}: provento sumiu da fonte`, body: 'Pode ter sido cancelado ou corrigido. Confira na aba Dividendos.', channel: 'dividendos' });
+  }
   return { added: res.added.length, errors };
 }
 
-/** Confirma que o provento caiu na conta: registra como receita. */
+/**
+ * Confirmação pelo extrato: liga cada provento a receber ao crédito correspondente já lançado ou importado.
+ * Também desfaz a confirmação quando o crédito ligado deixa de existir (ex.: importação desfeita). Nada é apagado.
+ */
+export async function reconcileDividends(): Promise<number> {
+  const now = new Date().toISOString();
+  const txIds = new Set(state.data.transactions.map((t) => t.id));
+  const orphans = state.data.dividends.filter((d) => d.receivedAt && d.receivedTxId && !txIds.has(d.receivedTxId));
+  if (orphans.length) {
+    await upsert('dividends', orphans.map((d) => ({ ...d, receivedAt: undefined, receivedTxId: undefined, confirmedBy: undefined, revisions: [...(d.revisions ?? []), { at: now, source: 'app', text: 'confirmação desfeita: o lançamento do recebimento foi apagado' }] })));
+  }
+  const matches = matchReceipts(state.data, state.today);
+  if (!matches.length) return 0;
+  const evs = matches.map((m) => {
+    const ev = state.data.dividends.find((d) => d.id === m.eventId)!;
+    const tx = state.data.transactions.find((t) => t.id === m.txId)!;
+    return { ...ev, receivedAt: tx.date, receivedTxId: tx.id, confirmedBy: 'extrato' as const, revisions: [...(ev.revisions ?? []), { at: now, source: 'extrato', text: `pago: confirmado pelo lançamento "${tx.description}" de ${tx.date.split('-').reverse().join('/')}` }] };
+  });
+  await upsert('dividends', evs);
+  // crédito importado sem categoria: passa a contar como provento
+  const retag = matches.map((m) => state.data.transactions.find((t) => t.id === m.txId)!).filter((t) => t.categoryId === 'outros_rend').map((t) => ({ ...t, categoryId: 'dividendos' }));
+  if (retag.length) await upsert('transactions', retag);
+  const prefs = state.settings.notifications;
+  if (prefs.enabled && prefs.types.dividendChanged) {
+    for (const e of evs) {
+      const asset = state.data.assets.find((a) => a.id === e.assetId);
+      await fireOnce({ key: `div-ok:${e.id}`, title: `Provento confirmado: ${asset?.ticker ?? ''}`, body: 'O crédito apareceu no seu extrato. Já conta como recebido.', channel: 'dividendos' });
+    }
+  }
+  return evs.length;
+}
+
+export async function cancelDividend(id: string): Promise<void> {
+  const e = state.data.dividends.find((d) => d.id === id);
+  if (e && !e.cancelledAt && !e.receivedAt) await upsert('dividends', cancelEvent(e, 'usuario'));
+}
+export async function reactivateDividend(id: string): Promise<void> {
+  const e = state.data.dividends.find((d) => d.id === id);
+  if (e?.cancelledAt) await upsert('dividends', reactivateEvent(e));
+}
+
+/** Confirma que o provento caiu na conta. Se o crédito já está lançado (ex.: veio no extrato), liga a ele; senão, registra a receita. */
 export async function confirmDividend(eventId: string, accountId?: string): Promise<void> {
   const row = dividendRows(state.data, state.today).find((r) => r.event.id === eventId);
-  if (!row || row.event.receivedAt) return;
+  if (!row || row.event.receivedAt || row.event.cancelledAt) return;
+  const existing = findReceiptFor(state.data, eventId, state.today);
+  if (existing) {
+    await upsert('dividends', { ...row.event, receivedAt: existing.date, receivedTxId: existing.id, confirmedBy: 'extrato', revisions: [...(row.event.revisions ?? []), { at: new Date().toISOString(), source: 'você', text: `pago: ligado ao lançamento "${existing.description}" que já existia` }] });
+    return;
+  }
   const date = row.event.paymentDate && row.event.paymentDate <= state.today ? row.event.paymentDate : state.today;
   const tx: Transaction = { id: uid('t_'), type: 'income', kind: 'outro_rendimento', description: `${row.event.kind === 'jcp' ? 'JCP' : row.event.kind === 'rendimento' ? 'Rendimento' : 'Dividendo'} ${row.asset.ticker}`, amountCents: row.netCents, categoryId: 'dividendos', date, paymentMethod: 'transferencia', accountId: accountId ?? defaultAccountId(), status: 'paid', paidDate: date, source: 'dividend', refId: eventId, createdAt: Date.now() };
   await upsert('transactions', tx);
-  await upsert('dividends', { ...row.event, receivedAt: date, receivedTxId: tx.id });
+  await upsert('dividends', { ...row.event, receivedAt: date, receivedTxId: tx.id, confirmedBy: 'manual' });
 }
 
 // ---------- importação de extratos ----------

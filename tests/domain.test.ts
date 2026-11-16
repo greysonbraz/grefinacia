@@ -189,11 +189,11 @@ describe('dividendos', () => {
     expect(r.grossCents).toBe(10000);
     expect(r.netCents).toBe(8500);
   });
-  it('status: agendado, a confirmar e recebido', () => {
+  it('status: pagamento previsto, aguardando confirmação e pago', () => {
     const d = withHoldings();
     d.dividends.push(ev({ dataCom: '2026-11-01', paymentDate: '2026-12-15' }), ev({ dataCom: '2026-10-01', paymentDate: '2026-11-05' }), ev({ dataCom: '2026-09-01', paymentDate: '2026-10-10', receivedAt: '2026-10-10' }));
     const st = dividendRows(d, TODAY).map((r) => r.status).sort();
-    expect(st).toEqual(['a_confirmar', 'agendado', 'recebido']);
+    expect(st).toEqual(['aguardando_confirmacao', 'pagamento_previsto', 'pago']);
   });
   it('previsão: separa oficial de estimado e não estima sem histórico', () => {
     const d = withHoldings();

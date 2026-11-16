@@ -113,11 +113,16 @@ export function planNotifications(data: AppData, settings: Settings, now: Date, 
     }
   }
 
-  // 4) Dividendos: lembrete antes e no dia do pagamento (somente pagamentos oficiais)
+  // 4) Proventos: data-com chegando; lembrete antes e no dia do pagamento (somente pagamentos oficiais)
   for (const r of dividendRows(data, today)) {
-    const pd = r.event.paymentDate;
-    if (!pd || !r.event.official || r.status === 'recebido' || pd > horizon) continue;
     const label = r.event.kind === 'rendimento' ? 'rendimento' : r.event.kind === 'jcp' ? 'JCP' : 'dividendo';
+    const dc = r.event.dataCom;
+    if (prefs.types.dividendDataCom && r.status === 'aguardando_data_com' && dc && dc <= horizon) {
+      const when = addDays(dc, -Math.max(prefs.dividendDaysBefore, 1));
+      add(`div-com:${r.event.id}`, when < today ? today : when, 'Data-com chegando', `${r.asset.ticker}: ${label} de ${formatBRL(r.netCents)} para quem tiver o ativo no fim de ${formatDayMonth(dc)} (data-com).`, 'dividendos');
+    }
+    const pd = r.event.paymentDate;
+    if (!pd || !r.event.official || r.status === 'pago' || r.status === 'cancelado' || pd > horizon) continue;
     if (prefs.types.dividendSoon && prefs.dividendDaysBefore > 0) {
       add(`div-soon:${r.event.id}`, addDays(pd, -prefs.dividendDaysBefore), 'Provento a caminho', `${r.asset.ticker}: ${label} de ${formatBRL(r.netCents)} previsto para ${formatDayMonth(pd)}.`, 'dividendos');
     }
