@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). Etapa 8a no PR nº 7 (aprovada no aparelho, aguardando merge). Etapa 9 no branch `claude/etapa-9-extratos` (versão 1.4.0, 187 testes), feito em cima da 8a.
+Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs abertos e aprovados no aparelho: nº 7 (8a) e nº 8 (9). Etapa 8b no branch `claude/etapa-8b-gemini-nano` (versão 1.5.0, 195 testes), feito em cima da 9.
 
 ## Concluído e no `main`
 
@@ -19,7 +19,16 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). Etapa 8a no P
 | Etapa | Entrega | Branch |
 |---|---|---|
 | 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | PR nº 7 (testada pelo dono) |
-| 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | `claude/etapa-9-extratos` |
+| 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | PR nº 8 (testada com extrato do Inter) |
+| 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | `claude/etapa-8b-gemini-nano` |
+
+Detalhes da Etapa 8b (Gemini Nano, ML Kit GenAI `com.google.mlkit:genai-prompt:1.0.0-beta5`, conferido em 16/11/2026):
+- **Onde:** Ajustes → Grefinacia AI → "IA no aparelho (Gemini Nano)". Desligado por padrão; mostra o estado (pronto, precisa baixar, indisponível) e baixa o modelo.
+- **Como responde:** as perguntas que as regras locais reconhecem continuam com as regras (números exatos). Só as que elas não reconhecem vão ao Gemini Nano, com os totais do app (sem descrições de lançamentos), cortados para caber na janela de ~4.000 tokens. A resposta vem marcada "Gemini Nano, no aparelho. Pode errar".
+- **Privacidade:** o texto não sai do celular; o ML Kit envia ao Google métricas de uso (aparelho, identificadores de instalação, tempo, tamanho, erros), conforme a página oficial de divulgação de dados. O app avisa isso na opção e na seção de privacidade.
+- **Aparelhos:** lista oficial inclui Galaxy S25/S26 (Gemini Nano 4), Pixel 9/10/11 e outros. Exige Android 8+: **o mínimo do app subiu de Android 7 para Android 8**.
+- **Nativo:** `android/app/src/main/java/br/com/grefinacia/app/NanoEngine.java` (compilado localmente contra a biblioteca real) e `GeminiNanoPlugin.java`, registrado na `MainActivity`.
+- **Termos do Google (ML Kit GenAI):** 18+; avisar sobre as métricas; não usar como conselho profissional; recurso beta pode mudar.
 
 Detalhes da Etapa 9 (tudo no aparelho, o arquivo não sai dele):
 - **Onde:** Movimentações → botão de importar (no topo) ou Ajustes → Importar extrato.
@@ -52,7 +61,7 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 | Etapa | O que é |
 |---|---|
-| 8b | Linguagem natural com Gemini Nano no aparelho ou Ollama no computador, como experimento |
+| — | Ollama no computador (alternativa à 8b), se o dono quiser |
 | 9 (resto) | Leitura de PDF por banco, se valer a pena; ajustes com extratos reais do dono |
 | 10 | Testes completos e roteiro de teste no aparelho |
 | — | Leitor de código de barras pela câmera; boleto em PDF |
@@ -62,7 +71,7 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 - **Verificado por teste automático:** leitura de OFX (SGML e XML, Windows-1252) e CSV (vários layouts), prévia, duplicados, fatura, desfazer com cópia de segurança; previsão de caixa, fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, Price/SAC/CET; regras de cálculo, criptografia, backup, migração do banco (inclusive 3 → 4), sincronização com dois aparelhos simulados, leitura de feeds, leitura de boleto, rentabilidade por cotas, CDI e IPCA acumulados, cota da brapi.
 - **Verificado contra as fontes reais (16/11/2026, fora do celular):** histórico da brapi (PETR4, 62 dias) e do Yahoo (1 ano), preço, histórico e busca na CoinGecko, CDI de 10 anos e IPCA do Banco Central. Tela de cripto e desempenho conferida no navegador com essas respostas reais.
 - **Verificado pelo dono no Galaxy S26 Ultra:** instalação do APK assinado, login Google, envio e retorno dos dados pela nuvem após reinstalar, notícias, telas da Etapa 6 e da Etapa 7 ("tudo certo", sem detalhar item a item).
-- **Não verificado:** sincronização com dois aparelhos reais ao mesmo tempo; isolamento entre duas contas logadas no Supabase (só o acesso sem login foi conferido); boleto real (os testes usam boletos montados no padrão); Etapa 9 com extratos reais (os testes usam arquivos montados no formato de cada banco); Etapa 8a com meses de dados reais.
+- **Não verificado:** sincronização com dois aparelhos reais ao mesmo tempo; isolamento entre duas contas logadas no Supabase (só o acesso sem login foi conferido); boleto real (os testes usam boletos montados no padrão); Etapa 8b no aparelho (código nativo só compila no GitHub); importação de bancos além do Inter; Etapa 8a com meses de dados reais.
 
 ## Problemas conhecidos e limites
 
@@ -80,14 +89,15 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 - CET do comparador é estimativa (tarifas tratadas como descontadas do valor recebido); o oficial é o do contrato.
 - Importação: compra parcelada na fatura entra como compra simples daquela parcela; o app não junta as parcelas de meses diferentes.
 - Se a conta foi criada com o saldo de hoje, lançamentos importados de antes dessa data entram no histórico sem mudar o saldo (é o certo: o saldo informado já os inclui).
+- Gemini Nano (8b): beta do Google; respostas podem errar; só em celulares da lista oficial; cota de uso por app definida pelo AICore.
 - Aviso no build: as actions `checkout`, `setup-node` e `setup-java` v4 usam Node 20, que o GitHub está descontinuando. Ainda funciona.
 
 ## Próximo passo
 
-1. Dono faz o merge do PR nº 7 (Etapa 8a).
-2. Dono instala o APK do branch `claude/etapa-9-extratos` e importa um extrato real (OFX ou CSV) de cada banco que usa. Se algum arquivo não for lido ou vier com sinal/categoria errados, ajustar com um exemplo dele (pode trocar valores e nomes).
-3. Com o OK, abrir o PR da Etapa 9 (só com autorização).
-4. Depois: 8b (experimental) ou Etapa 10 (testes completos).
+1. Dono faz o merge do PR nº 7 e depois do nº 8.
+2. Dono instala o APK do branch `claude/etapa-8b-gemini-nano`, liga Ajustes → Grefinacia AI → IA no aparelho, baixa o modelo se pedir, e faz uma pergunta livre no chat (ex.: "Me explique o que é CDB com liquidez diária").
+3. Com o OK, abrir o PR da 8b.
+4. Depois: Etapa 10 (testes completos e revisão final de segurança).
 
 ## Serviços em uso (todos gratuitos)
 
@@ -100,3 +110,4 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 | CoinGecko (API pública, sem chave) | criptomoedas | nada a configurar |
 | Banco Central (SGS, dados abertos) | CDI e IPCA | nada a configurar |
 | Feeds RSS | notícias | lista em `src/domain/news.ts` |
+| Gemini Nano (ML Kit GenAI, no aparelho) | perguntas livres no chat (opcional) | Ajustes → Grefinacia AI; nada a pagar |

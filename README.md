@@ -46,6 +46,7 @@ Para testar no navegador do computador: `npm run dev`.
   (fora do celular) e o app leu as respostas corretamente. Os testes automáticos usam trechos dessas respostas.
 - **Cripto (CoinGecko, API pública sem chave):** preços em reais com alguns minutos de atraso e até 12 meses de histórico.
   O limite por minuto é por endereço de internet; se aparecer "espere um minuto", é só tentar de novo.
+- **IA no aparelho (Gemini Nano):** opcional e experimental, só em celulares compatíveis; o texto não sai do celular, mas o ML Kit envia métricas de uso ao Google. App exige Android 8 ou mais novo.
 - **Importar extrato:** OFX e CSV, lidos só no aparelho. PDF não é lido; Open Finance (conexão automática) não existe.
 - **Desempenho contra CDI e IPCA** usa os dados abertos do Banco Central. O IPCA sai uma vez por mês, então o mês
   corrente fica de fora até a divulgação.
