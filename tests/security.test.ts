@@ -55,7 +55,7 @@ describe('cota gratuita da brapi', () => {
   it('no plano gratuito a busca de proventos não faz nenhuma chamada e explica o motivo', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const r = await fetchDividends([{ id: 's1', ticker: 'ITSA4', type: 'acao' }], api({ brapiToken: 'meu-token', brapiPlan: 'free' }));
+    const r = await fetchDividends([{ id: 's1', ticker: 'ITSA4', type: 'acao' }], api({ dividendProvider: 'brapi', brapiToken: 'meu-token', brapiPlan: 'free' }));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(r.events).toHaveLength(0);
     expect(r.errors[0].message).toContain('Startup ou Pro');

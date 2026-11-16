@@ -2,7 +2,7 @@ import { BackgroundRunner } from '@capacitor/background-runner';
 import type { AppData, Settings } from '../lib/types';
 import { computePositions } from '../domain/portfolio';
 import { isNative } from './platform';
-import { brapiDividendsAvailable } from './quotes';
+import { brapiDividendsAvailable, resolveDividendProvider } from './quotes';
 
 export const RUNNER_LABEL = 'br.com.grefinacia.proventos';
 
@@ -12,7 +12,7 @@ export const RUNNER_CONFIG_VERSION = 2;
 export interface RunnerConfig {
   v: number;
   enabled: boolean;
-  provider: Settings['api']['dividendProvider'];
+  provider: 'brapi' | 'yahoo' | 'manual';
   token: string;
   assets: { ticker: string; type: string; qty: number }[];
   knownKeys: string[];
@@ -25,7 +25,7 @@ export interface RunnerConfig {
  */
 export function buildRunnerConfig(data: AppData, settings: Settings): RunnerConfig {
   const { api, notifications } = settings;
-  const provider = api.dividendProvider;
+  const provider = resolveDividendProvider(api);
   const held = computePositions(data.assets, data.operations).filter((p) => p.quantity > 0);
   const watch = provider === 'manual' ? [] : held.filter((p) => provider === 'yahoo' || brapiDividendsAvailable(p.asset.ticker, api));
   const needsToken = provider === 'brapi' && api.brapiPlan !== 'free';

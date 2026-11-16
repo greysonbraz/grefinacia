@@ -5,6 +5,7 @@ import { dividendRows, STATUS_LABEL, STATUS_TONE, type DividendRow } from '../do
 import { passiveDashboard, totalReturn } from '../domain/passiveIncome';
 import { formatBRL, formatPct, formatQty, formatRate } from '../lib/money';
 import { formatDateBR, monthShort } from '../lib/dates';
+import { isNative } from '../services/platform';
 import { ChartBox, cssVar, Legend, Note, Seg, seriesColors } from './kit';
 
 export const KIND_NAME: Record<string, string> = { dividendo: 'Dividendo', jcp: 'JCP', rendimento: 'Rendimento', amortizacao: 'Amortização', outro: 'Outro', estimativa: 'Estimativa' };
@@ -164,4 +165,14 @@ export function TotalReturnCard() {
       <Note>Proventos contam só depois de confirmados; os futuros aparecem à parte e não entram no resultado. O IR do JCP já sai do valor líquido; IR sobre lucro de vendas não é calculado. Sem cotação, o ativo entra pelo custo.</Note>
     </div>
   );
+}
+
+/** Quando os proventos foram atualizados e se a fonte está respondendo. */
+export function SourceHealth() {
+  const h = useStore((s) => s.divHealth);
+  const provider = useStore((s) => s.settings.api.dividendProvider);
+  if (provider === 'manual') return null;
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+  if (h.downSince) return <div className="note neg" style={{ marginBottom: 10 }}>A fonte de proventos não responde desde {when(h.downSince)}{h.lastError ? ` (${h.lastError})` : ''}. Os proventos já salvos continuam valendo; o app tenta de novo sozinho.</div>;
+  return <div className="hint" style={{ marginBottom: 10 }}>{h.lastOkAt ? `Proventos atualizados em ${when(h.lastOkAt)}. ` : ''}{isNative() ? 'O app busca sozinho uma vez por dia ao abrir.' : 'No app Android a busca é automática uma vez por dia.'}</div>;
 }

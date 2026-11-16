@@ -196,14 +196,21 @@ export function parseYahooDividends(json: any, asset: Asset): DividendEvent[] {
   return out;
 }
 
+/** Fonte de proventos que será usada de fato. "Automática": brapi só no plano pago (o gratuito não traz proventos); senão, Yahoo. */
+export function resolveDividendProvider(api: Pick<Api, 'dividendProvider' | 'brapiToken' | 'brapiPlan'>): 'brapi' | 'yahoo' | 'manual' {
+  if (api.dividendProvider !== 'auto') return api.dividendProvider;
+  return api.brapiToken.trim() && api.brapiPlan !== 'free' ? 'brapi' : 'yahoo';
+}
+
 export async function fetchDividends(assets: Asset[], api: Api): Promise<{ events: DividendEvent[]; errors: FetchError[] }> {
+  const provider = resolveDividendProvider(api);
   const events: DividendEvent[] = [];
   const errors: FetchError[] = [];
-  if (api.dividendProvider === 'manual') return { events, errors: assets.map((a) => ({ ticker: a.ticker, message: 'Busca automática de proventos desligada. Cadastre manualmente.' })) };
+  if (provider === 'manual') return { events, errors: assets.map((a) => ({ ticker: a.ticker, message: 'Busca automática de proventos desligada. Cadastre manualmente.' })) };
   const start = addMonths(todayISO(), -24);
   for (const a of assets) {
     try {
-      if (api.dividendProvider === 'yahoo') {
+      if (provider === 'yahoo') {
         countRequest('yahoo');
         const { status, json } = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${a.ticker}.SA?range=2y&interval=1d&events=div`);
         if (!json?.chart?.result) throw new Error(`resposta inválida (HTTP ${status})`);

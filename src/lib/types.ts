@@ -350,7 +350,7 @@ export interface Settings {
   notifications: NotificationPrefs;
   api: {
     quoteProvider: 'brapi' | 'yahoo' | 'manual';
-    dividendProvider: 'brapi' | 'yahoo' | 'manual';
+    dividendProvider: 'auto' | 'brapi' | 'yahoo' | 'manual'; // auto: brapi no plano pago, Yahoo no gratuito
     brapiToken: string;
     brapiPlan: 'free' | 'startup' | 'pro';
     lastQuoteRefresh?: string;
