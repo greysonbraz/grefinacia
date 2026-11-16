@@ -150,6 +150,17 @@ try {
   ok(t.includes('R$ 20,00') && t.includes('anunciado') && t.includes('ITSA4'), 'previsão: 200 cotas × 0,10 = R$ 20,00 anunciado; ITSA4 sem histórico');
   await page.locator('.cal .has').first().scrollIntoViewIfNeeded();
   await shot('05-dividendos');
+  t = await text();
+  ok(t.includes('Recebido no mês') && t.includes('Aguardando confirmação') && t.includes('Pagamento previsto'), 'proventos: painel separa recebido de previsto; status "Pagamento previsto"');
+  await page.locator('.divmain', { hasText: 'MXRF11' }).first().click();
+  t = await text();
+  ok(t.includes('Quantidade elegível') && t.includes('informado por você') && t.includes('Recebi') && t.includes('Cancelar'), 'proventos: detalhe com quantidade elegível, origem e ações');
+  await page.locator('.divdetail').scrollIntoViewIfNeeded();
+  await shot('05b-proventos-historico');
+  await seg('Bolsa (B3)');
+  t = await text();
+  ok(t.includes('Rentabilidade total') && t.includes('Proventos futuros') && t.includes('Patrimônio atual'), 'bolsa: rentabilidade total separando patrimônio, recebido e futuro');
+  await seg('Dividendos');
 
   // chat
   await tab('Grefinacia AI');

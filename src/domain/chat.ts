@@ -6,6 +6,7 @@ import { generateInsights } from './insights';
 import { goalProgress } from './goals';
 import { debtTotals, annualFromMonthly } from './debts';
 import { monthSummary } from './ledger';
+import { passiveDashboard } from './passiveIncome';
 import { cashForecast, CLASS_LABEL, detectSubscriptions, findDuplicates, portfolioXray, unusualSpending } from './analysis';
 import { monthShortYear } from '../lib/dates';
 
@@ -141,9 +142,13 @@ export function answerLocally(question: string, o: Overview, data: AppData, sett
     const p = goalProgress(g, data.goalMoves, o.today);
     return { text: `Sua reserva tem ${formatBRL(p.accumulatedCents)} de ${formatBRL(g.targetCents)} (${formatPct(p.pct)}). Guardando ${formatBRL(plan.saveCents)} por mês, como sugere seu plano, faltam cerca de ${plan.saveCents > 0 ? Math.ceil(p.remainingCents / plan.saveCents) : '—'} meses. Para acelerar: aumente o percentual de "guardar" no plano salarial ou direcione o que sobrar do dinheiro livre.`, calc: [`Falta: ${formatBRL(p.remainingCents)}`, `Aporte mensal pelo plano: ${formatBRL(plan.saveCents)}`] };
   }
-  if (/(dividendo|provento|rendimento)/.test(q)) {
+  if (/(dividendo|provento|rendimento|renda passiva|jcp)/.test(q)) {
     const f = o.nextForecast;
-    return { text: f.totalCents > 0 ? `Previsão para o próximo mês: ${formatBRL(f.totalCents)} (${formatBRL(f.officialCents)} anunciados + ${formatBRL(f.estimatedCents)} estimados pelo histórico, sem garantia).` : 'Não há proventos anunciados nem histórico suficiente para estimar o próximo mês.', calc: f.items.map((i) => `${i.ticker}: ${formatBRL(i.cents)} ${i.official ? '(anunciado)' : '(estimativa)'}`) };
+    const p = passiveDashboard(data, o.today);
+    const recebido = `Recebido (confirmado): ${formatBRL(p.monthCents)} neste mês, ${formatBRL(p.yearCents)} no ano, média de ${formatBRL(p.avgMonthlyCents)} por mês.`;
+    const aguardando = p.awaitingCount ? ` ${formatBRL(p.awaitingCents)} já passaram da data de pagamento e esperam confirmação: ainda não contam como recebidos.` : '';
+    const prox = f.totalCents > 0 ? ` Previsão para o próximo mês: ${formatBRL(f.totalCents)} (${formatBRL(f.officialCents)} anunciados + ${formatBRL(f.estimatedCents)} estimados pelo histórico, sem garantia).` : ' Não há proventos anunciados nem histórico suficiente para estimar o próximo mês.';
+    return { text: recebido + aguardando + prox, calc: f.items.map((i) => `${i.ticker}: ${formatBRL(i.cents)} ${i.official ? '(anunciado)' : '(estimativa)'}`) };
   }
   if (/(patrimonio|quanto tenho|saldo)/.test(q)) {
     return { text: `Seu patrimônio é ${formatBRL(o.netWorth.totalCents)}${o.debtCents > 0 ? `; descontando ${formatBRL(o.debtCents)} de dívidas, o líquido é ${formatBRL(o.netWorth.totalCents - o.debtCents)}` : ''}.`, calc: [`Contas: ${formatBRL(o.netWorth.accountsCents)}`, `Reservas: ${formatBRL(o.netWorth.goalsCents)}`, `Renda fixa: ${formatBRL(o.netWorth.fixedIncomeCents)}`, `Bolsa: ${formatBRL(o.netWorth.equityMarketCents)}`, ...(o.netWorth.cryptoCents ? [`Cripto: ${formatBRL(o.netWorth.cryptoCents)}`] : [])] };

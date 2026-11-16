@@ -27,6 +27,8 @@ const NOTIF: [keyof S['notifications']['types'], string, string][] = [
   ['dividendAnnounced', 'Proventos anunciados', 'Quando a fonte de dados trouxer um anúncio novo'],
   ['dividendSoon', 'Proventos perto do pagamento', 'Dias antes da data'],
   ['dividendReceived', 'Dia de pagamento de proventos', 'Para você confirmar o recebimento'],
+  ['dividendDataCom', 'Data-com chegando', 'Último dia para ter direito ao provento'],
+  ['dividendChanged', 'Provento confirmado, alterado ou cancelado', 'Quando o extrato confirmar ou a fonte mudar um evento'],
   ['overBudget', 'Gastos acima do orçamento', 'Por categoria e no total planejado'],
   ['lowBalance', 'Saldo insuficiente', 'Quando as contas a pagar passam do saldo'],
   ['goalReached', 'Metas alcançadas', 'Ao completar um objetivo'],

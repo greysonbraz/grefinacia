@@ -31,7 +31,8 @@ Conferido pelo dono num Galaxy S26 Ultra a cada etapa. Roteiro completo de teste
 | Painel, movimentações, cartões, parcelas, recorrências, transferências, categorias próprias, boleto | Funcional |
 | Importar extrato da conta e fatura do cartão (OFX e CSV), com prévia, duplicados e desfazer | Funcional (testado com o Banco Inter) |
 | Plano salarial, reservas, orçamento, dívidas e comparador de empréstimos (CET, Price, SAC) | Funcional |
-| Bolsa, renda fixa, cripto, dividendos, histórico de preços, desempenho contra CDI e IPCA | Funcional |
+| Bolsa, renda fixa, cripto, histórico de preços, desempenho contra CDI e IPCA, rentabilidade total | Funcional |
+| Proventos: status do anúncio ao pagamento, confirmação pelo extrato, painel de renda passiva, histórico de correções | Funcional (data de pagamento depende da fonte; ver docs/INVESTIMENTOS.md) |
 | Grefinacia AI: chat local, alertas, Raio-X (previsão de caixa, fora do padrão, assinaturas, cobranças em dobro) | Funcional, sem internet |
 | IA no aparelho (Gemini Nano) | Experimental, opcional, só em celulares compatíveis |
 | Login Google, cópia cifrada e sincronização entre aparelhos (Supabase) | Funcional; dois aparelhos ao mesmo tempo ainda não testados |
@@ -80,5 +81,6 @@ android        projeto Android gerado pelo Capacitor
 - [Segurança, assinatura do APK e atualização sem perder dados](docs/SEGURANCA.md)
 - [Tecnologias, serviços e limites](docs/TECNOLOGIAS.md)
 - [Roteiro de teste no celular](docs/ROTEIRO-TESTE.md)
+- [Investimentos e proventos (regras e fontes)](docs/INVESTIMENTOS.md)
 - [Progresso das etapas](docs/PROGRESSO.md)
 - [Nuvem (Supabase e login Google)](docs/NUVEM.md)

@@ -2,7 +2,7 @@ import type { AppData, Cents, ISODate, Settings, YearMonth } from '../lib/types'
 import { addMonthsYM, endOfMonth, lastMonths, monthOf } from '../lib/dates';
 import { monthSummary } from './ledger';
 import { netWorthAt } from './networth';
-import { dividendRows } from './dividends';
+import { dividendRows, isReceived } from './dividends';
 import { debtTotals } from './debts';
 
 export interface Closing {
@@ -30,7 +30,8 @@ export function monthlyClosing(data: AppData, ym: YearMonth, today: ISODate): Cl
   const nwEnd = netWorthAt(data, end, today).totalCents;
   const nwStart = netWorthAt(data, start, today).totalCents;
   const debt = debtTotals(data.debts).balanceCents;
-  const dividends = dividendRows(data, today).filter((r) => r.event.paymentDate && monthOf(r.event.paymentDate) === ym && r.event.paymentDate <= today).reduce((t, r) => t + r.netCents, 0);
+  // só o que foi confirmado como recebido; previsto não é dinheiro
+  const dividends = dividendRows(data, today).filter((r) => isReceived(r) && monthOf(r.event.receivedAt!) === ym).reduce((t, r) => t + r.netCents, 0);
   return {
     ym,
     receivedCents: s.incomeCents,
@@ -61,7 +62,7 @@ export interface Freedom {
 export function financialFreedom(data: AppData, settings: Settings, today: ISODate): Freedom {
   const ym = monthOf(today);
   const from = addMonthsYM(ym, -12);
-  const passive12 = dividendRows(data, today).filter((r) => r.event.paymentDate && r.event.paymentDate <= today && monthOf(r.event.paymentDate) > from).reduce((t, r) => t + r.netCents, 0);
+  const passive12 = dividendRows(data, today).filter((r) => isReceived(r) && monthOf(r.event.receivedAt!) > from).reduce((t, r) => t + r.netCents, 0);
   const prev = lastMonths(addMonthsYM(ym, -1), 3).map((m) => monthSummary(data, m).expenseCents).filter((v) => v > 0);
   const expenses = prev.length > 0 ? Math.round(prev.reduce((a, b) => a + b, 0) / prev.length) : monthSummary(data, ym).expenseCents;
   const passive = Math.round(passive12 / 12);
@@ -73,6 +74,6 @@ export function financialFreedom(data: AppData, settings: Settings, today: ISODa
 
 /** Proventos líquidos pagos por mês (renda passiva). */
 export function passiveIncomeSeries(data: AppData, months: number, today: ISODate): { ym: YearMonth; cents: Cents }[] {
-  const rows = dividendRows(data, today).filter((r) => r.event.paymentDate && r.event.paymentDate <= today);
-  return lastMonths(monthOf(today), months).map((ym) => ({ ym, cents: rows.filter((r) => monthOf(r.event.paymentDate!) === ym).reduce((t, r) => t + r.netCents, 0) }));
+  const rows = dividendRows(data, today).filter(isReceived);
+  return lastMonths(monthOf(today), months).map((ym) => ({ ym, cents: rows.filter((r) => monthOf(r.event.receivedAt!) === ym).reduce((t, r) => t + r.netCents, 0) }));
 }

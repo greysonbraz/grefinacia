@@ -73,7 +73,7 @@ export function computeOverview(data: AppData, settings: Settings, today: ISODat
     dueSoon: upcomingBills(data, today, addDays(today, 3)),
     projectedEndBalanceCents: projectedMonthEndBalance(data, today),
     nextForecast: forecastMonth(data, addMonthsYM(ym, 1), today),
-    toConfirmDividends: dividendRows(data, today).filter((r) => r.status === 'a_confirmar'),
+    toConfirmDividends: dividendRows(data, today).filter((r) => r.status === 'aguardando_confirmacao'),
     salaryPending,
     budgets: budgetStatuses(settings.budgets, cur),
     debtCents: data.debts.reduce((t, d) => t + d.balanceCents, 0),

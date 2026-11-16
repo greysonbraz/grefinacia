@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
-import { confirmDividend, defaultAccountId, deleteAsset, deleteOperation, refreshDividends, refreshHistory, refreshQuotes, remove, saveOperation, toast, upsert, useStore } from '../state/store';
+import { defaultAccountId, deleteAsset, deleteOperation, refreshDividends, refreshHistory, refreshQuotes, remove, saveOperation, toast, upsert, useStore } from '../state/store';
 import type { Asset, AssetType, DividendKind, FixedIncome, ISODate } from '../lib/types';
 import { computePositions, portfolioTotals, quantityAt, type Position } from '../domain/portfolio';
-import { assetDividendSummaries, dividendRows, forecastMonth, makeEventKey } from '../domain/dividends';
+import { forecastMonth, makeEventKey } from '../domain/dividends';
 import { estimateFixed, FI_LABEL, simulateGrowth } from '../domain/fixedincome';
-import { passiveIncomeSeries } from '../domain/reports';
 import { centsToInput, formatBRL, formatPct, formatQty, formatRate, parseDecimal, parseMoney } from '../lib/money';
-import { addMonthsYM, daysInMonth, formatDateBR, formatDayMonth, monthLong, monthOf, monthShort, weekdayOfFirst } from '../lib/dates';
+import { addMonthsYM, daysInMonth, formatDateBR, formatDayMonth, monthLong, monthOf, weekdayOfFirst } from '../lib/dates';
 import { uid } from '../lib/ids';
 import { ChartBox, cssVar, Empty, Field, Full, Legend, MoneyInput, MonthNav, Note, QuoteStamp, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 import { Cripto, PerformanceCard, PriceChart } from './Market';
+import { DividendHistory, PassivePanel, TotalReturnCard } from './Proventos';
 import { historyId } from '../domain/market';
 
 const TYPE_LABEL: Record<AssetType, string> = { acao: 'Ação', fii: 'FII', etf: 'ETF' };
@@ -87,6 +87,7 @@ function Bolsa() {
         </>
       )}
       <PerformanceCard scope="b3" />
+      <TotalReturnCard />
       <button className="fab" onClick={() => setAdd(true)} aria-label="Adicionar ativo ou operação"><Plus size={26} /></button>
       {add && <OpForm onClose={() => setAdd(false)} />}
       {dp && <AssetDetail p={dp} onClose={() => setDetail(null)} />}
@@ -293,15 +294,8 @@ function Dividendos() {
   const [add, setAdd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
-  const rows = useMemo(() => dividendRows(data, today), [data, today]);
   const next = useMemo(() => forecastMonth(data, addMonthsYM(ym, 1), today), [data, ym, today]);
   const cal = useMemo(() => forecastMonth(data, calYm, today), [data, calYm, today]);
-  const sums = useMemo(() => assetDividendSummaries(data, today), [data, today]);
-  const paid = rows.filter((r) => r.event.paymentDate && r.event.paymentDate <= today);
-  const thisMonth = rows.filter((r) => r.event.paymentDate && monthOf(r.event.paymentDate) === ym).reduce((s, r) => s + r.netCents, 0);
-  const year = paid.filter((r) => r.event.paymentDate!.slice(0, 4) === today.slice(0, 4)).reduce((s, r) => s + r.netCents, 0);
-  const series = passiveIncomeSeries(data, 12, today);
-  const avg = Math.round(series.reduce((s, x) => s + x.cents, 0) / 12);
   const refresh = async () => {
     setBusy(true);
     try { const r = await refreshDividends(); setErrors([...new Set(r.errors.map((e) => `${e.ticker}: ${e.message}`))]); toast(r.added > 0 ? `${r.added} proventos novos` : 'Nenhum provento novo'); } finally { setBusy(false); }
@@ -312,17 +306,12 @@ function Dividendos() {
   const dayItems = day ? byDay.get(day) ?? [] : cal.items;
   return (
     <>
-      <div className="grid2">
-        <div className="tile"><div className="lbl">Neste mês</div><div className="val num">{formatBRL(thisMonth)}</div></div>
-        <div className="tile"><div className="lbl">Próximo mês (previsão)</div><div className="val num">{formatBRL(next.totalCents)}</div><div className="foot">{formatBRL(next.officialCents)} anunciados</div></div>
-        <div className="tile"><div className="lbl">Recebido no ano</div><div className="val num">{formatBRL(year)}</div></div>
-        <div className="tile"><div className="lbl">Média mensal (12 meses)</div><div className="val num">{formatBRL(avg)}</div></div>
-      </div>
       <div className="btnrow" style={{ marginTop: 0, marginBottom: 12 }}>
         <button className="btn ghost" onClick={refresh} disabled={busy || data.assets.length === 0 || api.dividendProvider === 'manual'}><RefreshCw size={16} /> Buscar proventos</button>
         <button className="btn ghost" onClick={() => setAdd(true)} disabled={data.assets.length === 0}><Plus size={16} /> Cadastrar</button>
       </div>
       {errors.map((e) => (<div className="note neg" key={e} style={{ marginBottom: 8 }}>{e}</div>))}
+      <PassivePanel />
 
       <div className="card">
         <div className="cardhead"><div><h2>Previsão de {monthLong(next.ym)}</h2><div className="hint">Quantidade que você possui × valor por ação ou cota</div></div></div>
@@ -353,39 +342,8 @@ function Dividendos() {
         {dayItems.map((i, k) => (<div className="kv" key={k}><span>{formatDayMonth(i.date)} · {i.ticker} {i.official ? '' : '(estimativa)'}</span><b className="num">{formatBRL(i.cents)}</b></div>))}
       </div>
 
-      {series.some((x) => x.cents > 0) && <div className="card"><h2>Evolução da renda passiva</h2><ChartBox kind="bar" small labels={series.map((x) => monthShort(x.ym))} series={[{ label: 'Proventos líquidos', data: series.map((x) => x.cents), color: cssVar('--s4') }]} /></div>}
-
-      <div className="section">Por ativo</div>
-      <div className="card" style={{ padding: '4px 14px' }}>
-        {data.assets.length === 0 ? <Empty title="Sem ativos" text="Cadastre seus ativos na aba Bolsa." /> : data.assets.map((a) => {
-          const s = sums.get(a.id);
-          return (
-            <div className="row" key={a.id}>
-              <div className="mid"><div className="t">{a.ticker}</div><div className="s">{s?.lastPayment ? `Último: ${formatRate(s.lastPayment.event.ratePerUnit)}/un. em ${formatDateBR(s.lastPayment.event.paymentDate!)}` : 'Sem pagamentos registrados'}</div><div className="s">{s?.nextPayment ? `Próximo: ${formatDateBR(s.nextPayment.event.paymentDate!)} · ${formatBRL(s.nextPayment.netCents)}` : 'Próxima data não anunciada'}</div></div>
-              <div className="end"><div className="num">{formatBRL(s?.receivedCents ?? 0)}</div><div className="s">recebidos</div></div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="section">Histórico de pagamentos</div>
-      <div className="card" style={{ padding: '4px 14px' }}>
-        {rows.length === 0 ? <Empty title="Nenhum provento" text="Busque pela API (se o seu plano permitir) ou cadastre manualmente." /> : rows.slice(0, 60).map((r) => (
-          <div className="row" key={r.event.id}>
-            <div className="mid">
-              <div className="t">{r.asset.ticker} · {KIND_LABEL[r.event.kind]}</div>
-              <div className="s">{formatRate(r.event.ratePerUnit)} × {formatQty(r.quantity)}{r.event.dataCom ? ` · data-com ${formatDayMonth(r.event.dataCom)}` : ''}{r.event.kind === 'jcp' ? ' · IR 15% descontado' : ''}</div>
-              <div className="s">{r.event.paymentDate ? `Pagamento ${formatDateBR(r.event.paymentDate)}` : 'Data de pagamento não divulgada'} · {r.event.source === 'manual' ? 'informado por você' : r.event.sourceName}</div>
-            </div>
-            <div className="end">
-              <div className="num">{formatBRL(r.netCents)}</div>
-              {r.status === 'recebido' ? <span className="badge good">recebido</span> : r.status === 'a_confirmar' ? <button className="link" onClick={async () => { await confirmDividend(r.event.id); toast('Registrado na sua conta'); }}>Confirmar</button> : <span className="badge">{r.status === 'agendado' ? 'a receber' : 'sem data'}</span>}
-              {r.event.source === 'manual' && r.status !== 'recebido' && <div><button className="link" onClick={() => remove('dividends', r.event.id)}>Excluir</button></div>}
-            </div>
-          </div>
-        ))}
-      </div>
-      <Note>{api.dividendProvider === 'brapi' ? 'Fonte: brapi.dev. Proventos pela API exigem plano Startup ou Pro; no plano gratuito, cadastre manualmente ou escolha outra fonte em Ajustes.' : api.dividendProvider === 'yahoo' ? 'Fonte: Yahoo Finance (não oficial): traz só valor e data ex, sem data de pagamento e sem separar JCP.' : 'Busca automática desligada: os proventos são os que você cadastrar.'} Não há integração bancária: o recebimento é confirmado por você.</Note>
+      <DividendHistory />
+      <Note>{api.dividendProvider === 'brapi' ? 'Fonte: brapi.dev. Proventos pela API exigem plano Startup ou Pro; no plano gratuito, cadastre manualmente ou escolha outra fonte em Ajustes.' : api.dividendProvider === 'yahoo' ? 'Fonte: Yahoo Finance (não oficial): traz só valor e data ex, sem data de pagamento e sem separar JCP.' : 'Busca automática desligada: os proventos são os que você cadastrar.'} O pagamento só conta como recebido depois de confirmado: pelo extrato importado (o app reconhece o crédito com o código do ativo ou a palavra "dividendo", "JCP" ou "rendimento") ou pelo botão "Recebi". Data de pagamento passada não basta.</Note>
       {add && <DivForm onClose={() => setAdd(false)} />}
     </>
   );
