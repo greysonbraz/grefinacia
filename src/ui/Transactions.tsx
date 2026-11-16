@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, Repeat, CreditCard } from 'lucide-react';
+import { Plus, Search, Repeat, CreditCard, FileUp } from 'lucide-react';
+import { ImportStatement } from './Import';
 import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
 import type { PaymentMethod, Transaction, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
@@ -22,6 +23,7 @@ export function Transactions() {
   const [q, setQ] = useState('');
   const [view, setView] = useState<'lista' | 'graficos' | 'recorrentes'>('lista');
   const [edit, setEdit] = useState<Transaction | 'new' | null>(null);
+  const [importing, setImporting] = useState(false);
   const sum = useMemo(() => monthSummary(data, ym), [data, ym]);
   const cat = (id: string) => data.categories.find((c) => c.id === id);
   const list = useMemo(() => data.transactions
@@ -33,7 +35,8 @@ export function Transactions() {
 
   return (
     <div className="screen">
-      <div className="head"><h1>Movimentações</h1></div>
+      <div className="head"><h1>Movimentações</h1><button className="iconbtn" onClick={() => setImporting(true)} aria-label="Importar extrato"><FileUp size={18} /></button></div>
+      {importing && <ImportStatement onClose={() => setImporting(false)} />}
       <MonthNav ym={ym} onChange={setYm} />
       <div className="grid2">
         <div className="tile"><div className="lbl">Receitas</div><div className="val num">{formatBRL(sum.incomeCents)}</div></div>

@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   freedom: { yieldPct: 6 },
   news: { disabledSources: [] },
   analysis: { ignoredDuplicates: [] },
+  importRules: [],
 };
 
 export function emptyData(): AppData {
@@ -41,7 +42,8 @@ export function emptyData(): AppData {
     cryptoAssets: [],
     cryptoOps: [],
     marketHistory: [],
+    imports: [],
   };
 }
 
-export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers', 'cryptoAssets', 'cryptoOps', 'marketHistory'];
+export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers', 'cryptoAssets', 'cryptoOps', 'marketHistory', 'imports'];

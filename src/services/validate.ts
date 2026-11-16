@@ -5,7 +5,7 @@ import { DATA_KEYS, emptyData } from '../lib/defaults';
  * Versão do formato dos dados dentro de um backup. Sobe quando entram coleções ou campos que uma versão
  * antiga do app não saberia guardar; assim um app antigo recusa o arquivo em vez de restaurar pela metade.
  */
-export const DATA_SCHEMA = 3; // 2: transferências entre contas · 3: carteira de cripto e histórico de preços
+export const DATA_SCHEMA = 4; // 2: transferências entre contas · 3: carteira de cripto e histórico de preços · 4: importações de extratos
 
 export class ImportError extends Error {}
 
@@ -60,5 +60,6 @@ export function validateImported(parsed: unknown): { data: AppData; settings: Om
   const settings: Record<string, unknown> = isPlainObject(parsed.settings) ? clean(parsed.settings) : {};
   delete settings.security; // o PIN de bloqueio nunca vem de um arquivo
   for (const k of NESTED_SETTINGS) if (settings[k] !== undefined && !isPlainObject(settings[k])) delete settings[k];
+  if (settings.importRules !== undefined && !Array.isArray(settings.importRules)) delete settings.importRules;
   return { data, settings: settings as unknown as Omit<Settings, 'security'> };
 }

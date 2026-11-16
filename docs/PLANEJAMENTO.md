@@ -223,6 +223,7 @@ Em cada etapa eu entrego: código, testes, um APK no GitHub para você instalar,
 - 8b (experimental): linguagem natural com Gemini Nano e/ou Ollama.
 
 ### Etapa 9 — Notícias e importação de extratos
+**Notícias em 15/11/2026; importação OFX/CSV em 16/11/2026** (ver `docs/PROGRESSO.md`). PDF e Open Finance ficam de fora.
 - Leitor de notícias por RSS: título, resumo e link; fontes configuráveis; só texto. Os endereços dos feeds serão validados nesta etapa (não consegui abri-los daqui).
 - Importar OFX e CSV: prévia, detecção de duplicados, categorização automática por regras, desfazer importação. PDF conforme viabilidade por banco.
 - Estrutura de conectores pronta para Open Finance futuro.

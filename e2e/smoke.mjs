@@ -98,7 +98,7 @@ try {
   t = await text();
   ok(t.includes('24 meses') && t.includes('Economia total'), 'simulações da dívida aparecem (24 meses, portabilidade)');
   await shot('08-divida-simulacoes');
-  await page.getByRole('button', { name: 'Voltar' }).click();
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
 
   // investimentos
   await tab('Investimentos');
@@ -135,7 +135,7 @@ try {
   await page.locator('.row', { hasText: 'Bitcoin' }).click();
   t = await text();
   ok(t.includes('Preço médio') && t.includes('R$ 300.000,00'), 'cripto: detalhe com preço médio');
-  await page.getByRole('button', { name: 'Voltar' }).click();
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   // provento manual MXRF11 0,10 pagamento mês que vem
   await seg('Dividendos');
   await page.getByRole('button', { name: 'Cadastrar' }).click();
@@ -184,7 +184,28 @@ try {
   t = await text();
   ok(t.includes('R$ 945,60') && t.includes('menor custo efetivo') && t.includes('CET estimado'), 'comparador: 10 mil em 12× a 2% = R$ 945,60 e aponta o menor CET');
   await shot('10-comparador');
-  await page.getByRole('button', { name: 'Voltar' }).click();
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+
+  // importar extrato (CSV) com prévia e desfazer
+  await tab('Movimentações');
+  await page.getByRole('button', { name: 'Importar extrato' }).click();
+  await page.waitForTimeout(400);
+  const csv = 'Data;Histórico;Descrição;Valor\n02/11/2026;Pix enviado;Padaria Pão Quente;-12,50\n03/11/2026;Compra;UBER *TRIP;-23,50\n04/11/2026;Pagamento de fatura;Cartão;-500,00\n';
+  await page.locator('input[type=file]').setInputFiles({ name: 'extrato.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') });
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Importar 2 lançamentos') && t.includes('Pagamento de fatura') && t.includes('UBER *TRIP'), 'importação: prévia com 2 marcados e pagamento de fatura desmarcado');
+  ok((await page.locator('select[aria-label="Categoria de Compra - UBER *TRIP"]').inputValue()) === 'transporte', 'importação: Uber sugerido como Transporte');
+  await shot('11-importar');
+  await page.getByRole('button', { name: 'Importar 2 lançamentos' }).click();
+  await page.waitForTimeout(500);
+  t = await text();
+  ok(t.includes('Importações anteriores') && t.includes('extrato.csv') && t.includes('Desfazer'), 'importação: aparece no histórico com Desfazer');
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: /Desfazer/ }).click();
+  await page.waitForTimeout(500);
+  ok((await text()).includes('desfeita'), 'importação: desfeita');
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
 
   // relatórios
   await tab('Planejamento');
@@ -208,7 +229,7 @@ try {
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await seg('Claro');
   ok((await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'tema claro aplicado');
-  await page.getByRole('button', { name: 'Voltar' }).click();
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await page.waitForTimeout(500);
   await shot('12-inicio-claro');
   await page.reload();
