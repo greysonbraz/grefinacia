@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b), nº 10 (10), nº 11 (11a). Etapa 11b no branch `claude/etapa-11b-fontes` (versão 1.8.0, 241 testes), feito em cima da 11a.
+Checkpoint de **16/11/2026**. **Tudo no `main`** (merge dos PRs 7 a 12 em 16/11/2026), versão 1.8.0, 241 testes. Nenhum branch com trabalho pela metade.
 
 ## Concluído e no `main`
 
@@ -14,16 +14,16 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardand
 | 9 (parte) | Notícias do mercado financeiro por RSS, 12 fontes em 5 assuntos | 3 |
 | 7 | Selo e contador de cota nas cotações, histórico de preços, desempenho x CDI/IPCA, carteira de cripto | 6 |
 
-## Pronto no branch, aguardando teste no aparelho
+## Também no `main` desde 16/11/2026
 
-| Etapa | Entrega | Branch |
+| Etapa | Entrega | PR |
 |---|---|---|
-| 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | PR nº 7 (testada pelo dono) |
-| 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | PR nº 8 (testada com extrato do Inter) |
-| 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | PR nº 9 ("tudo ok") |
-| 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | PR nº 10 |
-| 11a | Proventos: status completos, só confirmado conta como recebido, confirmação pelo extrato, histórico de correções, painel de renda passiva, rentabilidade total, alertas novos | PR nº 11 |
-| 11b | Fonte automática de proventos (brapi no pago, Yahoo no grátis), busca sozinha 1×/dia, aviso de fonte fora do ar; B3 decidida contra | `claude/etapa-11b-fontes` |
+| 8a | Previsão de caixa, fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | 7 |
+| 9 | Importar extrato (OFX/CSV) com prévia, duplicados, categoria automática e desfazer | 8 |
+| 8b | Gemini Nano no aparelho (opcional) | 9 |
+| 10 | Testes completos, revisão de segurança, roteiro de teste, documentação | 10 |
+| 11a | Proventos: status completos, só confirmado conta, confirmação pelo extrato, painel, rentabilidade total | 11 |
+| 11b | Fonte automática de proventos, busca diária, aviso de fonte fora do ar | 12 |
 
 Detalhes da Etapa 11b:
 - **Achado:** a fonte padrão era a brapi, que no plano grátis não traz proventos, e a busca só acontecia ao tocar no botão. Na prática, nada era buscado sozinho.
@@ -81,7 +81,7 @@ PIN, biometria, backup em arquivo cifrado, notificações.
 
 ## Em desenvolvimento
 
-Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o APK (de preferência com um extrato real) e autorizar o PR. A 8a está no PR nº 7, aguardando merge.
+Nada em andamento.
 
 ## Falta desenvolver
 
@@ -95,8 +95,8 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 - **Verificado por teste automático:** leitura de OFX (SGML e XML, Windows-1252) e CSV (vários layouts), prévia, duplicados, fatura, desfazer com cópia de segurança; previsão de caixa, fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, Price/SAC/CET; regras de cálculo, criptografia, backup, migração do banco (inclusive 3 → 4), sincronização com dois aparelhos simulados, leitura de feeds, leitura de boleto, rentabilidade por cotas, CDI e IPCA acumulados, cota da brapi.
 - **Verificado contra as fontes reais (16/11/2026, fora do celular):** histórico da brapi (PETR4, 62 dias) e do Yahoo (1 ano), preço, histórico e busca na CoinGecko, CDI de 10 anos e IPCA do Banco Central. Tela de cripto e desempenho conferida no navegador com essas respostas reais.
-- **Verificado pelo dono no Galaxy S26 Ultra:** instalação do APK assinado, login Google, envio e retorno dos dados pela nuvem após reinstalar, notícias, telas da Etapa 6 e da Etapa 7 ("tudo certo", sem detalhar item a item).
-- **Não verificado:** sincronização com dois aparelhos reais ao mesmo tempo; isolamento entre duas contas logadas no Supabase (só o acesso sem login foi conferido); boleto real (os testes usam boletos montados no padrão); Etapa 8b no aparelho (código nativo só compila no GitHub); importação de bancos além do Inter; Etapa 8a com meses de dados reais.
+- **Verificado pelo dono no Galaxy S26 Ultra:** sincronização com dois aparelhos ao mesmo tempo (16/11/2026); instalação do APK assinado, login Google, envio e retorno dos dados pela nuvem após reinstalar, notícias, telas da Etapa 6 e da Etapa 7 ("tudo certo", sem detalhar item a item).
+- **Não verificado:** isolamento entre duas contas logadas no Supabase (só o acesso sem login foi conferido); boleto real (os testes usam boletos montados no padrão); Etapa 8b no aparelho (código nativo só compila no GitHub); importação de bancos além do Inter; Etapa 8a com meses de dados reais.
 
 ## Problemas conhecidos e limites
 
@@ -118,8 +118,8 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 ## Próximo passo
 
-1. Dono instala o APK 1.8.0 (branch `claude/etapa-11b-fontes`, contém todas as etapas) e testa: aba Dividendos (atualização sozinha, painel, histórico, "Recebi"), Bolsa (rentabilidade total) e o roteiro `docs/ROTEIRO-TESTE.md`.
-2. Dono faz (ou pede) os merges na ordem nº 7 → 8 → 9 → 10 → 11 → PR da 11b.
+Todas as etapas do plano e o módulo de proventos estão no `main`. Próximos passos são escolha do dono, por exemplo:
+leitor de código de barras pela câmera, leitura de PDF de algum banco, conferência mensal dos FIIs pela CVM, ou melhorias pedidas no uso.
 
 ## Serviços em uso (todos gratuitos)
 

@@ -35,7 +35,7 @@ Conferido pelo dono num Galaxy S26 Ultra a cada etapa. Roteiro completo de teste
 | Proventos: status do anúncio ao pagamento, confirmação pelo extrato, painel de renda passiva, histórico de correções | Funcional (data de pagamento depende da fonte; ver docs/INVESTIMENTOS.md) |
 | Grefinacia AI: chat local, alertas, Raio-X (previsão de caixa, fora do padrão, assinaturas, cobranças em dobro) | Funcional, sem internet |
 | IA no aparelho (Gemini Nano) | Experimental, opcional, só em celulares compatíveis |
-| Login Google, cópia cifrada e sincronização entre aparelhos (Supabase) | Funcional; dois aparelhos ao mesmo tempo ainda não testados |
+| Login Google, cópia cifrada e sincronização entre aparelhos (Supabase) | Funcional; dois aparelhos ao mesmo tempo conferidos pelo dono |
 | Notícias por RSS | Funcional no app Android |
 | Fechamento mensal, PDF e CSV, exportação JSON | Funcional |
 | PIN, biometria, bloqueio automático, backup AES-256, cópias automáticas | Funcional |
