@@ -63,10 +63,12 @@ export interface Transaction {
   installment?: { groupId: string; number: number; total: number };
   recurrenceId?: string;
   recurrenceMonth?: YearMonth;
-  source?: 'dividend' | 'salary' | 'manual';
+  source?: 'dividend' | 'salary' | 'manual' | 'import';
   refId?: string; // id do provento, etc.
   notes?: string;
   boletoLine?: string; // linha digitável (só dígitos), quando a conta é um boleto
+  importId?: string; // importação de extrato que criou o lançamento (para desfazer)
+  fitId?: string; // identificador do banco para o lançamento (evita importar duas vezes)
   createdAt: number;
 }
 
@@ -181,6 +183,23 @@ export interface MarketHistory {
   updatedAt: string; // última busca na fonte (ISO)
 }
 
+/** Uma importação de extrato (OFX ou CSV). Desfazer apaga os lançamentos que ela criou. */
+export interface ImportBatch {
+  id: string;
+  createdAt: string; // ISO
+  fileName: string;
+  format: 'ofx' | 'csv';
+  bank?: string;
+  accountId?: string; // extrato de conta
+  cardId?: string; // fatura de cartão
+  count: number;
+  incomeCents: Cents;
+  expenseCents: Cents;
+  from: ISODate;
+  to: ISODate;
+  undoneAt?: string;
+}
+
 export interface FixedIncome {
   id: string;
   name: string; // ex.: "CDB Banco X 110% CDI"
@@ -272,6 +291,7 @@ export interface AppData {
   cryptoAssets: CryptoAsset[];
   cryptoOps: CryptoOperation[];
   marketHistory: MarketHistory[];
+  imports: ImportBatch[];
 }
 
 export type CollectionName = keyof AppData;
@@ -335,5 +355,6 @@ export interface Settings {
   };
   freedom: { yieldPct: number }; // rendimento anual que você assume para a meta de liberdade financeira
   news: { disabledSources: string[] }; // fontes de notícias desligadas pelo usuário
-  analysis: { ignoredDuplicates: string[] }; // pares "idA|idB" que o usuário disse não serem cobrança em dobro
+  analysis: { ignoredDuplicates: string[] };
+  importRules: { pattern: string; categoryId: string }[]; // "descrição contém" → categoria, aprendido nas importações // pares "idA|idB" que o usuário disse não serem cobrança em dobro
 }

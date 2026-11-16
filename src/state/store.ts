@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AppData, CollectionName, CryptoOperation, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
+import type { AppData, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -59,8 +59,8 @@ import { secureRemove } from '../services/secrets';
 import { withoutSecrets } from '../lib/secretFields';
 
 const SYNC_META = 'sync';
-/** Sobe quando entra coleção nova em SYNCED. 2: cripto (Etapa 7). */
-export const SYNC_COLLECTIONS_VERSION = 2;
+/** Sobe quando entra coleção nova em SYNCED. 2: cripto (Etapa 7). 3: importações de extratos (Etapa 9). */
+export const SYNC_COLLECTIONS_VERSION = 3;
 const SYNC_COLLECTIONS_META = 'syncCollections';
 let sync: SyncState = emptySyncState();
 let onLocalChange: (() => void) | null = null;
@@ -454,6 +454,28 @@ export async function confirmDividend(eventId: string, accountId?: string): Prom
   const tx: Transaction = { id: uid('t_'), type: 'income', kind: 'outro_rendimento', description: `${row.event.kind === 'jcp' ? 'JCP' : row.event.kind === 'rendimento' ? 'Rendimento' : 'Dividendo'} ${row.asset.ticker}`, amountCents: row.netCents, categoryId: 'dividendos', date, paymentMethod: 'transferencia', accountId: accountId ?? defaultAccountId(), status: 'paid', paidDate: date, source: 'dividend', refId: eventId, createdAt: Date.now() };
   await upsert('transactions', tx);
   await upsert('dividends', { ...row.event, receivedAt: date, receivedTxId: tx.id });
+}
+
+// ---------- importação de extratos ----------
+/**
+ * Grava uma importação: guarda antes uma cópia de segurança de tudo, depois os lançamentos e o registro da importação
+ * (para poder desfazer), e as regras de categoria que você ensinou na prévia.
+ */
+export async function applyImport(batch: ImportBatch, txs: Transaction[], rules: Settings['importRules']): Promise<void> {
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  await upsert('transactions', txs);
+  await upsert('imports', batch);
+  if (JSON.stringify(rules) !== JSON.stringify(state.settings.importRules)) await updateSettings({ importRules: rules });
+}
+/** Desfaz uma importação: apaga os lançamentos que ela criou (com cópia de segurança antes) e marca como desfeita. */
+export async function undoImport(id: string): Promise<number> {
+  const batch = state.data.imports.find((b) => b.id === id);
+  if (!batch || batch.undoneAt) return 0;
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  const ids = state.data.transactions.filter((t) => t.importId === id).map((t) => t.id);
+  await remove('transactions', ids);
+  await upsert('imports', { ...batch, undoneAt: new Date().toISOString() });
+  return ids.length;
 }
 
 // ---------- metas ----------

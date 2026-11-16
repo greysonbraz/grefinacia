@@ -246,7 +246,7 @@ describe('dados: banco, backup e sincronização', () => {
     expect(DATA_KEYS).toEqual(expect.arrayContaining(['cryptoAssets', 'cryptoOps', 'marketHistory']));
   });
   it('backup novo leva a cripto; backup antigo continua abrindo, com a cripto vazia', () => {
-    expect(DATA_SCHEMA).toBe(3);
+    expect(DATA_SCHEMA).toBeGreaterThanOrEqual(3);
     const now = validateImported({ schema: 3, data: { cryptoAssets: [btc], cryptoOps: [cop({ id: 'o1' })] } });
     expect(now.data.cryptoAssets).toEqual([btc]);
     const old = validateImported({ schema: 2, data: { accounts: [] } });
@@ -272,7 +272,7 @@ describe('dados: banco, backup e sincronização', () => {
       await v3.put('accounts', { id: 'a1', name: 'Conta antiga', kind: 'corrente', initialCents: 0, initialDate: '2026-01-01' });
       await v3.put('transfers', { id: 'tr1', fromAccountId: 'a1', toAccountId: 'a2', amountCents: 1, date: TODAY, createdAt: 1 });
       v3.close();
-      expect(DB_VERSION).toBe(4);
+      expect(DB_VERSION).toBeGreaterThanOrEqual(4);
       const l = await loadAll();
       expect(l.data.accounts[0].name).toBe('Conta antiga');
       expect(l.data.transfers).toHaveLength(1);

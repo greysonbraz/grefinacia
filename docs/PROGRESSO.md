@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0, Etapa 7 incluída). Etapa 8a no branch `claude/etapa-8-ia-local` (versão 1.3.0, 169 testes).
+Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). Etapa 8a no PR nº 7 (aprovada no aparelho, aguardando merge). Etapa 9 no branch `claude/etapa-9-extratos` (versão 1.4.0, 187 testes), feito em cima da 8a.
 
 ## Concluído e no `main`
 
@@ -18,7 +18,19 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0, Etapa 7 inclu�
 
 | Etapa | Entrega | Branch |
 |---|---|---|
-| 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | `claude/etapa-8-ia-local` |
+| 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | PR nº 7 (testada pelo dono) |
+| 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | `claude/etapa-9-extratos` |
+
+Detalhes da Etapa 9 (tudo no aparelho, o arquivo não sai dele):
+- **Onde:** Movimentações → botão de importar (no topo) ou Ajustes → Importar extrato.
+- **Formatos:** OFX 1.x (SGML) e 2.x (XML), em UTF-8 ou Windows-1252; CSV com `;`, `,` ou tab, cabeçalho reconhecido pelo nome (data, descrição/histórico, valor ou débito/crédito, identificador), linhas antes do cabeçalho e linhas de saldo ignoradas. Fatura em CSV no formato "date,title,amount" tem o sinal invertido. Botão "inverter entradas e saídas" para CSV.
+- **Prévia:** destino (conta ou cartão), totais e período; cada linha com categoria sugerida (regra sua → como você fez antes → palavra-chave → "Outros"). Ficam desmarcados: já importado (mesmo identificador do banco), parecido com lançamento existente, pagamento de fatura e repetido no arquivo.
+- **Cartão:** compra de fatura já vencida entra paga pela conta do cartão; da fatura em aberto, a pagar.
+- **Segurança dos dados:** cópia de segurança antes de importar e antes de desfazer; desfazer apaga só os lançamentos daquela importação.
+- **Regras aprendidas:** trocar a categoria na prévia cria regra "descrição → categoria" (configuração `importRules`, sincroniza).
+- **Banco local versão 5** (coleção `imports`, sincroniza) e **backup formato 4**. Na primeira abertura, relê a nuvem uma vez.
+- **PDF não é lido**: o app pede para exportar em OFX ou CSV. **Conexão bancária automática** (Open Finance) continua fora; a leitura entrega sempre a mesma estrutura (`StatementRow`), pronta para um conector futuro.
+- Os testes usam arquivos montados no formato de cada banco; falta conferir com extratos reais do dono.
 
 Detalhes da Etapa 8a (tudo no aparelho, sem custo e sem internet):
 - **Grefinacia AI → Raio-X:** previsão de caixa de 3, 6 ou 12 meses (gráfico e tabela); gastos fora do padrão (categoria contra a mediana de 6 meses; lançamento 3× acima do típico); cobranças em dobro (com "excluir" ou "não é duplicada"); assinaturas e cobranças mensais (cadastradas e detectadas, com aviso de aumento de preço); raio-X da carteira (classes, concentração, renda fixa vencendo).
@@ -34,23 +46,23 @@ PIN, biometria, backup em arquivo cifrado, notificações.
 
 ## Em desenvolvimento
 
-Etapa 8a pronta no branch `claude/etapa-8-ia-local`, aguardando o dono testar o APK e autorizar o PR.
+Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o APK (de preferência com um extrato real) e autorizar o PR. A 8a está no PR nº 7, aguardando merge.
 
 ## Falta desenvolver
 
 | Etapa | O que é |
 |---|---|
 | 8b | Linguagem natural com Gemini Nano no aparelho ou Ollama no computador, como experimento |
-| 9 (resto) | Importar extratos OFX/CSV (PDF onde for viável); precisa de um arquivo de exemplo por banco |
+| 9 (resto) | Leitura de PDF por banco, se valer a pena; ajustes com extratos reais do dono |
 | 10 | Testes completos e roteiro de teste no aparelho |
 | — | Leitor de código de barras pela câmera; boleto em PDF |
 
 ## O que foi verificado e o que não foi
 
-- **Verificado por teste automático:** previsão de caixa, fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, Price/SAC/CET; regras de cálculo, criptografia, backup, migração do banco (inclusive 3 → 4), sincronização com dois aparelhos simulados, leitura de feeds, leitura de boleto, rentabilidade por cotas, CDI e IPCA acumulados, cota da brapi.
+- **Verificado por teste automático:** leitura de OFX (SGML e XML, Windows-1252) e CSV (vários layouts), prévia, duplicados, fatura, desfazer com cópia de segurança; previsão de caixa, fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, Price/SAC/CET; regras de cálculo, criptografia, backup, migração do banco (inclusive 3 → 4), sincronização com dois aparelhos simulados, leitura de feeds, leitura de boleto, rentabilidade por cotas, CDI e IPCA acumulados, cota da brapi.
 - **Verificado contra as fontes reais (16/11/2026, fora do celular):** histórico da brapi (PETR4, 62 dias) e do Yahoo (1 ano), preço, histórico e busca na CoinGecko, CDI de 10 anos e IPCA do Banco Central. Tela de cripto e desempenho conferida no navegador com essas respostas reais.
 - **Verificado pelo dono no Galaxy S26 Ultra:** instalação do APK assinado, login Google, envio e retorno dos dados pela nuvem após reinstalar, notícias, telas da Etapa 6 e da Etapa 7 ("tudo certo", sem detalhar item a item).
-- **Não verificado:** sincronização com dois aparelhos reais ao mesmo tempo; isolamento entre duas contas logadas no Supabase (só o acesso sem login foi conferido); boleto real (os testes usam boletos montados no padrão); Etapa 8a no aparelho com dados reais de vários meses.
+- **Não verificado:** sincronização com dois aparelhos reais ao mesmo tempo; isolamento entre duas contas logadas no Supabase (só o acesso sem login foi conferido); boleto real (os testes usam boletos montados no padrão); Etapa 9 com extratos reais (os testes usam arquivos montados no formato de cada banco); Etapa 8a com meses de dados reais.
 
 ## Problemas conhecidos e limites
 
@@ -66,13 +78,16 @@ Etapa 8a pronta no branch `claude/etapa-8-ia-local`, aguardando o dono testar o 
 - Previsão de caixa só conhece o que está lançado ou recorrente; receita sem lançamento não entra. O gasto do dia a dia é a média dos 3 últimos meses fechados.
 - Detecção de assinaturas e de cobranças em dobro depende de descrições parecidas; extratos com descrições muito diferentes podem escapar (melhora com a importação de extratos, Etapa 9).
 - CET do comparador é estimativa (tarifas tratadas como descontadas do valor recebido); o oficial é o do contrato.
+- Importação: compra parcelada na fatura entra como compra simples daquela parcela; o app não junta as parcelas de meses diferentes.
+- Se a conta foi criada com o saldo de hoje, lançamentos importados de antes dessa data entram no histórico sem mudar o saldo (é o certo: o saldo informado já os inclui).
 - Aviso no build: as actions `checkout`, `setup-node` e `setup-java` v4 usam Node 20, que o GitHub está descontinuando. Ainda funciona.
 
 ## Próximo passo
 
-1. Dono instala o APK do branch `claude/etapa-8-ia-local` e testa: Grefinacia AI → Raio-X e Alertas, perguntas novas no chat, Planejamento → Dívidas → Comparar empréstimos.
-2. Com o OK, abrir o PR para o `main` (só com autorização).
-3. Decidir sobre a 8b (experimental): Gemini Nano exige plugin nativo novo e só roda em alguns celulares; Ollama exige o computador ligado na mesma rede. Ou seguir para a Etapa 9 (extratos) ou 10 (testes completos).
+1. Dono faz o merge do PR nº 7 (Etapa 8a).
+2. Dono instala o APK do branch `claude/etapa-9-extratos` e importa um extrato real (OFX ou CSV) de cada banco que usa. Se algum arquivo não for lido ou vier com sinal/categoria errados, ajustar com um exemplo dele (pode trocar valores e nomes).
+3. Com o OK, abrir o PR da Etapa 9 (só com autorização).
+4. Depois: 8b (experimental) ou Etapa 10 (testes completos).
 
 ## Serviços em uso (todos gratuitos)
 

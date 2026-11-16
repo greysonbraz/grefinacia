@@ -17,6 +17,7 @@ import { MIN_PASSPHRASE } from '../services/vault';
 import { Field, Full, Ico, MoneyInput, Note, Progress, Seg, Sheet, SwitchRow } from './kit';
 import { brapiQuota, getUsage } from '../services/usage';
 import { PinPad } from './Lock';
+import { ImportStatement } from './Import';
 
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
   ['salary', 'Salário', 'No dia do pagamento e ao confirmar o recebimento'],
@@ -41,6 +42,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [transfer, setTransfer] = useState(false);
   const accName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? 'conta removida';
   const [pin, setPin] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [bk, setBk] = useState<'create' | 'restore' | null>(null);
   const [perm, setPerm] = useState<string>('');
   const n = st.notifications;
@@ -138,16 +140,17 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       <div className="section">Bancos e pagamentos (Open Finance)</div>
       <div className="card">
-        <div className="kv"><span>Conexão bancária</span><b>Não disponível nesta versão</b></div>
+        <div className="kv"><span>Importar extrato (OFX ou CSV)</span><button className="btn sm" onClick={() => setImporting(true)}>Importar</button></div>
+        <div className="kv"><span>Conexão bancária automática</span><b>Não disponível nesta versão</b></div>
         <div className="kv"><span>Pagamentos automáticos</span><b>Não disponível nesta versão</b></div>
-        <Note>Ler saldos e extratos ou iniciar pagamentos exige contrato com um provedor autorizado pelo Banco Central (por exemplo Pluggy ou Belvo) e um servidor para guardar as credenciais do provedor. Enquanto isso não existir, tudo é cadastrado por você, o app só lembra dos vencimentos e nunca movimenta dinheiro. Nenhuma senha bancária é pedida ou armazenada.</Note>
+        <Note>Ler saldos e extratos ou iniciar pagamentos exige contrato com um provedor autorizado pelo Banco Central (por exemplo Pluggy ou Belvo) e um servidor para guardar as credenciais do provedor. Enquanto isso não existir, você cadastra ou importa o extrato exportado pelo banco; o app só lembra dos vencimentos e nunca movimenta dinheiro. Nenhuma senha bancária é pedida ou armazenada.</Note>
       </div>
 
       <div className="section">Backup e outros aparelhos</div>
       <div className="card">
         <div className="kv"><span>Último backup</span><b>{st.lastBackupAt ? formatDateBR(st.lastBackupAt.slice(0, 10)) : 'nunca'}</b></div>
         <div className="btnrow"><button className="btn" onClick={() => setBk('create')}>Fazer backup</button><button className="btn ghost" onClick={() => setBk('restore')}>Restaurar</button></div>
-        <Note>O backup é um arquivo criptografado com a senha que você escolher. Salve no Google Drive e use "Restaurar" em outro aparelho para levar seus dados. Sincronização automática entre aparelhos não existe nesta versão: ela depende de um servidor.</Note>
+        <Note>O backup é um arquivo criptografado com a senha que você escolher. Salve no Google Drive e use "Restaurar" em outro aparelho para levar seus dados. Para sincronizar sozinho entre aparelhos, use a nuvem logo abaixo.</Note>
       </div>
       <SafetyCopies />
       <CloudCard />
@@ -165,6 +168,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {transfer && <TransferForm onClose={() => setTransfer(false)} />}
       {pin && <PinSheet onClose={() => setPin(false)} />}
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
+      {importing && <ImportStatement onClose={() => setImporting(false)} />}
     </Full>
   );
 }

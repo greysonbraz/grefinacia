@@ -11,8 +11,9 @@ const DB_NAME = 'grefinacia';
  *   2 — + "safety" (cópias de segurança automáticas guardadas no aparelho)
  *   3 — + "transfers" (transferências entre contas)
  *   4 — + "cryptoAssets", "cryptoOps" (carteira de cripto) e "marketHistory" (histórico de preços e índices)
+ *   5 — + "imports" (importações de extratos)
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 const SAFETY = 'safety';
 /** Quantas cópias automáticas ficam guardadas; a mais antiga sai quando entra uma nova. */
 export const MAX_SAFETY_COPIES = 3;
@@ -68,6 +69,7 @@ export function mergeSettings(saved: Partial<Settings> | undefined): Settings {
     ai: { ...DEFAULT_SETTINGS.ai, ...s.ai },
     freedom: { ...DEFAULT_SETTINGS.freedom, ...s.freedom },
     news: { disabledSources: Array.isArray(s.news?.disabledSources) ? s.news.disabledSources.filter((x) => typeof x === 'string') : [] },
+    importRules: Array.isArray(s.importRules) ? s.importRules.filter((r) => r && typeof r.pattern === 'string' && r.pattern && typeof r.categoryId === 'string').slice(-300) : [],
     analysis: { ignoredDuplicates: Array.isArray(s.analysis?.ignoredDuplicates) ? s.analysis.ignoredDuplicates.filter((x) => typeof x === 'string').slice(-500) : [] },
     budgets: { ...s.budgets },
   };
