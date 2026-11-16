@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs abertos e aprovados no aparelho: nº 7 (8a) e nº 8 (9). Etapa 8b no branch `claude/etapa-8b-gemini-nano` (versão 1.5.0, 195 testes), feito em cima da 9.
+Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aprovados no aparelho, aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b). Etapa 10 no branch `claude/etapa-10-testes` (versão 1.6.0, 218 testes), feito em cima da 8b.
 
 ## Concluído e no `main`
 
@@ -20,7 +20,14 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs abertos e
 |---|---|---|
 | 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | PR nº 7 (testada pelo dono) |
 | 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | PR nº 8 (testada com extrato do Inter) |
-| 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | `claude/etapa-8b-gemini-nano` |
+| 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | PR nº 9 ("tudo ok") |
+| 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | `claude/etapa-10-testes` |
+
+Detalhes da Etapa 10:
+- **Testes:** 218 (23 novos): PIN (hash, sal, limite de tentativas), cliente da nuvem (chaves, erros, sessão, lotes, codificação na URL), nomes das coleções no SQL, todas as perguntas sugeridas do chat. `npm run test:coverage` mostra a cobertura (regras de cálculo entre 80% e 100%; telas cobertas pela navegação automática).
+- **Revisão de segurança** (tabela em `docs/SEGURANCA.md`): 0 vulnerabilidades nas dependências; nenhum `innerHTML`/`eval`; links só `https`; manifesto e RLS conferidos. Corrigido: contador do PIN com registro corrompido. Reforçado: id do usuário codificado na exclusão da nuvem.
+- **GitHub Actions** em Node 24: checkout v6, setup-node v6, setup-java v5, upload-artifact v6.
+- **Documentos novos:** `docs/ROTEIRO-TESTE.md` (o que conferir no celular a cada versão) e `docs/TECNOLOGIAS.md` (tecnologias, serviços, limites, dados). README atualizado.
 
 Detalhes da Etapa 8b (Gemini Nano, ML Kit GenAI `com.google.mlkit:genai-prompt:1.0.0-beta5`, conferido em 16/11/2026):
 - **Onde:** Ajustes → Grefinacia AI → "IA no aparelho (Gemini Nano)". Desligado por padrão; mostra o estado (pronto, precisa baixar, indisponível) e baixa o modelo.
@@ -59,12 +66,11 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 ## Falta desenvolver
 
-| Etapa | O que é |
+| Item | O que é (todas as etapas 1 a 10 do plano estão feitas; isto é opcional) |
 |---|---|
 | — | Ollama no computador (alternativa à 8b), se o dono quiser |
 | 9 (resto) | Leitura de PDF por banco, se valer a pena; ajustes com extratos reais do dono |
-| 10 | Testes completos e roteiro de teste no aparelho |
-| — | Leitor de código de barras pela câmera; boleto em PDF |
+| — | Leitor de código de barras pela câmera; boleto em PDF (fora do plano das etapas; sob pedido) |
 
 ## O que foi verificado e o que não foi
 
@@ -90,14 +96,12 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 - Importação: compra parcelada na fatura entra como compra simples daquela parcela; o app não junta as parcelas de meses diferentes.
 - Se a conta foi criada com o saldo de hoje, lançamentos importados de antes dessa data entram no histórico sem mudar o saldo (é o certo: o saldo informado já os inclui).
 - Gemini Nano (8b): beta do Google; respostas podem errar; só em celulares da lista oficial; cota de uso por app definida pelo AICore.
-- Aviso no build: as actions `checkout`, `setup-node` e `setup-java` v4 usam Node 20, que o GitHub está descontinuando. Ainda funciona.
 
 ## Próximo passo
 
-1. Dono faz o merge do PR nº 7 e depois do nº 8.
-2. Dono instala o APK do branch `claude/etapa-8b-gemini-nano`, liga Ajustes → Grefinacia AI → IA no aparelho, baixa o modelo se pedir, e faz uma pergunta livre no chat (ex.: "Me explique o que é CDB com liquidez diária").
-3. Com o OK, abrir o PR da 8b.
-4. Depois: Etapa 10 (testes completos e revisão final de segurança).
+1. Dono faz o merge dos PRs na ordem nº 7 → nº 8 → nº 9, e depois o da Etapa 10.
+2. Dono instala o APK da Etapa 10 e segue `docs/ROTEIRO-TESTE.md` (pelo menos os itens 1, 2, 5, 6 e 7).
+3. Com as etapas do plano concluídas, o próximo passo é decisão do dono: melhorias pedidas no uso, leitor de código de barras pela câmera, leitura de PDF de algum banco, ou Ollama.
 
 ## Serviços em uso (todos gratuitos)
 

@@ -171,7 +171,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
-          <Note>Desfazer apaga só os lançamentos daquela importação (inclusive os que você editou depois). Uma cópia de segurança é guardada antes, em Ajustes → Cópias de segurança.</Note>
+          <Note>Desfazer apaga só os lançamentos daquela importação (inclusive os que você editou depois). Uma cópia de segurança é guardada antes, em Ajustes → Cópias automáticas neste aparelho.</Note>
         </>
       )}
     </Full>

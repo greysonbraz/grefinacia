@@ -137,8 +137,8 @@ export async function deleteRows(s: CloudSession, refs: { collection: string; id
 }
 
 export async function deleteAllCloudData(s: CloudSession): Promise<void> {
-  await call(`/rest/v1/vault_records?user_id=eq.${s.userId}`, { method: 'DELETE', token: s.accessToken, headers: { Prefer: 'return=minimal' } });
-  await call(`/rest/v1/vault_meta?user_id=eq.${s.userId}`, { method: 'DELETE', token: s.accessToken, headers: { Prefer: 'return=minimal' } });
+  await call(`/rest/v1/vault_records?user_id=eq.${encodeURIComponent(s.userId)}`, { method: 'DELETE', token: s.accessToken, headers: { Prefer: 'return=minimal' } });
+  await call(`/rest/v1/vault_meta?user_id=eq.${encodeURIComponent(s.userId)}`, { method: 'DELETE', token: s.accessToken, headers: { Prefer: 'return=minimal' } });
 }
 
 /** Linhas alteradas depois do cursor (inclui as marcadas como apagadas), da mais antiga para a mais nova. */

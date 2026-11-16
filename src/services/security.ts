@@ -44,7 +44,12 @@ interface Fail {
 }
 function readFail(): Fail {
   try {
-    return JSON.parse(localStorage.getItem(FAIL_KEY) ?? '') as Fail;
+    const f = JSON.parse(localStorage.getItem(FAIL_KEY) ?? '') as Partial<Fail> | null;
+    // registro corrompido não pode zerar a espera: conta como o máximo de erros já vistos
+    const count = Number.isFinite(f?.count) && (f!.count as number) >= 0 ? (f!.count as number) : 0;
+    const until = Number.isFinite(f?.until) ? (f!.until as number) : 0;
+    if (f && (!Number.isFinite(f.count) || !Number.isFinite(f.until))) return { count: Math.max(count, 5), until };
+    return { count, until };
   } catch {
     return { count: 0, until: 0 };
   }
