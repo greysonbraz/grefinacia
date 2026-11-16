@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { LoanCompare } from './Xray';
 import { Plus, TriangleAlert, FileText, Sheet as SheetIco } from 'lucide-react';
 import { defaultAccountId, deleteGoal, moveGoal, remove, saveSalary, saveTransaction, toast, updateSettings, upsert, useStore } from '../state/store';
 import type { Debt, DebtKind, Goal } from '../lib/types';
@@ -242,6 +243,7 @@ function Dividas() {
   const data = useStore((s) => s.data);
   const [edit, setEdit] = useState<Debt | 'new' | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
+  const [compare, setCompare] = useState(false);
   const [extra, setExtra] = useState('300');
   const t = debtTotals(data.debts);
   const ex = parseMoney(extra) ?? 0;
@@ -255,6 +257,7 @@ function Dividas() {
         <div className="tile"><div className="lbl">Saldo devedor total</div><div className="val num">{formatBRL(t.balanceCents)}</div></div>
         <div className="tile"><div className="lbl">Parcelas por mês</div><div className="val num">{formatBRL(t.monthlyCents)}</div><div className="foot">≈ {formatBRL(t.monthlyInterestCents)} são juros</div></div>
       </div>
+      <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => setCompare(true)}>Comparar empréstimos (CET, Price e SAC)</button>
       {data.debts.length === 0 ? <div className="card"><Empty title="Nenhuma dívida cadastrada" text="Cadastre empréstimos, financiamentos, cartões e parcelamentos para simular quitação e comparar juros." action="Cadastrar dívida" onAction={() => setEdit('new')} /></div> : (
         <>
           <div className="section">Prioridade de quitação (maior juro primeiro)</div>
@@ -281,6 +284,7 @@ function Dividas() {
       )}
       <button className="fab" onClick={() => setEdit('new')} aria-label="Cadastrar dívida"><Plus size={26} /></button>
       {edit && <DebtForm d={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {compare && <LoanCompare onClose={() => setCompare(false)} />}
       {d && <DebtDetail d={d} onClose={() => setDetail(null)} onEdit={() => { setDetail(null); setEdit(d); }} />}
     </>
   );

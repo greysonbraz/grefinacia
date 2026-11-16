@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { goInsight } from './Assistant';
 import { Settings as Gear, Newspaper, TriangleAlert, CircleCheck, Info, Banknote, Coins, ChevronRight } from 'lucide-react';
 import { confirmDividend, markPaid, toast, useStore } from '../state/store';
 import { computeOverview } from '../domain/overview';
@@ -129,7 +130,7 @@ export function Home({ nav }: { nav: Nav }) {
 
       <div className="section">Grefinacia AI</div>
       {insights.slice(0, 3).map((i) => (
-        <button key={i.id} className={'alert ' + i.tone} onClick={() => i.target && nav.go(i.target === 'dividends' ? 'invest' : (i.target as never), i.target === 'dividends' ? 'dividendos' : undefined)}>
+        <button key={i.id} className={'alert ' + i.tone} onClick={() => goInsight(nav, i.target)}>
           {i.tone === 'bad' || i.tone === 'warn' ? <TriangleAlert size={20} /> : i.tone === 'good' ? <CircleCheck size={20} /> : <Info size={20} />}
           <div><div className="t">{i.title}</div><div className="s">{i.text}</div></div>
         </button>

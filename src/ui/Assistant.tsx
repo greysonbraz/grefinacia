@@ -8,14 +8,15 @@ import { askAi } from '../services/ai';
 import { PAID_AI_ENABLED } from '../lib/flags';
 import type { Nav } from './App';
 import { Note, Seg } from './kit';
+import { Xray } from './Xray';
 
 interface Msg { role: 'user' | 'assistant'; content: string; calc?: string[]; via?: string }
 
-export function Assistant({ nav }: { nav: Nav }) {
+export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
   const data = useStore((s) => s.data);
   const settings = useStore((s) => s.settings);
   const today = useStore((s) => s.today);
-  const [view, setView] = useState<'chat' | 'analises'>('chat');
+  const [view, setView] = useState<'chat' | 'analises' | 'raiox'>(initial === 'raiox' || initial === 'analises' ? initial : 'chat');
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,12 +47,17 @@ export function Assistant({ nav }: { nav: Nav }) {
   return (
     <div className="screen" style={{ paddingBottom: view === 'chat' ? 150 : 110 }}>
       <div className="head"><div><h1>Grefinacia AI</h1><div className="sub">{useApi ? 'IA externa ligada, com sua autorização' : 'Modo local: nada sai do aparelho'}</div></div></div>
-      <Seg value={view} onChange={setView} options={[['chat', 'Conversa'], ['analises', `Análises (${insights.length})`]]} />
-      {view === 'analises' ? (
+      <Seg value={view} onChange={setView} options={[['chat', 'Conversa'], ['analises', `Alertas (${insights.length})`], ['raiox', 'Raio-X']]} />
+      {view === 'raiox' ? (
+        <>
+          <Xray />
+          <Note>Tudo calculado no aparelho, por regras que mostram a conta. Não é recomendação de investimento e o app nunca compra, vende ou paga nada sozinho.</Note>
+        </>
+      ) : view === 'analises' ? (
         <>
           {insights.length === 0 && <div className="empty">Sem alertas no momento. Lance suas movimentações para receber análises.</div>}
           {insights.map((i) => (
-            <button key={i.id} className={'alert ' + i.tone} onClick={() => i.target && nav.go(i.target === 'dividends' ? 'invest' : (i.target as never), i.target === 'dividends' ? 'dividendos' : undefined)}>
+            <button key={i.id} className={'alert ' + i.tone} onClick={() => (i.target === 'raiox' ? setView('raiox') : goInsight(nav, i.target))}>
               {i.tone === 'bad' || i.tone === 'warn' ? <TriangleAlert size={20} /> : i.tone === 'good' ? <CircleCheck size={20} /> : <Info size={20} />}
               <div><div className="t">{i.title}</div><div className="s">{i.text}</div></div>
             </button>
@@ -86,4 +92,12 @@ export function Assistant({ nav }: { nav: Nav }) {
       )}
     </div>
   );
+}
+
+/** Abre a tela de um alerta. */
+export function goInsight(nav: Nav, target: string | undefined): void {
+  if (!target) return;
+  if (target === 'dividends') nav.go('invest', 'dividendos');
+  else if (target === 'raiox') nav.go('ai', 'raiox');
+  else nav.go(target as never);
 }

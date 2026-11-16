@@ -4,13 +4,15 @@ import { formatBRL, formatPct, pctChange, roundHalfAway } from '../lib/money';
 import { expensesUpToDay, monthSummary } from './ledger';
 import { goalProgress } from './goals';
 import type { Overview } from './overview';
+import { cashForecast, detectSubscriptions, findDuplicates, portfolioXray, unusualSpending } from './analysis';
+import { monthLong } from '../lib/dates';
 
 export interface Insight {
   id: string;
   tone: 'bad' | 'warn' | 'good' | 'info';
   title: string;
   text: string;
-  target?: 'home' | 'transactions' | 'invest' | 'dividends' | 'planning';
+  target?: 'home' | 'transactions' | 'invest' | 'dividends' | 'planning' | 'raiox';
 }
 
 const ORDER = { bad: 0, warn: 1, good: 2, info: 3 } as const;
@@ -127,5 +129,42 @@ export function generateInsights(o: Overview, data: AppData, settings: Settings)
     out.push({ id: 'idle-money', tone: 'info', title: 'Sobrou dinheiro que ainda não foi guardado nem investido', text: 'Considere separar parte do saldo em uma reserva ou em um aporte. O app não faz nenhum investimento automaticamente.', target: 'planning' });
   }
 
+  // 13. análises locais da Etapa 8 (detalhes no Raio-X)
+  out.push(...deepInsights(data, settings, o.today, catName));
+
   return out.sort((a, b) => ORDER[a.tone] - ORDER[b.tone]);
+}
+
+const ddmm = (d: string) => d.slice(8, 10) + '/' + d.slice(5, 7);
+
+/** Alertas tirados do motor de análises: previsão de caixa, fora do padrão, cobranças em dobro, assinaturas e carteira. */
+export function deepInsights(data: AppData, settings: Settings, today: string, catName: (id: string) => string): Insight[] {
+  const out: Insight[] = [];
+  const f = cashForecast(data, today, 6);
+  if (f.firstNegative && data.accounts.length > 0) {
+    const m = f.months.find((x) => x.ym === f.firstNegative)!;
+    out.push({ id: 'forecast-negative', tone: 'bad', title: `Seu saldo pode ficar negativo em ${monthLong(f.firstNegative)}`, text: `Pela previsão, as contas terminam esse mês com ${formatBRL(m.endBalanceCents)}. Veja mês a mês no Raio-X.`, target: 'raiox' });
+  }
+  for (const d of findDuplicates(data, today, settings.analysis?.ignoredDuplicates ?? []).slice(0, 2)) {
+    out.push({ id: 'dup-' + d.key, tone: 'warn', title: `Possível cobrança em dobro: ${d.a.description}`, text: `${formatBRL(d.a.amountCents)} em ${ddmm(d.a.date)} e de novo em ${ddmm(d.b.date)}. Se foi engano, confira com o banco ou o cartão.`, target: 'raiox' });
+  }
+  const u = unusualSpending(data, today);
+  for (const c of u.categories.slice(0, 2)) {
+    out.push({ id: 'unusual-' + c.categoryId, tone: 'warn', title: `${catName(c.categoryId)} fora do padrão neste mês`, text: `${formatBRL(c.curCents)} até agora, contra ${formatBRL(c.typicalCents)} num mês normal (mediana de ${c.months} meses): ${formatPct(c.pct)} acima.`, target: 'raiox' });
+  }
+  const big = u.transactions[0];
+  if (big) out.push({ id: 'unusual-tx-' + big.tx.id, tone: 'info', title: `Lançamento acima do normal: ${big.tx.description}`, text: `${formatBRL(big.tx.amountCents)} em ${ddmm(big.tx.date)}, ${big.times.toFixed(1).replace('.', ',')} vezes o valor típico de ${catName(big.tx.categoryId)} (${formatBRL(big.typicalCents)}).`, target: 'raiox' });
+  const subs = detectSubscriptions(data, today);
+  for (const s of subs.filter((x) => x.increasedFromCents).slice(0, 2)) {
+    out.push({ id: 'sub-up-' + s.key, tone: 'warn', title: `${s.name} ficou mais cara`, text: `Passou de ${formatBRL(s.increasedFromCents!)} para ${formatBRL(s.monthlyCents)} por mês (${formatBRL((s.monthlyCents - s.increasedFromCents!) * 12)} a mais por ano).`, target: 'raiox' });
+  }
+  if (subs.length >= 2) {
+    const m = subs.reduce((t, s) => t + s.monthlyCents, 0);
+    out.push({ id: 'subs-total', tone: 'info', title: `${subs.length} assinaturas e cobranças mensais somam ${formatBRL(m)}`, text: `São ${formatBRL(m * 12)} por ano. Vale conferir se usa todas.`, target: 'raiox' });
+  }
+  const x = portfolioXray(data, today);
+  const crypto = x.classes.find((c) => c.cls === 'cripto');
+  if (crypto && crypto.pct >= 20 && x.totalCents > 0) out.push({ id: 'xray-crypto', tone: 'info', title: `Cripto é ${Math.round(crypto.pct)}% dos seus investimentos`, text: 'É uma classe que oscila muito. Avalie se essa fatia combina com o seu perfil.', target: 'raiox' });
+  for (const m of x.maturing) out.push({ id: 'maturing-' + m.name + m.date, tone: 'info', title: `${m.name} vence em ${ddmm(m.date)}`, text: `${formatBRL(m.cents)} ficam disponíveis. Decida antes onde reaplicar, se for o caso.`, target: 'invest' });
+  return out;
 }

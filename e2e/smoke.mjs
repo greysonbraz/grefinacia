@@ -162,6 +162,29 @@ try {
   await page.waitForTimeout(500);
   ok((await text()).includes('Valor da compra: R$ 15.000,00'), 'chat analisa compra com valor');
   await shot('09-grefinacia-ai');
+  await page.fill('.composer input', 'Como fica meu saldo nos próximos meses?');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(500);
+  t = await text();
+  ok(t.includes('Saldo de hoje') && t.includes('Gasto do dia a dia estimado'), 'chat responde a previsão de caixa com a conta');
+  await seg('Raio-X');
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Previsão de caixa') && t.includes('Cobranças em dobro') && t.includes('Assinaturas e cobranças mensais') && t.includes('Raio-X da carteira'), 'Raio-X: previsão, cobranças em dobro, assinaturas e carteira');
+  await shot('09b-raio-x');
+
+  // comparador de empréstimos
+  await tab('Planejamento');
+  await seg('Dívidas');
+  await page.getByRole('button', { name: /Comparar empréstimos/ }).click();
+  await page.waitForTimeout(400); // animação de entrada da tela
+  await page.fill('input[name=taxa_0]', '2');
+  await page.fill('input[name=taxa_1]', '3');
+  await page.fill('input[name=tarifas_1]', '0');
+  t = await text();
+  ok(t.includes('R$ 945,60') && t.includes('menor custo efetivo') && t.includes('CET estimado'), 'comparador: 10 mil em 12× a 2% = R$ 945,60 e aponta o menor CET');
+  await shot('10-comparador');
+  await page.getByRole('button', { name: 'Voltar' }).click();
 
   // relatórios
   await tab('Planejamento');

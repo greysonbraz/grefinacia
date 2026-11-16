@@ -335,4 +335,5 @@ export interface Settings {
   };
   freedom: { yieldPct: number }; // rendimento anual que você assume para a meta de liberdade financeira
   news: { disabledSources: string[] }; // fontes de notícias desligadas pelo usuário
+  analysis: { ignoredDuplicates: string[] }; // pares "idA|idB" que o usuário disse não serem cobrança em dobro
 }
