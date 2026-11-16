@@ -9,6 +9,7 @@ export interface NetWorth {
   fixedIncomeCents: Cents;
   equityMarketCents: Cents;
   equityCostCents: Cents;
+  cryptoCents: Cents;
   totalCents: Cents;
   marketBased: boolean;
 }
@@ -25,7 +26,8 @@ export function netWorthAt(data: AppData, asOf: ISODate, today: ISODate): NetWor
   const pos = computePositions(data.assets, data.operations, current ? undefined : asOf, current);
   const equityCostCents = pos.reduce((s, p) => s + p.costCents, 0);
   const equityMarketCents = pos.reduce((s, p) => s + p.valueCents, 0);
-  return { accountsCents, goalsCents, fixedIncomeCents, equityMarketCents, equityCostCents, totalCents: accountsCents + goalsCents + fixedIncomeCents + equityMarketCents, marketBased: current };
+  const cryptoCents = computePositions(data.cryptoAssets ?? [], data.cryptoOps ?? [], current ? undefined : asOf, current).reduce((s, p) => s + p.valueCents, 0);
+  return { accountsCents, goalsCents, fixedIncomeCents, equityMarketCents, equityCostCents, cryptoCents, totalCents: accountsCents + goalsCents + fixedIncomeCents + equityMarketCents + cryptoCents, marketBased: current };
 }
 
 export interface NetWorthPoint {
@@ -49,5 +51,5 @@ export function netWorthSeries(data: AppData, months: number, today: ISODate): N
 
 export function makeSnapshot(data: AppData, today: ISODate) {
   const nw = netWorthAt(data, today, today);
-  return { id: today, date: today, accountsCents: nw.accountsCents, goalsCents: nw.goalsCents, fixedIncomeCents: nw.fixedIncomeCents, equityMarketCents: nw.equityMarketCents, equityCostCents: nw.equityCostCents, totalCents: nw.totalCents, debtCents: data.debts.reduce((t, d) => t + d.balanceCents, 0) };
+  return { id: today, date: today, accountsCents: nw.accountsCents, goalsCents: nw.goalsCents, fixedIncomeCents: nw.fixedIncomeCents, equityMarketCents: nw.equityMarketCents, equityCostCents: nw.equityCostCents, totalCents: nw.totalCents, debtCents: data.debts.reduce((t, d) => t + d.balanceCents, 0), cryptoCents: nw.cryptoCents };
 }

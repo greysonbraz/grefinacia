@@ -42,8 +42,12 @@ Para testar no navegador do computador: `npm run dev`.
 - **Não testado em aparelho.** O ambiente onde o app foi escrito não compila Android. A lógica e as telas foram
   testadas em navegador (412 px); notificações, biometria, compartilhamento de arquivos e o verificador em
   segundo plano dependem de plugins nativos e só podem ser validados no celular.
-- **APIs de cotação não foram chamadas de verdade.** O código segue a documentação da brapi.dev e foi testado
-  com respostas simuladas nos testes; a primeira consulta real será a sua.
+- **Fontes de dados:** brapi.dev, Yahoo Finance, CoinGecko e Banco Central foram consultados de verdade em 16/11/2026
+  (fora do celular) e o app leu as respostas corretamente. Os testes automáticos usam trechos dessas respostas.
+- **Cripto (CoinGecko, API pública sem chave):** preços em reais com alguns minutos de atraso e até 12 meses de histórico.
+  O limite por minuto é por endereço de internet; se aparecer "espere um minuto", é só tentar de novo.
+- **Desempenho contra CDI e IPCA** usa os dados abertos do Banco Central. O IPCA sai uma vez por mês, então o mês
+  corrente fica de fora até a divulgação.
 - **brapi.dev, plano gratuito:** 1 ativo por consulta e **sem dados de dividendos** (exigem Startup ou Pro).
   Alternativas dentro do app: cadastro manual ou Yahoo Finance (não oficial, sem data de pagamento).
 - **Cotações têm atraso**, não são tempo real.

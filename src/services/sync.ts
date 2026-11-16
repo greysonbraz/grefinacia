@@ -33,8 +33,11 @@ export const emptySyncState = (): SyncState => ({ cursor: null, dirty: {} });
 export const dirtyKey = (collection: string, id: string): string => collection + '\n' + id;
 const splitKey = (k: string): { collection: string; id: string } => ({ collection: k.slice(0, k.indexOf('\n')), id: k.slice(k.indexOf('\n') + 1) });
 
-/** Coleções que viajam. Retratos de patrimônio e controle de alertas são recriados por cada aparelho. */
-export const SYNCED = new Set(['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'transfers', 'meta']);
+/**
+ * Coleções que viajam. Retratos de patrimônio, controle de alertas e histórico de preços são recriados
+ * por cada aparelho (o histórico se busca de novo nas fontes e iria pesar na cota gratuita da nuvem).
+ */
+export const SYNCED = new Set(['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'transfers', 'cryptoAssets', 'cryptoOps', 'meta']);
 
 export interface SyncResult {
   state: SyncState;

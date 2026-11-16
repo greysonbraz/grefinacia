@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
-import { confirmDividend, defaultAccountId, deleteAsset, deleteOperation, refreshDividends, refreshQuotes, remove, saveOperation, toast, upsert, useStore } from '../state/store';
+import { confirmDividend, defaultAccountId, deleteAsset, deleteOperation, refreshDividends, refreshHistory, refreshQuotes, remove, saveOperation, toast, upsert, useStore } from '../state/store';
 import type { Asset, AssetType, DividendKind, FixedIncome, ISODate } from '../lib/types';
 import { computePositions, portfolioTotals, quantityAt, type Position } from '../domain/portfolio';
 import { assetDividendSummaries, dividendRows, forecastMonth, makeEventKey } from '../domain/dividends';
@@ -9,19 +9,22 @@ import { passiveIncomeSeries } from '../domain/reports';
 import { centsToInput, formatBRL, formatPct, formatQty, formatRate, parseDecimal, parseMoney } from '../lib/money';
 import { addMonthsYM, daysInMonth, formatDateBR, formatDayMonth, monthLong, monthOf, monthShort, weekdayOfFirst } from '../lib/dates';
 import { uid } from '../lib/ids';
-import { ChartBox, cssVar, Empty, Field, Full, Legend, MoneyInput, MonthNav, Note, Seg, seriesColors, Sheet, SwitchRow } from './kit';
+import { ChartBox, cssVar, Empty, Field, Full, Legend, MoneyInput, MonthNav, Note, QuoteStamp, Seg, seriesColors, Sheet, SwitchRow } from './kit';
+import { Cripto, PerformanceCard, PriceChart } from './Market';
+import { historyId } from '../domain/market';
 
 const TYPE_LABEL: Record<AssetType, string> = { acao: 'Ação', fii: 'FII', etf: 'ETF' };
-type Sub = 'bolsa' | 'fixa' | 'dividendos';
+type Sub = 'bolsa' | 'fixa' | 'cripto' | 'dividendos';
 
 export function Invest({ initial }: { initial?: string }) {
   const [sub, setSub] = useState<Sub>((initial as Sub) ?? 'bolsa');
   return (
     <div className="screen">
       <div className="head"><h1>Investimentos</h1></div>
-      <Seg value={sub} onChange={setSub} options={[['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['dividendos', 'Dividendos']]} />
+      <Seg value={sub} onChange={setSub} options={[['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
       {sub === 'bolsa' && <Bolsa />}
       {sub === 'fixa' && <Fixa />}
+      {sub === 'cripto' && <Cripto />}
       {sub === 'dividendos' && <Dividendos />}
     </div>
   );
@@ -42,7 +45,9 @@ function Bolsa() {
     setBusy(true);
     try {
       const r = await refreshQuotes();
-      setErrors([...new Set(r.errors.map((e) => `${e.ticker}: ${e.message}`))]);
+      // histórico de preços e índices: no máximo uma busca por dia, junto com a cotação
+      const h = await refreshHistory('b3');
+      setErrors([...new Set([...r.errors, ...h.errors].map((e) => `${e.ticker}: ${e.message}`))]);
       toast(r.updated > 0 ? `${r.updated} ${r.updated === 1 ? 'cotação atualizada' : 'cotações atualizadas'}` : 'Nenhuma cotação atualizada', r.updated > 0 ? 'ok' : 'err');
     } finally { setBusy(false); }
   };
@@ -69,7 +74,7 @@ function Bolsa() {
             {held.map((p) => (
               <button className="row" key={p.asset.id} onClick={() => setDetail(p.asset.id)}>
                 <div className="ic" style={{ fontSize: 11, fontWeight: 650, color: 'var(--text)' }}>{p.asset.ticker.slice(0, 4)}</div>
-                <div className="mid"><div className="t">{p.asset.ticker} <span className="badge">{TYPE_LABEL[p.asset.type]}</span></div><div className="s">{formatQty(p.quantity)} × PM {formatBRL(Math.round(p.avgPriceCents))} · {((p.valueCents / totals.equityValueCents) * 100).toFixed(1).replace('.', ',')}% da carteira</div></div>
+                <div className="mid"><div className="t">{p.asset.ticker} <span className="badge">{TYPE_LABEL[p.asset.type]}</span> {p.asset.quote ? <QuoteStamp quote={p.asset.quote} compact /> : null}</div><div className="s">{formatQty(p.quantity)} × PM {formatBRL(Math.round(p.avgPriceCents))} · {((p.valueCents / totals.equityValueCents) * 100).toFixed(1).replace('.', ',')}% da carteira</div></div>
                 <div className="end"><div className="num">{formatBRL(p.valueCents)}</div>{p.pnlPct === null ? <span className="badge warn">sem cotação</span> : <div className={'s num ' + (p.pnlCents! >= 0 ? 'pos' : 'neg')}>{formatPct(p.pnlPct, true)}</div>}</div>
               </button>
             ))}
@@ -81,6 +86,7 @@ function Bolsa() {
           </div>
         </>
       )}
+      <PerformanceCard scope="b3" />
       <button className="fab" onClick={() => setAdd(true)} aria-label="Adicionar ativo ou operação"><Plus size={26} /></button>
       {add && <OpForm onClose={() => setAdd(false)} />}
       {dp && <AssetDetail p={dp} onClose={() => setDetail(null)} />}
@@ -144,6 +150,7 @@ function OpForm({ onClose, asset }: { onClose: () => void; asset?: Asset }) {
 
 function AssetDetail({ p, onClose }: { p: Position; onClose: () => void }) {
   const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
   const [op, setOp] = useState(false);
   const [manual, setManual] = useState(p.asset.manualPriceCents ? centsToInput(p.asset.manualPriceCents) : '');
   const ops = data.operations.filter((o) => o.assetId === p.asset.id).sort((a, b) => b.date.localeCompare(a.date));
@@ -158,8 +165,9 @@ function AssetDetail({ p, onClose }: { p: Position; onClose: () => void }) {
         <div className="kv"><span>Total investido</span><b className="num">{formatBRL(p.costCents)}</b></div>
         <div className="kv"><span>Lucro ou prejuízo</span><b className={'num ' + ((p.pnlCents ?? 0) >= 0 ? 'pos' : 'neg')}>{p.pnlCents === null ? '—' : `${formatBRL(p.pnlCents)} (${formatPct(p.pnlPct!, true)})`}</b></div>
         {p.realizedCents !== 0 && <div className="kv"><span>Realizado em vendas</span><b className="num">{formatBRL(p.realizedCents)}</b></div>}
-        {p.asset.quote && <Note>Cotação de {p.asset.quote.source}, referente a {new Date(p.asset.quote.time).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}. Pode estar atrasada.</Note>}
+        {p.asset.quote && <div style={{ marginTop: 8 }}><QuoteStamp quote={p.asset.quote} /></div>}
       </div>
+      <PriceChart historyKey={historyId('b3', p.asset.ticker)} today={today} />
       <div className="card">
         <h2>Preço manual</h2>
         <div className="hint" style={{ marginBottom: 10 }}>Usado somente quando não houver cotação automática.</div>

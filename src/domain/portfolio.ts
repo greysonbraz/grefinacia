@@ -1,12 +1,33 @@
-import type { Asset, AppData, Cents, FixedIncome, ISODate, Operation } from '../lib/types';
+import type { Asset, AppData, Cents, FixedIncome, ISODate, Quote } from '../lib/types';
 import { roundHalfAway } from '../lib/money';
 
-export function sortedOps(ops: Operation[]): Operation[] {
+/** O que o cálculo precisa de uma compra ou venda (vale para ações/FIIs e para cripto). */
+export interface InvestOp {
+  assetId: string;
+  side: 'buy' | 'sell';
+  quantity: number;
+  priceCents: number;
+  feesCents: number;
+  date: ISODate;
+  broker?: string;
+  createdAt: number;
+}
+/** O que o cálculo precisa de um ativo. */
+export interface PricedAsset {
+  id: string;
+  quote?: Quote;
+  manualPriceCents?: Cents;
+}
+
+/** Quantidades com até 8 casas (cripto). Evita sobras como 0,30000000000000004 depois de várias operações. */
+export const roundQty = (q: number): number => Math.round(q * 1e8) / 1e8;
+
+export function sortedOps<O extends InvestOp>(ops: O[]): O[] {
   return [...ops].sort((a, b) => a.date.localeCompare(b.date) || (a.side === b.side ? 0 : a.side === 'buy' ? -1 : 1) || a.createdAt - b.createdAt);
 }
 
-export interface Position {
-  asset: Asset;
+export interface Position<A extends PricedAsset = Asset> {
+  asset: A;
   quantity: number;
   costCents: Cents; // custo da posição atual (inclui custos de corretagem)
   avgPriceCents: number; // preço médio (fração de centavo é mantida)
@@ -21,9 +42,9 @@ export interface Position {
 }
 
 /** Posição de cada ativo considerando as operações até `asOf` (inclusive). */
-export function computePositions(assets: Asset[], operations: Operation[], asOf?: ISODate, useQuotes = true): Position[] {
+export function computePositions<A extends PricedAsset = Asset>(assets: A[], operations: InvestOp[], asOf?: ISODate, useQuotes = true): Position<A>[] {
   const ops = sortedOps(operations.filter((o) => !asOf || o.date <= asOf));
-  const out: Position[] = [];
+  const out: Position<A>[] = [];
   for (const asset of assets) {
     let qty = 0;
     let cost = 0;
@@ -34,7 +55,7 @@ export function computePositions(assets: Asset[], operations: Operation[], asOf?
       if (o.assetId !== asset.id) continue;
       if (o.broker) brokers.add(o.broker);
       if (o.side === 'buy') {
-        qty += o.quantity;
+        qty = roundQty(qty + o.quantity);
         cost += o.quantity * o.priceCents + o.feesCents;
         firstBuy = firstBuy ?? o.date;
       } else {
@@ -42,13 +63,16 @@ export function computePositions(assets: Asset[], operations: Operation[], asOf?
         const avg = qty > 0 ? cost / qty : 0;
         realized += sellQty * o.priceCents - o.feesCents - avg * sellQty;
         cost -= avg * sellQty;
-        qty -= sellQty;
-        if (qty === 0) cost = 0;
+        qty = roundQty(qty - sellQty);
+        if (qty <= 0) {
+          qty = 0;
+          cost = 0;
+        }
       }
     }
     const costCents = roundHalfAway(cost);
     let priceCents: Cents | null = null;
-    let priceSource: Position['priceSource'] = 'none';
+    let priceSource: Position<A>['priceSource'] = 'none';
     if (useQuotes && asset.quote) {
       priceCents = asset.quote.priceCents;
       priceSource = 'quote';
@@ -76,20 +100,20 @@ export function computePositions(assets: Asset[], operations: Operation[], asOf?
   return out;
 }
 
-export function quantityAt(operations: Operation[], assetId: string, date: ISODate): number {
+export function quantityAt(operations: InvestOp[], assetId: string, date: ISODate): number {
   let q = 0;
   for (const o of sortedOps(operations)) {
     if (o.assetId !== assetId || o.date > date) continue;
-    q += o.side === 'buy' ? o.quantity : -o.quantity;
+    q = roundQty(q + (o.side === 'buy' ? o.quantity : -o.quantity));
   }
   return Math.max(q, 0);
 }
 
 /** Verifica se a lista de operações nunca deixa a posição negativa (não dá para vender o que não tem). */
-export function operationsAreValid(operations: Operation[]): { ok: boolean; assetId?: string; date?: ISODate } {
+export function operationsAreValid(operations: InvestOp[]): { ok: boolean; assetId?: string; date?: ISODate } {
   const qty = new Map<string, number>();
   for (const o of sortedOps(operations)) {
-    const q = (qty.get(o.assetId) ?? 0) + (o.side === 'buy' ? o.quantity : -o.quantity);
+    const q = roundQty((qty.get(o.assetId) ?? 0) + (o.side === 'buy' ? o.quantity : -o.quantity));
     if (q < 0) return { ok: false, assetId: o.assetId, date: o.date };
     qty.set(o.assetId, q);
   }
@@ -107,7 +131,7 @@ export interface PortfolioTotals {
   unquoted: number; // quantidade de ativos sem cotação
 }
 
-export function portfolioTotals(positions: Position[], fixed: FixedIncome[]): PortfolioTotals {
+export function portfolioTotals(positions: Position<PricedAsset>[], fixed: FixedIncome[]): PortfolioTotals {
   let invested = 0, value = 0, equityValue = 0, pnl = 0, pnlBase = 0, realized = 0, unquoted = 0;
   for (const p of positions) {
     realized += p.realizedCents;

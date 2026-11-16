@@ -45,6 +45,9 @@ h1, h2, h3, p { margin: 0; }
 .cardhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
 .section { font-size: 13px; color: var(--muted); font-weight: 500; margin: 18px 4px 8px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.grid3 .tile { padding: 10px; }
+.grid3 .tile .val { font-size: 16px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 13px 14px; min-width: 0; }
 .tile .lbl { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .tile .val { font-size: 18px; font-weight: 600; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -68,7 +71,7 @@ h1, h2, h3, p { margin: 0; }
 .row .s { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .end { text-align: right; flex: none; }
 .row .end .s { text-align: right; }
-.pos { color: var(--good); } .neg { color: var(--bad); } .mut { color: var(--muted); }
+.pos { color: var(--good); } .neg { color: var(--bad); } .mut { color: var(--muted); } .num.warn { color: var(--warn); }
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-weight: 520; white-space: nowrap; }
 .badge.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 .badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }

@@ -116,7 +116,26 @@ try {
   await addOp('MXRF11', 'fii', '200', '10,00');
   t = await text();
   ok(t.includes('R$ 3.000,00') && t.includes('sem cotação'), 'carteira: investido 3.000 e ativos marcados "sem cotação" (sem dados inventados)');
+  ok(t.includes('Desempenho') && t.includes('CDI') && t.includes('IPCA'), 'bolsa: quadro de desempenho comparando com CDI e IPCA');
   await shot('04-investimentos');
+  // cripto: compra fracionada informando o total pago
+  await seg('Cripto');
+  await page.locator('.fab').click();
+  await page.locator('.sheet select[name=moeda]').selectOption('bitcoin');
+  await page.fill('input[name=quantidade]', '0,01');
+  await page.fill('input[name=valor]', '3.000,00');
+  t = await text();
+  ok(t.includes('Preço por unidade: R$ 300.000,00'), 'cripto: total pago ÷ quantidade = preço por unidade');
+  await page.fill('input[name=corretora]', 'Exchange');
+  await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+  await page.waitForTimeout(500);
+  t = await text();
+  ok(t.includes('Bitcoin') && t.includes('0,01 BTC') && t.includes('R$ 3.000,00') && t.includes('sem cotação'), 'cripto: 0,01 BTC por R$ 3.000, marcado "sem cotação"');
+  await shot('04b-cripto');
+  await page.locator('.row', { hasText: 'Bitcoin' }).click();
+  t = await text();
+  ok(t.includes('Preço médio') && t.includes('R$ 300.000,00'), 'cripto: detalhe com preço médio');
+  await page.getByRole('button', { name: 'Voltar' }).click();
   // provento manual MXRF11 0,10 pagamento mês que vem
   await seg('Dividendos');
   await page.getByRole('button', { name: 'Cadastrar' }).click();

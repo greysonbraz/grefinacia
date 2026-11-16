@@ -19,6 +19,8 @@ export const NEWS_HOSTS: string[] = [
 export const ALLOWED_HOSTS: string[] = [
   'https://brapi.dev', // cotações
   'https://query1.finance.yahoo.com', // cotações e proventos (não oficial)
+  'https://api.coingecko.com', // criptomoedas: preço e histórico (API pública, sem chave)
+  'https://api.bcb.gov.br', // Banco Central: CDI e IPCA (dados abertos, sem chave)
   SUPABASE_URL, // nuvem: login e cópia cifrada dos dados
   ...NEWS_HOSTS, // notícias (feeds públicos)
   ...(PAID_AI_ENABLED ? ['https://api.anthropic.com'] : []),
