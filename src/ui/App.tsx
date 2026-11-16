@@ -51,7 +51,7 @@ export function App() {
       {tab === 'home' && <Home nav={nav} />}
       {tab === 'transactions' && <Transactions />}
       {tab === 'invest' && <Invest initial={sub} />}
-      {tab === 'ai' && <Assistant nav={nav} />}
+      {tab === 'ai' && <Assistant nav={nav} initial={sub} />}
       {tab === 'planning' && <Planning initial={sub} />}
       <nav className="nav" aria-label="Principal">
         {TABS.map(([id, label, I]) => (

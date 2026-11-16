@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ai: { mode: 'local', apiKey: '', model: 'claude-haiku-5-5', consent: false },
   freedom: { yieldPct: 6 },
   news: { disabledSources: [] },
+  analysis: { ignoredDuplicates: [] },
 };
 
 export function emptyData(): AppData {

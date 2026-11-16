@@ -6,6 +6,8 @@ import { generateInsights } from './insights';
 import { goalProgress } from './goals';
 import { debtTotals, annualFromMonthly } from './debts';
 import { monthSummary } from './ledger';
+import { cashForecast, CLASS_LABEL, detectSubscriptions, findDuplicates, portfolioXray, unusualSpending } from './analysis';
+import { monthShortYear } from '../lib/dates';
 
 export interface ChatAnswer {
   text: string;
@@ -19,6 +21,9 @@ export const SUGGESTED_QUESTIONS = [
   'Quais despesas posso reduzir?',
   'Como posso aumentar minha reserva de emergência?',
   'Qual dívida devo quitar primeiro?',
+  'Como fica meu saldo nos próximos meses?',
+  'Tenho gastos fora do padrão?',
+  'Quais assinaturas eu pago?',
 ];
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -43,6 +48,42 @@ export function answerLocally(question: string, o: Overview, data: AppData, sett
   const plan = o.spend.plan;
   const safeInvest = Math.min(Math.max(plan.investCents - Math.max(o.cur.investedCents, 0), 0), Math.max(o.projectedEndBalanceCents, 0));
 
+  const name = (id: string) => data.categories.find((c) => c.id === id)?.name ?? id;
+  const ddmm = (d: string) => d.slice(8, 10) + '/' + d.slice(5, 7);
+
+  if (/(compar|simul).*(emprestimo|financiamento)|\bcet\b|tabela price|\bsac\b/.test(q)) {
+    return { text: 'Para comparar propostas de empréstimo, abra Planejamento → Dívidas → Comparar empréstimos. Informe valor, prazo e a taxa ou a parcela de cada banco, mais tarifas e IOF: eu calculo parcela, total pago, juros e o custo efetivo (CET) pela Tabela Price e pela SAC. Compare sempre pelo CET, não só pela taxa.' };
+  }
+  if (/(previs|proximos meses|vai sobrar|vou ter|fluxo de caixa|\bcaixa\b|futuro)/.test(q)) {
+    if (data.accounts.length === 0) return { text: 'Cadastre suas contas com o saldo de hoje (Ajustes → Contas) para eu prever o saldo dos próximos meses.' };
+    const f = cashForecast(data, o.today, 6);
+    const end = f.months[f.months.length - 1];
+    return {
+      text: f.firstNegative ? `Atenção: pela previsão, o saldo fica negativo em ${monthName(f.firstNegative)} (${formatBRL(f.months.find((m) => m.ym === f.firstNegative)!.endBalanceCents)}). Corte gastos do dia a dia ou adie compras antes disso.` : `Pela previsão, você termina ${monthName(end.ym)} com ${formatBRL(end.endBalanceCents)} nas contas. O mês mais apertado é ${monthName(f.lowest!.ym)}, com ${formatBRL(f.lowest!.endBalanceCents)}.`,
+      calc: [`Saldo de hoje: ${formatBRL(f.startCents)}`, `Gasto do dia a dia estimado: ${formatBRL(f.variableMonthlyCents)} por mês (média de ${f.variableBasisMonths} ${f.variableBasisMonths === 1 ? 'mês' : 'meses'})`, ...f.months.map((m) => `${monthShortYear(m.ym)}: +${formatBRL(m.incomeCents)} − ${formatBRL(m.fixedCents + m.debtCents + m.variableCents)} → ${formatBRL(m.endBalanceCents)}`)],
+    };
+  }
+  if (/(fora do padrao|incomum|anormal|estranh|acima do normal|fora do normal)/.test(q)) {
+    const u = unusualSpending(data, o.today);
+    if (!u.categories.length && !u.transactions.length) return { text: 'Não encontrei nada fora do padrão neste mês. Comparo cada categoria com a mediana dos 6 meses anteriores (preciso de pelo menos 3) e cada lançamento com o valor típico da categoria.' };
+    return { text: 'Encontrei estes gastos acima do seu normal:', calc: [...u.categories.map((c) => `${name(c.categoryId)}: ${formatBRL(c.curCents)} neste mês, normal ${formatBRL(c.typicalCents)} (+${formatPct(c.pct)})`), ...u.transactions.map((t) => `${t.tx.description} em ${ddmm(t.tx.date)}: ${formatBRL(t.tx.amountCents)}, ${t.times.toFixed(1).replace('.', ',')}× o típico`)] };
+  }
+  if (/(duplicad|em dobro|duas vezes|cobrad[oa] 2)/.test(q)) {
+    const d = findDuplicates(data, o.today, settings.analysis?.ignoredDuplicates ?? []);
+    if (!d.length) return { text: 'Não achei cobranças repetidas nos últimos 60 dias (mesmo valor, mesma descrição, até 3 dias de diferença).' };
+    return { text: `Achei ${d.length} ${d.length === 1 ? 'possível cobrança em dobro' : 'possíveis cobranças em dobro'}. Confira no Raio-X; se uma estiver certa, marque "não é duplicada".`, calc: d.map((x) => `${x.a.description}: ${formatBRL(x.a.amountCents)} em ${ddmm(x.a.date)} e ${ddmm(x.b.date)}`) };
+  }
+  if (/(assinatura|mensalidade|streaming|recorrent)/.test(q)) {
+    const s = detectSubscriptions(data, o.today);
+    if (!s.length) return { text: 'Não encontrei assinaturas. Eu considero as assinaturas cadastradas e as cobranças que se repetem com valor parecido por pelo menos 3 meses seguidos.' };
+    const m = s.reduce((t, x) => t + x.monthlyCents, 0);
+    return { text: `Você paga ${s.length} ${s.length === 1 ? 'assinatura ou cobrança mensal' : 'assinaturas ou cobranças mensais'}: ${formatBRL(m)} por mês, ${formatBRL(m * 12)} por ano.`, calc: s.map((x) => `${x.name}: ${formatBRL(x.monthlyCents)}/mês${x.increasedFromCents ? ` (era ${formatBRL(x.increasedFromCents)})` : ''}${x.source === 'detectada' ? ' · detectada nos lançamentos' : ''}`) };
+  }
+  if (/(diversific|alocac|raio.?x|minha carteira|distribu)/.test(q)) {
+    const x = portfolioXray(data, o.today);
+    if (x.totalCents <= 0) return { text: 'Você ainda não tem investimentos cadastrados.' };
+    return { text: `Seus investimentos somam ${formatBRL(x.totalCents)}. Os 3 maiores itens são ${formatPct(x.top3Pct)} do total; na prática é como ter ${x.effectiveItems.toFixed(1).replace('.', ',')} itens do mesmo tamanho. Diversificar ou não é decisão sua; eu só mostro a fotografia.`, calc: x.classes.map((c) => `${CLASS_LABEL[c.cls]}: ${formatBRL(c.cents)} (${formatPct(c.pct)})`) };
+  }
   if (/(divida|emprestimo|juros|financiamento|quitar)/.test(q)) {
     const t = debtTotals(data.debts);
     if (data.debts.length === 0) return { text: 'Você ainda não cadastrou dívidas. Cadastre em Planejamento → Dívidas para eu comparar juros e simular a quitação.' };
@@ -84,7 +125,6 @@ export function answerLocally(question: string, o: Overview, data: AppData, sett
     const prev = monthSummary(data, o.prevYm);
     const cats = Object.entries(o.cur.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 4);
     if (cats.length === 0) return { text: 'Ainda não há despesas neste mês para analisar.' };
-    const name = (id: string) => data.categories.find((c) => c.id === id)?.name ?? id;
     const lines = cats.map(([id, v]) => {
       const p = prev.byCategory[id] ?? 0;
       const ch = p > 0 ? ` (${v >= p ? '+' : ''}${formatPct(((v - p) / p) * 100)} vs. mês passado)` : '';
@@ -107,7 +147,7 @@ export function answerLocally(question: string, o: Overview, data: AppData, sett
     return { text: `Seu patrimônio é ${formatBRL(o.netWorth.totalCents)}${o.debtCents > 0 ? `; descontando ${formatBRL(o.debtCents)} de dívidas, o líquido é ${formatBRL(o.netWorth.totalCents - o.debtCents)}` : ''}.`, calc: [`Contas: ${formatBRL(o.netWorth.accountsCents)}`, `Reservas: ${formatBRL(o.netWorth.goalsCents)}`, `Renda fixa: ${formatBRL(o.netWorth.fixedIncomeCents)}`, `Bolsa: ${formatBRL(o.netWorth.equityMarketCents)}`, ...(o.netWorth.cryptoCents ? [`Cripto: ${formatBRL(o.netWorth.cryptoCents)}`] : [])] };
   }
   const top = generateInsights(o, data, settings).slice(0, 3);
-  return { text: 'No modo local eu respondo sobre: quanto você pode gastar, quanto economizou, quanto pode investir, despesas para reduzir, reserva de emergência, dívidas, dividendos, patrimônio e se uma compra cabe no orçamento.' + (top.length ? ' O que mais chama atenção agora:' : ''), calc: top.map((i) => i.title) };
+  return { text: 'No modo local eu respondo sobre: quanto você pode gastar, quanto economizou, quanto pode investir, despesas para reduzir, previsão do saldo nos próximos meses, gastos fora do padrão, assinaturas, cobranças em dobro, sua carteira, comparar empréstimos, reserva de emergência, dívidas, dividendos, patrimônio e se uma compra cabe no orçamento.' + (top.length ? ' O que mais chama atenção agora:' : ''), calc: top.map((i) => i.title) };
 }
 
 /** Resumo (só agregados, sem descrições de lançamentos) enviado ao serviço de IA quando o usuário autoriza. */

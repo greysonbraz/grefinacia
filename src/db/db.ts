@@ -68,6 +68,7 @@ export function mergeSettings(saved: Partial<Settings> | undefined): Settings {
     ai: { ...DEFAULT_SETTINGS.ai, ...s.ai },
     freedom: { ...DEFAULT_SETTINGS.freedom, ...s.freedom },
     news: { disabledSources: Array.isArray(s.news?.disabledSources) ? s.news.disabledSources.filter((x) => typeof x === 'string') : [] },
+    analysis: { ignoredDuplicates: Array.isArray(s.analysis?.ignoredDuplicates) ? s.analysis.ignoredDuplicates.filter((x) => typeof x === 'string').slice(-500) : [] },
     budgets: { ...s.budgets },
   };
 }
