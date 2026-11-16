@@ -24,24 +24,26 @@ Para testar no navegador do computador: `npm run dev`.
 
 ## O que funciona hoje
 
+Conferido pelo dono num Galaxy S26 Ultra a cada etapa. Roteiro completo de teste no celular: [docs/ROTEIRO-TESTE.md](docs/ROTEIRO-TESTE.md).
+
 | Módulo | Situação |
 |---|---|
-| Painel, movimentações, cartões, parcelas, recorrências | Funcional |
-| Plano salarial, reservas, orçamento por categoria | Funcional |
-| Dívidas: prioridade, extra mensal, antecipação, portabilidade, avalanche × bola de neve | Funcional |
-| Bolsa (ações, FIIs, ETFs), preço médio, renda fixa com estimativa e IR | Funcional |
-| Dividendos: previsão, calendário, histórico, confirmação de recebimento | Funcional (cadastro manual sempre disponível) |
-| Grefinacia AI | Chat local por cálculo (IA externa paga desligada nesta fase) |
-| Fechamento mensal, PDF mensal/anual, planilha CSV | Funcional |
-| PIN, biometria, bloqueio automático, backup AES-256 | Funcional (biometria só no aparelho) |
-| Notificações Android | Agendadas localmente; ver limites abaixo |
-| Open Finance, pagamentos automáticos, sincronização em nuvem | **Não incluído**: exige provedor autorizado e servidor |
+| Painel, movimentações, cartões, parcelas, recorrências, transferências, categorias próprias, boleto | Funcional |
+| Importar extrato da conta e fatura do cartão (OFX e CSV), com prévia, duplicados e desfazer | Funcional (testado com o Banco Inter) |
+| Plano salarial, reservas, orçamento, dívidas e comparador de empréstimos (CET, Price, SAC) | Funcional |
+| Bolsa, renda fixa, cripto, dividendos, histórico de preços, desempenho contra CDI e IPCA | Funcional |
+| Grefinacia AI: chat local, alertas, Raio-X (previsão de caixa, fora do padrão, assinaturas, cobranças em dobro) | Funcional, sem internet |
+| IA no aparelho (Gemini Nano) | Experimental, opcional, só em celulares compatíveis |
+| Login Google, cópia cifrada e sincronização entre aparelhos (Supabase) | Funcional; dois aparelhos ao mesmo tempo ainda não testados |
+| Notícias por RSS | Funcional no app Android |
+| Fechamento mensal, PDF e CSV, exportação JSON | Funcional |
+| PIN, biometria, bloqueio automático, backup AES-256, cópias automáticas | Funcional |
+| Open Finance e pagamentos automáticos | **Não incluído**: exige provedor pago e servidor |
 
 ## Limites que você precisa conhecer
 
-- **Não testado em aparelho.** O ambiente onde o app foi escrito não compila Android. A lógica e as telas foram
-  testadas em navegador (412 px); notificações, biometria, compartilhamento de arquivos e o verificador em
-  segundo plano dependem de plugins nativos e só podem ser validados no celular.
+- **Testes:** 218 automáticos e navegação automática no navegador (412 px). O que depende do Android (notificações,
+  biometria, verificador em segundo plano, Gemini Nano) é conferido no celular pelo roteiro de teste.
 - **Fontes de dados:** brapi.dev, Yahoo Finance, CoinGecko e Banco Central foram consultados de verdade em 16/11/2026
   (fora do celular) e o app leu as respostas corretamente. Os testes automáticos usam trechos dessas respostas.
 - **Cripto (CoinGecko, API pública sem chave):** preços em reais com alguns minutos de atraso e até 12 meses de histórico.
@@ -64,7 +66,7 @@ Para testar no navegador do computador: `npm run dev`.
 ```
 src/lib        dinheiro em centavos, datas, tipos
 src/domain     regras de negócio puras (testadas em tests/)
-src/services   cotações, notificações, segurança, backup, PDF, IA
+src/services   cotações, cripto, índices, notificações, segurança, backup, nuvem, Gemini Nano
 src/db         IndexedDB
 src/state      estado do app e ações
 src/ui         telas
@@ -76,3 +78,7 @@ android        projeto Android gerado pelo Capacitor
 
 - [Planejamento e auditoria](docs/PLANEJAMENTO.md)
 - [Segurança, assinatura do APK e atualização sem perder dados](docs/SEGURANCA.md)
+- [Tecnologias, serviços e limites](docs/TECNOLOGIAS.md)
+- [Roteiro de teste no celular](docs/ROTEIRO-TESTE.md)
+- [Progresso das etapas](docs/PROGRESSO.md)
+- [Nuvem (Supabase e login Google)](docs/NUVEM.md)

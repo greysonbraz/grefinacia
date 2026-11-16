@@ -19,3 +19,4 @@ keystore.properties
 # backups do app (só o exemplo sintético usado nos testes pode ser versionado)
 *.gfbackup
 !tests/fixtures/*.gfbackup
+coverage/

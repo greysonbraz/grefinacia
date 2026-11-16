@@ -1,7 +1,7 @@
 {
   "name": "grefinacia",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "type": "module",
   "description": "Controle financeiro pessoal e investimentos (B3) para Android",
   "scripts": {
@@ -13,13 +13,15 @@
     "android:open": "cap open android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "e2e": "npm run build && node e2e/smoke.mjs",
-    "check:secrets": "node scripts/check-secrets.mjs"
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "test:coverage": "vitest run --coverage --coverage.include=src/**"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^5.1.0",
     "fake-indexeddb": "^6.2.8",
     "jsdom": "^31.0.0",
     "typescript": "^7.0.2",

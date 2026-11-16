@@ -230,6 +230,7 @@ Em cada etapa eu entrego: código, testes, um APK no GitHub para você instalar,
 - **Você faz:** enviar 1 extrato de exemplo de cada banco que usa (pode alterar os valores; não vai para o GitHub).
 
 ### Etapa 10 — Testes completos
+**Concluída em 16/11/2026** (ver `docs/PROGRESSO.md`, `docs/SEGURANCA.md`, `docs/ROTEIRO-TESTE.md`, `docs/TECNOLOGIAS.md`).
 - Suíte completa, revisão final de segurança, roteiro de teste no aparelho para o que só o celular valida (notificações, biometria, login, câmera, IA local) e documentação final das tecnologias.
 
 ---
