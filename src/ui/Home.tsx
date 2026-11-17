@@ -48,6 +48,7 @@ export function Home({ nav }: { nav: Nav }) {
     { label: 'Renda fixa', cents: nw.fixedIncomeCents, color: cssVar('--s4') },
     { label: 'Bolsa', cents: nw.equityMarketCents, color: cssVar('--s7') },
     { label: 'Cripto', cents: nw.cryptoCents, color: cssVar('--s8') },
+    { label: 'Nos bancos', cents: nw.bankInvestCents, color: cssVar('--s5') },
   ].filter((c) => c.cents > 0);
   const compTotal = comp.reduce((s, c) => s + c.cents, 0);
   const planInvestLeft = Math.min(Math.max(o.spend.plan.investCents - Math.max(o.cur.investedCents, 0), 0), Math.max(o.projectedEndBalanceCents, 0));
@@ -117,7 +118,7 @@ export function Home({ nav }: { nav: Nav }) {
       <div className="grid2">
         <button className="tile" style={{ textAlign: 'left' }} onClick={() => nav.go('planning', 'salario')}><div className="lbl">Livre para gastar</div><div className={'val num ' + (o.spend.remainingCents < 0 ? 'neg' : '')}>{formatBRL(o.spend.remainingCents)}</div><div className="foot">{o.spend.plan.risk === 'sem_receita' ? 'cadastre seu salário' : o.spend.perDayCents > 0 ? `${formatBRL(o.spend.perDayCents)}/dia por ${o.spend.daysLeft} dias` : 'neste mês'}</div></button>
         <button className="tile" style={{ textAlign: 'left' }} onClick={() => nav.go('planning', 'salario')}><div className="lbl">Disponível para investir</div><div className="val num">{formatBRL(planInvestLeft)}</div><div className="foot">sem apertar as contas</div></button>
-        <button className="tile" style={{ textAlign: 'left' }} onClick={() => nav.go('invest')}><div className="lbl">Total investido</div><div className="val num">{formatBRL(o.totals.investedCents)}</div><div className="foot">vale {formatBRL(o.totals.valueCents)}</div></button>
+        <button className="tile" style={{ textAlign: 'left' }} onClick={() => nav.go('invest')}><div className="lbl">Total investido</div><div className="val num">{formatBRL(o.totals.investedCents)}</div><div className="foot">vale {formatBRL(o.totals.valueCents)}{nw.bankInvestCents > 0 ? ` · + ${formatBRL(nw.bankInvestCents)} nos bancos` : ''}</div></button>
         <button className="tile" style={{ textAlign: 'left' }} onClick={() => nav.go('planning', 'reservas')}><div className="lbl">Valor reservado</div><div className="val num">{formatBRL(o.goalsCents)}</div><div className="foot">{data.goals.length} {data.goals.length === 1 ? 'objetivo' : 'objetivos'}</div></button>
         <button className="tile" style={{ textAlign: 'left', gridColumn: '1 / -1' }} onClick={() => nav.go('planning', 'dividas')}><div className="lbl">Total de dívidas</div><div className="val num">{formatBRL(o.debtCents)}</div><div className="foot">{data.debts.length === 0 ? 'nenhuma dívida cadastrada' : `${data.debts.length} em aberto`}</div></button>
       </div>

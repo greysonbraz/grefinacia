@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 14 | Investimentos dos bancos pela conexão (renda fixa, ações, fundos, previdência) em Investimentos → Nos bancos e no patrimônio | `claude/etapa-14-investimentos` |
 | 13 | Tela inicial nova: gasto do mês dia a dia × mês passado, maiores categorias, previsão do mês inteiro e do mês que vem | `claude/etapa-13-inicio` |
 | 12 | Conexão bancária pelo Meu Pluggy: saldos, extratos e cartões entrando sozinhos pelo importador, sem duplicar | `claude/etapa-12-pluggy` |
 
@@ -36,6 +37,12 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 14:
+- `GET /investments?itemId=` da Pluggy a cada sincronização; Inter, Itaú e Santander constam com investimentos no Open Finance (tabela de cobertura da Pluggy, 30/10/2026).
+- Coleção nova `bankInvestments` (banco local v6, backup formato 5, sincroniza na nuvem). É uma foto da posição: valor líquido, bruto, aplicado, quantidade, taxa, vencimento. Não vira operação de compra (o Open Finance não traz o histórico completo; inventar compras distorceria a rentabilidade).
+- Entra no patrimônio de hoje ("Nos bancos"). Ação/FII/ETF com o mesmo código já cadastrado à mão vem desligada; cada posição tem "Contar no patrimônio". Resgatado por completo sai; moeda estrangeira fica de fora (aba Dólar, Etapa 15).
+- Rentabilidade passada não vem pelo Open Finance; quando o banco informa o valor aplicado, mostra quanto rendeu.
 
 Detalhes da Etapa 13:
 - **Topo da tela inicial:** gasto do mês até hoje, gráfico acumulado dia a dia contra o mês passado, diferença até o mesmo dia, as 5 maiores categorias e a previsão do mês inteiro (já gasto + contas a vencer + recorrências + média do dia a dia).

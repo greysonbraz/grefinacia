@@ -106,6 +106,40 @@ export async function listAccounts(apiKey: string, itemId: string): Promise<Plug
   return Array.isArray(r.results) ? r.results : [];
 }
 
+export interface PluggyInvestment {
+  id: string;
+  itemId?: string;
+  name: string;
+  code?: string | null;
+  isin?: string | null;
+  type: string;
+  subtype?: string | null;
+  balance: number;
+  amount?: number | null;
+  amountOriginal?: number | null;
+  quantity?: number | null;
+  value?: number | null;
+  currencyCode?: string | null;
+  date?: string | null;
+  dueDate?: string | null;
+  issuer?: string | null;
+  rate?: number | null;
+  rateType?: string | null;
+  fixedAnnualRate?: number | null;
+  status?: string | null;
+}
+
+/** Investimentos de um banco (renda fixa, ações, fundos, previdência), em páginas de 500. */
+export async function listInvestments(apiKey: string, itemId: string): Promise<PluggyInvestment[]> {
+  const out: PluggyInvestment[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const r = await call<{ results?: PluggyInvestment[]; totalPages?: number }>(`/investments?itemId=${encodeURIComponent(itemId.trim())}&pageSize=500&page=${page}`, { apiKey });
+    if (Array.isArray(r.results)) out.push(...r.results);
+    if (!r.totalPages || page >= r.totalPages) break;
+  }
+  return out;
+}
+
 /** Todas as transações de uma conta desde `dateFrom` (aaaa-mm-dd), seguindo o cursor. Para em 40 páginas (20 mil). */
 export async function listTransactions(apiKey: string, accountId: string, dateFrom: string): Promise<PluggyTransaction[]> {
   const out: PluggyTransaction[] = [];

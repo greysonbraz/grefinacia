@@ -12,8 +12,9 @@ const DB_NAME = 'grefinacia';
  *   3 — + "transfers" (transferências entre contas)
  *   4 — + "cryptoAssets", "cryptoOps" (carteira de cripto) e "marketHistory" (histórico de preços e índices)
  *   5 — + "imports" (importações de extratos)
+ *   6 — + "bankInvestments" (investimentos lidos do banco pela conexão)
  */
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 const SAFETY = 'safety';
 /** Quantas cópias automáticas ficam guardadas; a mais antiga sai quando entra uma nova. */
 export const MAX_SAFETY_COPIES = 3;

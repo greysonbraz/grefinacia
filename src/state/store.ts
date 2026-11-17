@@ -13,7 +13,8 @@ import { computePositions, operationsAreValid, quantityAt } from '../domain/port
 import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError } from '../services/quotes';
 import { isNative } from '../services/platform';
-import { forgetPluggyKey, getItem, listAccounts, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
+import { forgetPluggyKey, getItem, listAccounts, listInvestments, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
+import { mergeInvestments } from '../domain/bankInvest';
 import { applyBankCategories, autoSelect, localDay, neutralKind, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
 import { buildPreview, buildTransactions, makeBatch } from '../domain/importer';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
@@ -48,6 +49,8 @@ export interface BankState {
   lastSyncByAccount: Record<string, string>;
   /** Resumo da última sincronização, por conta (para mostrar o que veio e por que algo ficou de fora). */
   report?: SyncReport[];
+  /** Investimentos: quantos vieram de cada banco na última sincronização, ou o erro. */
+  investReport?: { bank: string; count: number; foreign: number; error?: string }[];
 }
 const BANK_META = 'bankState';
 /** Sincronização bancária automática: no máximo a cada 12 h (o Meu Pluggy atualiza a cada 24 h). */
@@ -721,8 +724,30 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
       errors.push(`${name}: ${msg}`);
     }
   }
-  await saveBank({ report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
+  // investimentos de cada banco (foto das posições; um banco com erro não apaga o que já estava salvo)
+  const investReport: NonNullable<BankState['investReport']> = [];
+  for (const it of b.items) {
+    const bankName = it.label || state.bank.items[it.itemId]?.name || 'Banco';
+    try {
+      const got = await listInvestments(key, it.itemId);
+      const prev = (state.data.bankInvestments ?? []).filter((x) => x.itemId === it.itemId);
+      const { list, skippedForeign } = mergeInvestments(prev, got, it.itemId, bankName, state.data, attempt);
+      const gone = prev.filter((p) => !list.some((x) => x.id === p.id)).map((p) => p.id);
+      if (gone.length) await remove('bankInvestments', gone);
+      if (list.length) await upsert('bankInvestments', list);
+      investReport.push({ bank: bankName, count: list.length, foreign: skippedForeign });
+    } catch (e) {
+      investReport.push({ bank: bankName, count: 0, foreign: 0, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  await saveBank({ investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
+}
+
+/** Conta (ou não) um investimento do banco no patrimônio. A escolha fica guardada nas próximas sincronizações. */
+export async function setBankInvestmentCounted(id: string, counted: boolean): Promise<void> {
+  const inv = (state.data.bankInvestments ?? []).find((x) => x.id === id);
+  if (inv) await upsert('bankInvestments', { ...inv, counted, countedReason: 'voce' });
 }
 
 /**
@@ -774,6 +799,9 @@ export async function autoSyncBank(now = Date.now()): Promise<boolean> {
 /** Remove a conexão deste aparelho: apaga as credenciais do cofre e os vínculos. Os lançamentos já importados ficam. */
 export async function disconnectBank(): Promise<void> {
   forgetPluggyKey();
+  // investimentos do banco são só uma foto da conexão: saem junto (nada que você lançou é tocado)
+  const invIds = (state.data.bankInvestments ?? []).map((x) => x.id);
+  if (invIds.length) await remove('bankInvestments', invIds);
   await updateSettings({ bank: { ...DEFAULT_SETTINGS.bank } });
   await saveBank({ items: {}, accounts: [], lastSyncByAccount: {}, report: undefined, error: undefined, lastAttempt: undefined, lastOkAt: undefined });
 }

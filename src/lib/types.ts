@@ -284,6 +284,34 @@ export interface FiredAlert {
   at: number;
 }
 
+/** Investimento lido do banco pela conexão (Etapa 14). É uma foto da posição, atualizada a cada sincronização. */
+export interface BankInvestment {
+  id: string; // id da Pluggy
+  itemId: string;
+  bankName: string;
+  name: string;
+  code?: string; // ticker (ações/FII/ETF) ou CNPJ (fundos)
+  isin?: string;
+  type: string; // FIXED_INCOME, EQUITY, MUTUAL_FUND, SECURITY, ETF, COE
+  subtype?: string; // CDB, LCI, TREASURY, STOCK, REAL_ESTATE_FUND...
+  balanceCents: Cents; // valor líquido hoje (depois de IR e IOF)
+  grossCents: Cents; // valor bruto
+  originalCents?: Cents; // valor aplicado, quando o banco informa
+  quantity?: number;
+  unitCents?: Cents;
+  dueDate?: ISODate;
+  issuer?: string;
+  rate?: number;
+  rateType?: string;
+  fixedAnnualRate?: number;
+  date?: ISODate; // data de referência do valor
+  status?: string; // ACTIVE, PENDING, TOTAL_WITHDRAWAL
+  /** Conta no patrimônio? Fica de fora quando o mesmo ativo já está cadastrado à mão (para não contar em dobro). */
+  counted: boolean;
+  countedReason?: 'auto' | 'manual-duplicado' | 'voce';
+  updatedAt: string;
+}
+
 export interface AppData {
   accounts: Account[];
   cards: Card[];
@@ -304,6 +332,7 @@ export interface AppData {
   cryptoOps: CryptoOperation[];
   marketHistory: MarketHistory[];
   imports: ImportBatch[];
+  bankInvestments: BankInvestment[];
 }
 
 export type CollectionName = keyof AppData;

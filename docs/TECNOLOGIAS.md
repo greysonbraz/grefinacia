@@ -1,6 +1,6 @@
 # Tecnologias do Grefinacia
 
-Versão 1.11.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
+Versão 1.12.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
 
 ## Aplicativo
 
@@ -70,7 +70,7 @@ restaurar, importar ou atualizar.
 
 ```bash
 npm ci
-npm test                 # varredura de segredos + 262 testes
+npm test                 # varredura de segredos + 268 testes
 npm run test:coverage    # mesmos testes com relatório de cobertura
 npm run build            # TypeScript + Vite (com CSP)
 PW_ROOT=<pasta do playwright> npm run e2e

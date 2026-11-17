@@ -13,16 +13,19 @@ import { Cripto, PerformanceCard, PriceChart } from './Market';
 import { DividendHistory, PassivePanel, SourceHealth, TotalReturnCard } from './Proventos';
 import { resolveDividendProvider } from '../services/quotes';
 import { historyId } from '../domain/market';
+import { BankInvestments } from './BankInvest';
 
 const TYPE_LABEL: Record<AssetType, string> = { acao: 'Ação', fii: 'FII', etf: 'ETF' };
-type Sub = 'bolsa' | 'fixa' | 'cripto' | 'dividendos';
+type Sub = 'bancos' | 'bolsa' | 'fixa' | 'cripto' | 'dividendos';
 
 export function Invest({ initial }: { initial?: string }) {
-  const [sub, setSub] = useState<Sub>((initial as Sub) ?? 'bolsa');
+  const hasBank = useStore((s) => (s.data.bankInvestments ?? []).length > 0 || !!s.settings.bank.items.length);
+  const [sub, setSub] = useState<Sub>((initial as Sub) ?? (hasBank ? 'bancos' : 'bolsa'));
   return (
     <div className="screen">
       <div className="head"><h1>Investimentos</h1></div>
-      <Seg value={sub} onChange={setSub} options={[['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
+      <Seg value={sub} onChange={setSub} options={[...(hasBank ? [['bancos', 'Nos bancos'] as [Sub, string]] : []), ['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
+      {sub === 'bancos' && <BankInvestments />}
       {sub === 'bolsa' && <Bolsa />}
       {sub === 'fixa' && <Fixa />}
       {sub === 'cripto' && <Cripto />}
