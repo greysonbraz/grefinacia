@@ -64,3 +64,10 @@ Com os Secrets cadastrados, o fluxo *Gerar APK* publica o artefato `grefinacia-a
 ## Custo zero
 
 A IA externa paga está desligada por código (`src/lib/flags.ts`). A verificação de proventos em segundo plano não consulta a brapi no plano gratuito e roda a cada ~6 h.
+
+## Auditoria de dependências (17/11/2026)
+
+- Dependências do app (o que vai no APK): `npm audit --omit=dev --audit-level=high` bloqueia o build em qualquer alerta alto ou crítico.
+- Ferramentas de build e teste (Vite, Vitest e plugins): `scripts/audit-tools.mjs` bloqueia quando já existe versão corrigida publicada; sem correção, só avisa no log.
+- Motivo: alerta GHSA-fc5q-39xc-vjpf (ReDoS no `picomatch` ≤ 4.0.7, usado só pelas ferramentas de build) sem versão corrigida travava todos os APKs. Autorizado pelo dono em 17/11/2026. Quando sair a correção, o build volta a bloquear até atualizar.
+
