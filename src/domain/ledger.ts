@@ -62,10 +62,24 @@ export interface MonthSummary {
   savedCents: Cents; // depósitos líquidos em reservas no mês
 }
 
+// ---------- mês em que um gasto conta ----------
+let cardMonth: 'fatura' | 'compra' = 'fatura';
+/** O estado do app avisa aqui a escolha feita em Ajustes (padrão: mês da fatura). */
+export function setCardMonthMode(mode: 'fatura' | 'compra' | undefined): void {
+  cardMonth = mode === 'compra' ? 'compra' : 'fatura';
+}
+export const cardMonthMode = () => cardMonth;
+/**
+ * Data em que o lançamento pesa no mês. Compra no cartão: no vencimento da fatura (o dinheiro sai nesse mês),
+ * a menos que você escolha "data da compra" em Ajustes. Estorno no cartão e o resto: a data do lançamento.
+ */
+export const costDate = (t: Transaction): ISODate => (cardMonth === 'fatura' && t.type === 'expense' && t.cardId && t.dueDate ? t.dueDate : t.date);
+export const costMonth = (t: Transaction): YearMonth => monthOf(costDate(t));
+
 export function monthSummary(data: AppData, ym: YearMonth): MonthSummary {
   const s: MonthSummary = { ym, incomeCents: 0, expenseCents: 0, incomePaidCents: 0, expensePendingCents: 0, netCents: 0, byCategory: {}, byKind: {}, investedCents: 0, savedCents: 0 };
   for (const t of data.transactions) {
-    if (monthOf(t.date) !== ym) continue;
+    if (costMonth(t) !== ym) continue;
     if (t.type === 'income') {
       s.incomeCents += t.amountCents;
       if (t.status === 'paid') s.incomePaidCents += t.amountCents;
@@ -91,7 +105,7 @@ export function monthSummary(data: AppData, ym: YearMonth): MonthSummary {
 export function expensesUpToDay(data: AppData, ym: YearMonth, uptoDay: number): Cents {
   let t = 0;
   for (const x of data.transactions) {
-    if (x.type === 'expense' && monthOf(x.date) === ym && Number(x.date.slice(8, 10)) <= uptoDay) t += x.amountCents;
+    if (x.type === 'expense' && costMonth(x) === ym && Number(costDate(x).slice(8, 10)) <= uptoDay) t += x.amountCents;
   }
   return t;
 }

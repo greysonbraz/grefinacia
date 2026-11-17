@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 17 | Compra no cartão conta no mês da fatura (padrão; chave em Ajustes → Cartões); previsão sem contar o cartão em dobro; "Renda fixa em dólar" na aba Dólar | `claude/etapa-17-cartao-fatura` |
 | 16 | Notícias dos EUA e Wall Street: assunto novo com 5 fontes (3 em português, 2 em inglês) e atalho na aba Dólar | `claude/etapa-16-noticias-eua` |
 | 15 | Aba Dólar na tela inicial (R$ / US$): conta em dólar, ações e ETFs dos EUA, investimentos em dólar do banco, PTAX com gráfico e conversor | `claude/etapa-15-dolar` |
 | 14 | Investimentos dos bancos pela conexão (renda fixa, ações, fundos, previdência) em Investimentos → Nos bancos e no patrimônio | `claude/etapa-14-investimentos` |
@@ -39,6 +40,12 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 17 (pedido do dono depois de testar o 1.14.0):
+- `costDate`/`costMonth` em `src/domain/ledger.ts`: compra no cartão pesa no mês do vencimento da fatura (quando o dinheiro sai). Vale para resumo do mês, tela inicial, Movimentações, Planejamento, salário e previsão. Ajustes → Cartões tem a chave para voltar ao "mês da compra".
+- A lista de Movimentações continua pela data da compra, com a marca "fatura dez"; o topo explica o que entrou de fatura e o que foi para a próxima.
+- Previsão do mês que vem: fatura já lançada entra em "contas" e a média do dia a dia só completa o que falta (antes o cartão podia contar duas vezes).
+- Inter Global (Conta Global, Inter Dólar+, Meu Porquinho USD) fica numa instituição fora do Brasil: não vem pelo Open Finance. Tipo novo "Renda fixa em dólar" na aba Dólar para cadastrar à mão.
 
 Detalhes da Etapa 16:
 - Assunto "EUA e Wall Street" em Notícias: InfoMoney Wall Street, Money Times Internacional, Investing.com Brasil (ações), CNBC Markets e MarketWatch (estes dois em inglês). Feeds conferidos e lidos pelo leitor do app em 17/11/2026.

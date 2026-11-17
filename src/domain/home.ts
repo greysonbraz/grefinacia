@@ -1,6 +1,7 @@
 import type { AppData, Cents, ISODate, YearMonth } from '../lib/types';
 import { addMonthsYM, daysInMonth, monthOf } from '../lib/dates';
 import { cashForecast } from './analysis';
+import { costDate, costMonth } from './ledger';
 
 /**
  * Tela inicial (Etapa 13): o gasto do mês dia a dia, comparado ao mês passado, e a previsão do mês que vem.
@@ -12,8 +13,8 @@ export function cumulativeSpending(data: AppData, ym: YearMonth, uptoDay?: numbe
   const n = Math.min(uptoDay ?? daysInMonth(ym), daysInMonth(ym));
   const perDay = new Array<number>(n).fill(0);
   for (const t of data.transactions) {
-    if (t.type !== 'expense' || monthOf(t.date) !== ym) continue;
-    const d = Number(t.date.slice(8, 10));
+    if (t.type !== 'expense' || costMonth(t) !== ym) continue;
+    const d = Number(costDate(t).slice(8, 10));
     if (d >= 1 && d <= n) perDay[d - 1] += t.amountCents;
   }
   let acc = 0;
@@ -24,7 +25,7 @@ export interface CategorySlice { categoryId: string; cents: Cents; pct: number }
 /** Maiores categorias de gasto do mês (as demais somadas em "outras"). */
 export function topCategories(data: AppData, ym: YearMonth, max = 5): { items: CategorySlice[]; otherCents: Cents; totalCents: Cents } {
   const by: Record<string, number> = {};
-  for (const t of data.transactions) if (t.type === 'expense' && monthOf(t.date) === ym) by[t.categoryId] = (by[t.categoryId] ?? 0) + t.amountCents;
+  for (const t of data.transactions) if (t.type === 'expense' && costMonth(t) === ym) by[t.categoryId] = (by[t.categoryId] ?? 0) + t.amountCents;
   const ents = Object.entries(by).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const total = ents.reduce((s, [, v]) => s + v, 0);
   const pct = (v: number) => (total ? (v / total) * 100 : 0);
@@ -53,7 +54,7 @@ export function monthPace(data: AppData, today: ISODate): MonthPace {
   const spent = cur[cur.length - 1] ?? 0;
   const f = cashForecast(data, today, 1).months[0];
   // ainda vem neste mês: lançamentos com data depois de hoje e recorrências que ainda não viraram lançamento
-  const futureThisMonth = data.transactions.filter((t) => t.type === 'expense' && monthOf(t.date) === ym && Number(t.date.slice(8, 10)) > day).reduce((s, t) => s + t.amountCents, 0);
+  const futureThisMonth = data.transactions.filter((t) => t.type === 'expense' && costMonth(t) === ym && Number(costDate(t).slice(8, 10)) > day).reduce((s, t) => s + t.amountCents, 0);
   const made = new Set(data.transactions.filter((t) => t.recurrenceId).map((t) => `${t.recurrenceId}|${t.recurrenceMonth}`));
   const recurring = data.recurrences
     .filter((r) => r.type === 'expense' && r.active && r.startMonth <= ym && (!r.endMonth || r.endMonth >= ym) && !r.skipMonths?.includes(ym) && !made.has(`${r.id}|${ym}`))
@@ -67,6 +68,12 @@ export function monthPace(data: AppData, today: ISODate): MonthPace {
     day,
     days: daysInMonth(ym),
   };
+}
+
+/** Compras no cartão feitas neste mês que vão para faturas dos próximos meses (no modo "mês da fatura"). */
+export function cardThisMonthToNext(data: AppData, today: ISODate): Cents {
+  const ym = monthOf(today);
+  return data.transactions.filter((t) => t.type === 'expense' && t.cardId && monthOf(t.date) === ym && costMonth(t) > ym).reduce((s, t) => s + t.amountCents, 0);
 }
 
 export interface NextMonth {

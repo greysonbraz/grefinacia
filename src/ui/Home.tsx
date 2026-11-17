@@ -5,9 +5,9 @@ import { confirmDividend, markPaid, toast, useStore } from '../state/store';
 import { computeOverview } from '../domain/overview';
 import { generateInsights } from '../domain/insights';
 import { netWorthSeries } from '../domain/networth';
-import { accountBalance, monthSummary } from '../domain/ledger';
+import { accountBalance, costDate, monthSummary } from '../domain/ledger';
 import { passiveIncomeSeries } from '../domain/reports';
-import { cumulativeSpending, monthPace, nextMonthForecast, topCategories } from '../domain/home';
+import { cardThisMonthToNext, cumulativeSpending, monthPace, nextMonthForecast, topCategories } from '../domain/home';
 import { addDays, addMonthsYM, capFirst, monthName, lastMonths, monthLong, monthShort, parseISO, formatDayMonth } from '../lib/dates';
 import { formatBRL, pctChange } from '../lib/money';
 import type { AppData, ISODate } from '../lib/types';
@@ -25,7 +25,7 @@ function periodRange(p: Period, today: ISODate): [ISODate, ISODate] {
 }
 function periodTotals(data: AppData, from: ISODate, to: ISODate) {
   let income = 0, expense = 0;
-  for (const t of data.transactions) if (t.date >= from && t.date <= to) t.type === 'income' ? (income += t.amountCents) : (expense += t.amountCents);
+  for (const t of data.transactions) { const d = costDate(t); if (d >= from && d <= to) t.type === 'income' ? (income += t.amountCents) : (expense += t.amountCents); }
   return { income, expense };
 }
 
@@ -207,17 +207,19 @@ function SpendingCard({ onOpen }: { onOpen: () => void }) {
   const today = useStore((s) => s.today);
   const ym = today.slice(0, 7);
   const prev = addMonthsYM(ym, -1);
-  const pace = useMemo(() => monthPace(data, today), [data, today]);
-  const cur = useMemo(() => cumulativeSpending(data, ym, pace.day), [data, ym, pace.day]);
-  const last = useMemo(() => cumulativeSpending(data, prev), [data, prev]);
-  const cats = useMemo(() => topCategories(data, ym, 5), [data, ym]);
+  const mode = useStore((s) => s.settings.cardMonth);
+  const pace = useMemo(() => monthPace(data, today), [data, today, mode]);
+  const toNext = useMemo(() => (mode === 'fatura' ? cardThisMonthToNext(data, today) : 0), [data, today, mode]);
+  const cur = useMemo(() => cumulativeSpending(data, ym, pace.day), [data, ym, pace.day, mode]);
+  const last = useMemo(() => cumulativeSpending(data, prev), [data, prev, mode]);
+  const cats = useMemo(() => topCategories(data, ym, 5), [data, ym, mode]);
   const pal = seriesColors();
   const name = (id: string) => data.categories.find((c) => c.id === id)?.name ?? id;
   const diff = pace.spentCents - pace.lastMonthSameDayCents;
   const labels = Array.from({ length: pace.days }, (_, i) => String(i + 1));
   return (
     <div className="card">
-      <div className="lbl" style={{ color: 'var(--muted)', fontSize: 13 }}>Gastos de {monthName(ym)} até hoje</div>
+      <div className="lbl" style={{ color: 'var(--muted)', fontSize: 13 }}>Gastos de {monthName(ym)} até hoje{mode === 'fatura' ? ' (cartão pela fatura)' : ''}</div>
       <div className="big num" style={{ fontSize: 32, fontWeight: 650, letterSpacing: '-0.02em', margin: '2px 0' }}>{formatBRL(pace.spentCents)}</div>
       <div className="hint">
         {pace.lastMonthSameDayCents > 0
@@ -230,6 +232,12 @@ function SpendingCard({ onOpen }: { onOpen: () => void }) {
           <Legend items={[{ label: `${capFirst(monthShort(ym))} (até hoje)`, color: pal[1] }, { label: capFirst(monthShort(prev)), color: pal[3], dashed: true }]} />
         </>
       ) : <div className="empty">Nenhum gasto lançado neste mês ainda.</div>}
+      {toNext > 0 && (
+        <div className="kv" style={{ borderTop: '1px solid var(--line)', paddingTop: 10, marginTop: 6 }}>
+          <span>No cartão neste mês<br /><span className="hint">vai para a próxima fatura: conta no mês do vencimento</span></span>
+          <b className="num">{formatBRL(toNext)}</b>
+        </div>
+      )}
       <div className="kv" style={{ borderTop: '1px solid var(--line)', paddingTop: 10, marginTop: 6 }}>
         <span>Previsão para o mês inteiro<br /><span className="hint">já gasto + contas a vencer + o dia a dia que costuma vir</span></span>
         <b className="num">{formatBRL(pace.projectedCents)}</b>
@@ -254,13 +262,14 @@ function SpendingCard({ onOpen }: { onOpen: () => void }) {
 function NextMonthCard({ onOpen }: { onOpen: () => void }) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
-  const f = useMemo(() => nextMonthForecast(data, today), [data, today]);
+  const mode = useStore((s) => s.settings.cardMonth);
+  const f = useMemo(() => nextMonthForecast(data, today), [data, today, mode]);
   const out = f.billsCents + f.debtCents + f.dailyCents;
   return (
     <button className="card" style={{ textAlign: 'left', width: '100%' }} onClick={onOpen}>
       <h2 style={{ marginTop: 0 }}>Previsão de {monthLong(f.ym)}</h2>
       <div className="kv"><span>Entradas previstas</span><b className="num pos">{formatBRL(f.incomeCents)}</b></div>
-      <div className="kv"><span>Contas e faturas já lançadas</span><b className="num">{formatBRL(f.billsCents)}</b></div>
+      <div className="kv"><span>Contas e faturas já lançadas<br /><span className="hint">inclui o que você comprou no cartão até agora</span></span><b className="num">{formatBRL(f.billsCents)}</b></div>
       {f.debtCents > 0 && <div className="kv"><span>Parcelas de dívidas</span><b className="num">{formatBRL(f.debtCents)}</b></div>}
       <div className="kv"><span>Gasto do dia a dia (média)</span><b className="num">{formatBRL(f.dailyCents)}</b></div>
       <div className="kv" style={{ borderTop: '1px solid var(--line)' }}><span><b>{f.netCents >= 0 ? 'Deve sobrar' : 'Deve faltar'}</b></span><b className={'num ' + (f.netCents >= 0 ? 'pos' : 'neg')}>{formatBRL(Math.abs(f.netCents))}</b></div>

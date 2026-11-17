@@ -5,7 +5,7 @@ import { defaultAccountId, deleteGoal, moveGoal, remove, saveSalary, saveTransac
 import type { Debt, DebtKind, Goal } from '../lib/types';
 import { spendableView } from '../domain/salary';
 import { goalProgress } from '../domain/goals';
-import { monthSummary } from '../domain/ledger';
+import { monthSummary, costMonth } from '../domain/ledger';
 import { budgetStatuses } from '../domain/overview';
 import { annualFromMonthly, debtTotals, presentValue, simulateAnticipation, simulateExtra, simulateRefinance, simulateStrategy } from '../domain/debts';
 import { financialFreedom, monthlyClosing } from '../domain/reports';
@@ -48,7 +48,7 @@ function Salario() {
   const preview = { ...settings, salary: { ...sal, amountCents: parseMoney(amount) ?? 0, savePct: save, investPct: invest } };
   const v = useMemo(() => spendableView(data, preview, monthOf(today), today), [data, amount, save, invest, today]);
   const p = v.plan;
-  const debts = v.fixedItems.length ? data.transactions.filter((t) => monthOf(t.date) === v.ym && t.type === 'expense' && ['fixa', 'assinatura', 'parcelada'].includes(t.kind) && (t.categoryId === 'dividas' || t.kind === 'parcelada')).reduce((s, t) => s + t.amountCents, 0) : 0;
+  const debts = v.fixedItems.length ? data.transactions.filter((t) => costMonth(t) === v.ym && t.type === 'expense' && ['fixa', 'assinatura', 'parcelada'].includes(t.kind) && (t.categoryId === 'dividas' || t.kind === 'parcelada')).reduce((s, t) => s + t.amountCents, 0) : 0;
   const parts = [
     { label: 'Despesas essenciais', cents: p.fixedCents - debts, color: cssVar('--s1') },
     { label: 'Dívidas e parcelas', cents: debts, color: cssVar('--s8') },

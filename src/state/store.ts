@@ -4,7 +4,7 @@ import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
 import * as db from '../db/db';
-import { materializeRecurrences, cardInvoiceDue } from '../domain/ledger';
+import { materializeRecurrences, cardInvoiceDue, setCardMonthMode } from '../domain/ledger';
 import { makeSnapshot } from '../domain/networth';
 import { evaluateAlerts, planNotifications, salaryReceivedAlert, type ImmediateAlert } from '../domain/notifications';
 import { cancelEvent, dividendRows, mergeEvents, reactivateEvent } from '../domain/dividends';
@@ -70,6 +70,7 @@ let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch };
+  if (patch.settings) setCardMonthMode(patch.settings.cardMonth);
   listeners.forEach((l) => l());
 };
 export const getState = () => state;

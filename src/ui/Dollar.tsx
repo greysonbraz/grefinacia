@@ -83,7 +83,7 @@ export function DollarHome() {
       <button className="btn" onClick={() => setEdit('novo')}><Plus size={18} /> Adicionar</button>
       <button className="btn ghost" onClick={() => setNews(true)}><Newspaper size={18} /> Notícias dos EUA e Wall Street</button>
       {news && <News initialTopic="eua" onClose={() => setNews(false)} />}
-      <Note>A conta em dólar dos bancos (como a Conta Global do Inter) normalmente não vem pelo Open Finance: informe o saldo aqui e atualize quando quiser. Ações e ETFs dos EUA usam a cotação do Yahoo Finance (não oficial, com atraso); o dólar usa a PTAX do Banco Central, publicada no fim de cada dia útil. O total em reais entra no patrimônio da tela inicial como "Dólar".</Note>
+      <Note>A conta em dólar e os investimentos no exterior (Conta Global do Inter, Inter Dólar+, Meu Porquinho USD) ficam numa instituição fora do Brasil e não vêm pelo Open Finance: informe o saldo aqui e atualize quando quiser. Ações e ETFs dos EUA usam a cotação do Yahoo Finance (não oficial, com atraso); o dólar usa a PTAX do Banco Central, publicada no fim de cada dia útil. O total em reais entra no patrimônio da tela inicial como "Dólar".</Note>
       {edit && <HoldingSheet h={edit === 'novo' ? null : edit} onClose={() => setEdit(null)} />}
       <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
     </>
@@ -152,7 +152,7 @@ function HoldingSheet({ h, onClose }: { h: UsdHolding | null; onClose: () => voi
         </>
       ) : (
         <div className="two">
-          <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Conta Global Inter" /></Field>
+          <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'deposito' ? 'Inter Dólar+' : 'Conta Global Inter'} /></Field>
           <Field label="Saldo (US$)"><input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} placeholder="250,00" /></Field>
         </div>
       )}

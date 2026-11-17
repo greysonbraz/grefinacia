@@ -1,7 +1,7 @@
 import type { AppData, Cents, ISODate, Transaction, YearMonth } from '../lib/types';
 import { addDays, addMonthsYM, diffDays, makeDate, monthOf, monthRange } from '../lib/dates';
 import { COMMITMENT_KINDS } from '../lib/categories';
-import { effectiveDue, totalBalance } from './ledger';
+import { costDate, costMonth, effectiveDue, totalBalance } from './ledger';
 import { computePositions } from './portfolio';
 
 /**
@@ -63,12 +63,12 @@ export interface Unusual {
 export function unusualSpending(data: AppData, today: ISODate): Unusual {
   const ym = monthOf(today);
   const prevMonths = monthRange(addMonthsYM(ym, -6), addMonthsYM(ym, -1));
-  const firstData = data.transactions.reduce<ISODate | null>((m, t) => (!m || t.date < m ? t.date : m), null);
+  const firstData = data.transactions.reduce<ISODate | null>((m, t) => { const d = costDate(t); return !m || d < m ? d : m; }, null);
   const usable = prevMonths.filter((m) => firstData && makeDate(m, 1) >= makeDate(monthOf(firstData), 1));
   const byCatMonth = new Map<string, Map<YearMonth, number>>();
   for (const t of data.transactions) {
     if (!isExpense(t)) continue;
-    const m = monthOf(t.date);
+    const m = costMonth(t);
     if (m !== ym && !usable.includes(m)) continue;
     const c = byCatMonth.get(t.categoryId) ?? new Map<YearMonth, number>();
     c.set(m, (c.get(m) ?? 0) + t.amountCents);
@@ -238,9 +238,9 @@ export function cashForecast(data: AppData, today: ISODate, count: number): Cash
   const start = totalBalance(data);
 
   const closed = [1, 2, 3].map((i) => addMonthsYM(ym, -i));
-  const firstData = data.transactions.reduce<ISODate | null>((m, t) => (!m || t.date < m ? t.date : m), null);
+  const firstData = data.transactions.reduce<ISODate | null>((m, t) => { const d = costDate(t); return !m || d < m ? d : m; }, null);
   const basis = closed.filter((m) => firstData && monthOf(firstData) <= m);
-  const variableBy = (m: YearMonth) => data.transactions.filter((t) => isVariable(t) && monthOf(t.date) === m).reduce((s, t) => s + t.amountCents, 0);
+  const variableBy = (m: YearMonth) => data.transactions.filter((t) => isVariable(t) && costMonth(t) === m).reduce((s, t) => s + t.amountCents, 0);
   const variableMonthly = basis.length ? Math.round(basis.reduce((s, m) => s + variableBy(m), 0) / basis.length) : 0;
 
   const pendingIn = (t: Transaction) => monthOf(t.type === 'expense' ? effectiveDue(t) : t.date);
@@ -280,7 +280,9 @@ export function cashForecast(data: AppData, today: ISODate, count: number): Cash
       if (name && descs.some((x) => x && (x.includes(name) || name.includes(x)))) continue;
       debt += d.installmentCents;
     }
-    const variable = idx === 0 ? Math.max(variableMonthly - variableBy(m), 0) : variableMonthly;
+    // compras do dia a dia já lançadas para o mês (ex.: cartão que vence nele) já estão em "contas": o estimado só completa a média
+    const pendingVariable = data.transactions.filter((t) => t.status === 'pending' && isVariable(t) && pendingIn(t) === m).reduce((s, t) => s + t.amountCents, 0);
+    const variable = idx === 0 ? Math.max(variableMonthly - variableBy(m), 0) : Math.max(variableMonthly - pendingVariable, 0);
     const net = income - fixed - debt - variable;
     bal += net;
     out.push({ ym: m, incomeCents: income, fixedCents: fixed, debtCents: debt, variableCents: variable, netCents: net, endBalanceCents: bal });

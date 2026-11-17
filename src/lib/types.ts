@@ -287,7 +287,7 @@ export interface FiredAlert {
 /** Dinheiro e investimentos em dólar (Etapa 15). Valores em centavos de dólar. */
 export interface UsdHolding {
   id: string;
-  kind: 'conta' | 'acao' | 'etf' | 'reit' | 'outro';
+  kind: 'conta' | 'deposito' | 'acao' | 'etf' | 'reit' | 'outro';
   name: string; // ex.: "Conta Global Inter", "Apple"
   ticker?: string; // ações/ETFs/REITs americanos (cotação pelo Yahoo Finance)
   quantity?: number;
@@ -379,6 +379,8 @@ export interface NotificationPrefs {
 export interface Settings {
   onboarded: boolean;
   theme: 'dark' | 'light' | 'system';
+  /** Em que mês a compra no cartão conta como gasto: no da fatura (quando o dinheiro sai) ou no da compra. */
+  cardMonth: 'fatura' | 'compra';
   userName?: string;
   security: {
     enabled: boolean;

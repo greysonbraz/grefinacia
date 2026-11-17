@@ -84,6 +84,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ padding: '4px 14px' }}>
         {data.cards.map((c) => (<button className="row" key={c.id} onClick={() => setCard(c)}><div className="mid"><div className="t">{c.name}</div><div className="s">Fecha dia {c.closingDay} · vence dia {c.dueDay}{c.limitCents ? ` · usado ${formatBRL(cardUsedCents(c.id, data))} de ${formatBRL(c.limitCents)}` : ''}</div></div></button>))}
         <button className="row link" onClick={() => setCard('new')}>+ Adicionar cartão</button>
+        <SwitchRow title="Compra no cartão conta no mês da fatura" sub={st.cardMonth === 'compra' ? 'Desligado: conta no mês da compra' : 'O gasto entra no mês em que a fatura vence (quando o dinheiro sai). O que você compra agora aparece como previsão do mês da fatura.'} on={st.cardMonth !== 'compra'} onChange={(on) => void updateSettings({ cardMonth: on ? 'fatura' : 'compra' })} />
       </div>
       <div className="section">Categorias</div>
       <div className="card" style={{ padding: '4px 14px' }}>

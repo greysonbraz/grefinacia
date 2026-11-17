@@ -7,7 +7,7 @@ import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categor
 import { formatBoletoLine, parseBoleto } from '../domain/boleto';
 import { centsToInput, formatBRL, parseMoney } from '../lib/money';
 import { formatDateBR, formatDayMonth, lastMonths, monthOf, monthShort, weekdayShort } from '../lib/dates';
-import { buildInstallments, effectiveDue, monthSummary, openInvoices } from '../domain/ledger';
+import { buildInstallments, costMonth, effectiveDue, monthSummary, openInvoices } from '../domain/ledger';
 import { uid } from '../lib/ids';
 import { ChartBox, cssVar, Empty, Field, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
@@ -24,7 +24,11 @@ export function Transactions() {
   const [view, setView] = useState<'lista' | 'graficos' | 'recorrentes'>('lista');
   const [edit, setEdit] = useState<Transaction | 'new' | null>(null);
   const [importing, setImporting] = useState(false);
-  const sum = useMemo(() => monthSummary(data, ym), [data, ym]);
+  const mode = useStore((s) => s.settings.cardMonth);
+  const sum = useMemo(() => monthSummary(data, ym), [data, ym, mode]);
+  // modo "mês da fatura": o total do mês inclui a fatura que vence nele e deixa de fora as compras que vão para a próxima
+  const cardIn = useMemo(() => (mode === 'fatura' ? data.transactions.filter((t) => t.type === 'expense' && t.cardId && costMonth(t) === ym && monthOf(t.date) !== ym).reduce((s, t) => s + t.amountCents, 0) : 0), [data, ym, mode]);
+  const cardOut = useMemo(() => (mode === 'fatura' ? data.transactions.filter((t) => t.type === 'expense' && t.cardId && monthOf(t.date) === ym && costMonth(t) !== ym).reduce((s, t) => s + t.amountCents, 0) : 0), [data, ym, mode]);
   const cat = (id: string) => data.categories.find((c) => c.id === id);
   const list = useMemo(() => data.transactions
     .filter((t) => (q ? t.description.toLowerCase().includes(q.toLowerCase()) : monthOf(t.date) === ym))
@@ -42,6 +46,12 @@ export function Transactions() {
         <div className="tile"><div className="lbl">Receitas</div><div className="val num">{formatBRL(sum.incomeCents)}</div></div>
         <div className="tile"><div className="lbl">Despesas</div><div className="val num">{formatBRL(sum.expenseCents)}</div>{sum.expensePendingCents > 0 && <div className="foot">{formatBRL(sum.expensePendingCents)} a pagar</div>}</div>
       </div>
+      {(cardIn > 0 || cardOut > 0) && (
+        <div className="hint" style={{ margin: '-4px 4px 10px' }}>
+          {cardIn > 0 ? `Despesas incluem ${formatBRL(cardIn)} da fatura do cartão que vence neste mês (compras do mês anterior). ` : ''}
+          {cardOut > 0 ? `${formatBRL(cardOut)} comprados no cartão neste mês contam no mês da fatura.` : ''}
+        </div>
+      )}
       <Seg value={view} onChange={setView} options={[['lista', 'Lançamentos'], ['graficos', 'Gráficos'], ['recorrentes', 'Recorrentes']]} />
 
       {view === 'lista' && (
@@ -70,7 +80,7 @@ export function Transactions() {
                   return (
                     <button className="row" key={t.id} onClick={() => setEdit(t)}>
                       <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>
-                      <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}</div></div>
+                      <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
                       <div className="end">
                         <div className={'num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
                         {t.status === 'pending' && <span className={'badge ' + (late ? 'bad' : 'warn')}>{late ? 'atrasada' : t.type === 'income' ? 'a receber' : `vence ${formatDayMonth(effectiveDue(t))}`}</span>}

@@ -1,3 +1,4 @@
+import { costMonth } from './ledger';
 import type { AppData, Cents, ISODate, Settings, YearMonth } from '../lib/types';
 import { daysInMonth, monthOf } from '../lib/dates';
 import { mulCents } from '../lib/money';
@@ -54,7 +55,7 @@ export interface SpendableView {
 const SALARY_KINDS = ['salario', 'hora_extra', 'adicional'];
 
 export function spendableView(data: AppData, settings: Settings, ym: YearMonth, today: ISODate): SpendableView {
-  const inMonth = data.transactions.filter((t) => monthOf(t.date) === ym);
+  const inMonth = data.transactions.filter((t) => costMonth(t) === ym);
   const paidSalary = inMonth.filter((t) => t.type === 'income' && SALARY_KINDS.includes(t.kind) && t.status === 'paid').reduce((s, t) => s + t.amountCents, 0);
   const allIncome = inMonth.filter((t) => t.type === 'income').reduce((s, t) => s + t.amountCents, 0);
   let income = 0;

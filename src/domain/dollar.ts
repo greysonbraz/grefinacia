@@ -35,7 +35,7 @@ export function holdingUsd(h: UsdHolding): number {
 }
 export const holdingCostUsd = (h: UsdHolding): number => (isAsset(h) ? Math.round((h.quantity ?? 0) * (h.avgCostUsdCents ?? 0)) : Math.round(h.balanceUsdCents ?? 0));
 
-export const KIND_LABEL: Record<UsdHolding['kind'], string> = { conta: 'Conta em dólar', acao: 'Ações (EUA)', etf: 'ETFs', reit: 'REITs', outro: 'Outros' };
+export const KIND_LABEL: Record<UsdHolding['kind'], string> = { conta: 'Conta em dólar', deposito: 'Renda fixa em dólar (Time Deposit, Porquinho)', acao: 'Ações (EUA)', etf: 'ETFs', reit: 'REITs', outro: 'Outros' };
 
 export interface DollarSummary {
   totalUsd: number; // centavos de dólar
