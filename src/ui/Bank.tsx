@@ -162,6 +162,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
             <span>{r.account}<br /><span className="hint">{r.error ? r.error : [
               `desde ${formatDateBR(r.from)}: ${r.received} ${r.received === 1 ? 'lançamento' : 'lançamentos'} no banco`,
               r.moved ? `${r.moved} entre contas suas ou investimentos (não contam como gasto)` : '',
+              r.pixCredit ? `${r.pixCredit} de Pix no crédito (o gasto vem pela fatura do cartão)` : '',
               r.already ? `${r.already} já estavam no app` : '',
               r.similar ? `${r.similar} parecidos com lançamentos que você já tinha (ficaram de fora)` : '',
               r.invoice ? `${r.invoice} pagamentos de fatura` : '',

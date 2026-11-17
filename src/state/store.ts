@@ -15,7 +15,7 @@ import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError }
 import { isNative } from '../services/platform';
 import { forgetPluggyKey, getItem, listAccounts, listBills, listInvestments, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
 import { mergeInvestments } from '../domain/bankInvest';
-import { applyBankCategories, autoSelect, localDay, neutralKind, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
+import { applyBankCategories, autoSelect, localDay, neutralKind, pixOnCreditPairs, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
 import { buildPreview, buildTransactions, makeBatch } from '../domain/importer';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
@@ -641,7 +641,7 @@ export async function undoImport(id: string): Promise<number> {
 }
 
 // ---------- conexão bancária (Meu Pluggy) ----------
-export interface SyncReport { account: string; from: string; received: number; imported: number; moved?: number; already: number; similar: number; invoice: number; pending: number; payments: number; foreign: number; error?: string }
+export interface SyncReport { account: string; from: string; received: number; imported: number; moved?: number; pixCredit?: number; already: number; similar: number; invoice: number; pending: number; payments: number; foreign: number; error?: string }
 async function saveBank(patch: Partial<BankState>): Promise<void> {
   const bank = { ...state.bank, ...patch };
   set({ bank });
@@ -731,13 +731,17 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
           const list = await listBills(key, acc.id);
           bills[acc.id] = list.filter((x) => typeof x.dueDate === 'string').map((x) => ({ id: x.id, dueDate: x.dueDate.slice(0, 10), closingDate: x.billClosingDate ? x.billClosingDate.slice(0, 10) : undefined, totalCents: Math.round((x.totalAmount ?? 0) * 100) }));
           billDue = Object.fromEntries(bills[acc.id].map((x) => [x.id, x.dueDate]));
+          // dias de fechamento e vencimento do cartão pela última fatura do banco (o que vem no cadastro do cartão pode estar desatualizado)
+          if (target.kind === 'cartao') await syncCardDays(target.cardId, bills[acc.id]);
         } catch {
           /* sem faturas: segue pelo dia de fechamento */
         }
       }
       const st = toStatement(acc, txs, billDue);
       if (target.kind === 'cartao') await fixCardDueDates(target.cardId, st.rows);
-      const preview = autoSelect(applyBankCategories(buildPreview(st, target, state.data, state.settings)), cardsSynced);
+      const pre = autoSelect(applyBankCategories(buildPreview(st, target, state.data, state.settings)), cardsSynced);
+      const pixCredit = target.kind === 'conta' && cardsSynced ? pixOnCreditPairs(pre) : new Set<string>();
+      const preview = pre.map((r) => (pixCredit.has(r.key) ? { ...r, include: false } : r));
       const count = (f: string) => preview.filter((r) => r.flag === f && !r.include).length;
       const id = uid('imp_');
       // entre contas suas e aplicação/resgate de investimento: viram transferência (mexem no saldo, não em receitas/despesas)
@@ -757,7 +761,7 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
         await applyImport(makeBatch(id, `Meu Pluggy · ${acc.bankName} · ${acc.marketingName || acc.name}`, st, target, rows), built, state.settings.importRules ?? [], { safetyCopy: false });
         imported += built.length + moves.length;
       }
-      report.push({ account: name, from, received: txs.length, imported: built.length, moved: moves.length, already: count('importado') + count('repetido'), similar: count('possivel'), invoice: count('fatura'), ...st.skipped });
+      report.push({ account: name, from, received: txs.length, imported: built.length, moved: moves.length, pixCredit: pixCredit.size, already: count('importado') + count('repetido'), similar: count('possivel'), invoice: count('fatura'), ...st.skipped });
       // Banco ainda sem transações (o Meu Pluggy pode estar coletando): não avança a data, para o histórico vir depois.
       if (txs.length || lastByAcc[acc.id]) lastByAcc[acc.id] = attempt;
       accountsDone++;
@@ -785,6 +789,22 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
   }
   await saveBank({ bills, investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
+}
+
+/** Acerta fechamento e vencimento do cartão pela fatura mais recente informada pelo banco; refaz o vencimento das compras sem fatura do banco. */
+async function syncCardDays(cardId: string, list: { dueDate: ISODate; closingDate?: ISODate }[]): Promise<void> {
+  const card = state.data.cards.find((c) => c.id === cardId);
+  const last = [...list].filter((b) => b.closingDate).sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+  if (!card || !last?.closingDate) return;
+  const closingDay = Number(last.closingDate.slice(8, 10));
+  const dueDay = Number(last.dueDate.slice(8, 10));
+  if (card.closingDay === closingDay && card.dueDay === dueDay) return;
+  const fixed = { ...card, closingDay, dueDay };
+  await upsert('cards', fixed);
+  // compras pendentes que o banco ainda não pôs em fatura: vencimento recalculado com os dias certos
+  const known = new Set(list.map((b) => b.dueDate));
+  const upd = state.data.transactions.filter((t) => t.cardId === cardId && t.status === 'pending' && t.type === 'expense' && (!t.dueDate || !known.has(t.dueDate))).map((t) => ({ ...t, dueDate: cardInvoiceDue(fixed, t.date).dueDate }));
+  if (upd.length) await upsert('transactions', upd);
 }
 
 /**

@@ -102,12 +102,33 @@ export function neutralKind(bankCategory: string | undefined, description: strin
   const c = (bankCategory ?? '').trim();
   const dd = description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   // compra de dólar (ex.: Conta Global do Inter): dinheiro que vira dólar, não é gasto
-  if (/^transfer - foreign exchange$/i.test(c) || /\b(cambio|compra de dolar|compra dolar|global account|conta global|inter global|remessa internacional)\b/.test(dd)) return 'cambio';
+  // pontos/cashback creditados com nome do produto ("Cred Pontos Conta Global", "Meu Porquinho") são receita, não câmbio nem resgate
+  const points = /\b(pontos|cashback)\b/.test(dd);
+  if (!points && (/^transfer - foreign exchange$/i.test(c) || /\b(cambio|compra de dolar|compra dolar|global account|conta global|inter global|remessa internacional)\b/.test(dd))) return 'cambio';
   if (/^same person transfer/i.test(c)) return 'propria';
   if (/^(investments|automatic investment|fixed income|mutual funds|variable income|margin|pension)$/i.test(c)) return 'investimento';
+  // compra de ações na corretora debitada na conta (ex.: Inter: "Débito B3 · Nota Bov")
+  if (/\b(debito b3|nota bov|liquidacao bovespa|liq bolsa)\b/.test(dd)) return 'investimento';
+  // nome do próprio investimento na descrição (ex.: "Cdb Porq Obj Banco Inter", "Inter Conservador Plus Firf Lp")
+  if (!points && /^(aplicacao|resgate|credito resgate fundo)?\s*(cdb|lci|lca|rdb)\b|\bporq(uinho)?\b|\b(firf|fic fi|fic fim)\b/.test(dd)) return 'investimento';
   const d = description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (/\b(aplicacao|aplic\.?|resgate|resg\.?)\b.*\b(cdb|lci|lca|rdb|poupanca|fundo|tesouro|investimento|porquinho|cofrinho|meu porquinho)\b|\b(aplicacao|resgate) (automatica|automatico)\b|\binvestimento (cdb|lci|lca)\b/.test(d)) return 'investimento';
   return null;
+}
+
+/**
+ * "Pix no crédito" (Inter e outros): o banco credita na conta o valor e em seguida sai o Pix; o gasto de verdade
+ * vem na fatura do cartão. O par (crédito liberado + Pix do mesmo valor no mesmo dia) fica de fora da conta.
+ */
+export function pixOnCreditPairs(rows: PreviewRow[]): Set<string> {
+  const out = new Set<string>();
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const credits = rows.filter((r) => r.type === 'income' && /pix no credito|credito liberado/.test(norm(r.row.description)));
+  for (const c of credits) {
+    const pair = rows.find((r) => r.type === 'expense' && !out.has(r.key) && r.row.date === c.row.date && r.amountCents === c.amountCents);
+    if (pair) { out.add(c.key); out.add(pair.key); }
+  }
+  return out;
 }
 
 /** Usa a categoria do banco quando o app só teria o palpite por palavra-chave ou nenhum. */

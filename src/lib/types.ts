@@ -289,7 +289,7 @@ export interface FiredAlert {
 /** Dinheiro e investimentos em dólar (Etapa 15). Valores em centavos de dólar. */
 export interface UsdHolding {
   id: string;
-  kind: 'conta' | 'deposito' | 'acao' | 'etf' | 'reit' | 'outro';
+  kind: 'conta' | 'deposito' | 'bond' | 'fundo' | 'acao' | 'etf' | 'reit' | 'outro';
   name: string; // ex.: "Conta Global Inter", "Apple"
   ticker?: string; // ações/ETFs/REITs americanos (cotação pelo Yahoo Finance)
   quantity?: number;

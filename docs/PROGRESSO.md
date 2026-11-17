@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 19 | Investimentos → Exterior (US$) com bonds e fundos; dias do cartão pela fatura do banco; regras do extrato do Inter (Global Account, Porquinho, Débito B3, Pix no crédito) | `claude/etapa-19-ajustes` |
 | 18 | Faturas do cartão como no banco: fatura de cada compra pelo Open Finance (billId), tela Faturas (paga/aberta/futura, total do banco para conferir); câmbio para dólar fora dos gastos e somado na aba Dólar | `claude/etapa-18-faturas` |
 | 17 | Compra no cartão conta no mês da fatura (padrão; chave em Ajustes → Cartões); previsão sem contar o cartão em dobro; "Renda fixa em dólar" na aba Dólar | `claude/etapa-17-cartao-fatura` |
 | 16 | Notícias dos EUA e Wall Street: assunto novo com 5 fontes (3 em português, 2 em inglês) e atalho na aba Dólar | `claude/etapa-16-noticias-eua` |
@@ -41,6 +42,11 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
+- Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).
+- Fechamento e vencimento do cartão passam a vir da fatura mais recente do banco (`billClosingDate`); compras pendentes sem fatura do banco têm o vencimento refeito. Hipótese para dezembro: fechamento errado no cadastro do cartão (`balanceCloseDate`) jogando compras do fim do mês para janeiro.
+- Extrato do Inter: "Depósito/IOF Global Account" = câmbio; "Cdb Porq…", "Crédito Resgate Fundo … Firf", "Débito B3 Nota Bov" = investimento; pontos e cashback = receita; "Crédito liberado Pix No Crédito" + Pix do mesmo valor/dia saem da conta quando o cartão está sincronizado (o gasto vem na fatura).
 
 Detalhes da Etapa 18 (dono comparou com o app do Inter: dezembro R$ 756,72 no app × R$ 1.894,43 no banco):
 - Causa: o app montava as faturas pelo dia de fechamento; parcelas futuras caíam um mês depois.
