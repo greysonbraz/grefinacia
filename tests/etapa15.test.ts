@@ -28,7 +28,7 @@ describe('aba Dólar (regras)', () => {
     expect(s.totalUsd).toBe(25000 + 100000 + 10000);
     expect(s.gainUsd).toBe(20000);
     expect(s.totalBrl).toBe(Math.round(135000 * 5.7324));
-    expect(s.byKind.map((k) => k.label)).toEqual(['ETFs', 'Conta em dólar', 'Investimentos no banco']);
+    expect(s.byKind.map((k) => k.label)).toEqual(['ETFs (inclui UCITS)', 'Conta em dólar', 'Investimentos no banco']);
     const nw = netWorthAt(d, '2026-11-17', '2026-11-17');
     expect(nw.abroadCents).toBe(s.totalBrl);
     expect(nw.bankInvestCents).toBe(0); // em dólar não soma duas vezes
