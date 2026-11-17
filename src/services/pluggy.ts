@@ -69,23 +69,28 @@ async function call<T>(path: string, init: RequestInit & { apiKey?: string } = {
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
-    if (res.status === 401 || res.status === 403) throw new PluggyError('A Pluggy recusou o acesso: confira o Client ID e o Client Secret (o Secret só aparece uma vez no Dashboard; se perdeu, gere outro).', res.status);
+    const detail = body?.message ? ` (Pluggy: ${String(body.message).slice(0, 160)})` : '';
+    if ((res.status === 400 || res.status === 401 || res.status === 403) && path === '/auth')
+      throw new PluggyError(`A Pluggy não aceitou o Client ID e o Client Secret (erro ${res.status})${detail}. Gere um Client Secret novo no Dashboard, cole aqui e toque em "Guardar chaves".`, res.status);
+    if (res.status === 401 || res.status === 403)
+      throw new PluggyError(`As chaves entraram, mas a Pluggy negou acesso a esse banco (erro ${res.status})${detail}. Confira se o Item ID é de um item da mesma aplicação do Client ID (no Dashboard: Demo → Itens conectados).`, res.status);
     if (res.status === 404) throw new PluggyError('A Pluggy não achou esse banco: confira o Item ID copiado do Dashboard.', res.status);
     if (res.status === 429) throw new PluggyError('Muitas consultas seguidas à Pluggy. Espere um minuto.', res.status);
-    throw new PluggyError(`A Pluggy respondeu com erro ${res.status}.` + (body?.message ? ` ${body.message}` : ''), res.status);
+    throw new PluggyError(`A Pluggy respondeu com erro ${res.status}.${detail}`, res.status);
   }
   return (await res.json()) as T;
 }
 
-let cached: { clientId: string; apiKey: string; until: number } | null = null;
+let cached: { creds: string; apiKey: string; until: number } | null = null;
 
 /** API key da Pluggy (vale 2 h; guardada só em memória e renovada 10 min antes). */
 export async function pluggyApiKey(clientId: string, clientSecret: string, now = Date.now()): Promise<string> {
   if (!clientId.trim() || !clientSecret.trim()) throw new PluggyError('Informe o Client ID e o Client Secret da sua aplicação na Pluggy.');
-  if (cached && cached.clientId === clientId && cached.until > now) return cached.apiKey;
+  const creds = `${clientId.trim()}\n${clientSecret.trim()}`;
+  if (cached && cached.creds === creds && cached.until > now) return cached.apiKey;
   const r = await call<{ apiKey?: string }>('/auth', { method: 'POST', body: JSON.stringify({ clientId: clientId.trim(), clientSecret: clientSecret.trim() }) });
   if (!r.apiKey) throw new PluggyError('Resposta inesperada da Pluggy ao entrar.');
-  cached = { clientId, apiKey: r.apiKey, until: now + 110 * 60_000 };
+  cached = { creds, apiKey: r.apiKey, until: now + 110 * 60_000 };
   return r.apiKey;
 }
 /** Esquece a API key em memória (credenciais trocadas ou apagadas). */
