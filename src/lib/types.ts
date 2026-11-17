@@ -37,6 +37,10 @@ export interface Transfer {
   date: ISODate;
   note?: string;
   createdAt: number;
+  /** Conexão bancária: o outro lado fora do app (conta vazia ''): aplicação/resgate de investimento ou conta sua não cadastrada. */
+  kind?: 'propria' | 'investimento';
+  importId?: string;
+  fitId?: string;
 }
 
 export interface Category {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { disconnectBank, linkBankAccount, loadBankAccounts, syncBank, toast, updateSettings, useStore } from '../state/store';
+import { disconnectBank, linkBankAccount, loadBankAccounts, reimportBank, startAccountAtBankBalance, syncBank, toast, updateSettings, useStore } from '../state/store';
 import { accountBalance } from '../domain/ledger';
 import { balanceGap, consentWarning } from '../domain/bankSync';
 import { formatBRL } from '../lib/money';
@@ -31,7 +31,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
   const [secret, setSecret] = useState('');
   const [label, setLabel] = useState('');
   const [itemId, setItemId] = useState('');
-  const [busy, setBusy] = useState<'' | 'contas' | 'sync'>('');
+  const [busy, setBusy] = useState<'' | 'contas' | 'sync' | 'refazer'>('');
   const [errors, setErrors] = useState<string[]>([]);
   const hasCreds = !!(b.clientId && b.clientSecret);
 
@@ -56,7 +56,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
     const links = Object.fromEntries(Object.entries(b.links).filter(([k]) => !accIds.includes(k)));
     await updateSettings({ bank: { ...b, items: b.items.filter((i) => i.itemId !== id), links } });
   };
-  const run = async (what: 'contas' | 'sync') => {
+  const run = async (what: 'contas' | 'sync' | 'refazer') => {
     setBusy(what);
     setErrors([]);
     try {
@@ -65,7 +65,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
         setErrors(r.errors);
         toast(r.errors.length ? 'Alguns bancos não responderam' : 'Contas carregadas: vincule cada uma abaixo', r.errors.length ? 'err' : 'ok');
       } else {
-        const r = await syncBank();
+        const r = await (what === 'refazer' ? reimportBank() : syncBank());
         setErrors(r.errors);
         toast(r.imported ? `${r.imported} ${r.imported === 1 ? 'lançamento novo' : 'lançamentos novos'}` : r.errors.length ? 'A sincronização teve erros' : 'Nada novo desde a última vez', r.errors.length && !r.accounts ? 'err' : 'ok');
       }
@@ -80,6 +80,10 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
     return !l ? '' : l.kind === 'ignorar' ? 'ignorar' : `${l.kind}:${l.id}`;
   };
   const linked = bank.accounts.filter((a) => b.links[a.id] && b.links[a.id].kind !== 'ignorar');
+  // contas do app ligadas (várias contas do banco podem cair na mesma conta do app: os saldos somam)
+  const appAccounts = [...new Set(linked.filter((a) => b.links[a.id].kind === 'conta').map((a) => b.links[a.id].id!))]
+    .map((id) => ({ acc: data.accounts.find((x) => x.id === id), from: linked.filter((a) => b.links[a.id].kind === 'conta' && b.links[a.id].id === id) }))
+    .filter((x): x is { acc: NonNullable<typeof x.acc>; from: typeof linked } => !!x.acc);
 
   return (
     <Full title="Conexão bancária" onBack={onClose}>
@@ -157,6 +161,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
           <div className="kv" key={r.account}>
             <span>{r.account}<br /><span className="hint">{r.error ? r.error : [
               `desde ${formatDateBR(r.from)}: ${r.received} ${r.received === 1 ? 'lançamento' : 'lançamentos'} no banco`,
+              r.moved ? `${r.moved} entre contas suas ou investimentos (não contam como gasto)` : '',
               r.already ? `${r.already} já estavam no app` : '',
               r.similar ? `${r.similar} parecidos com lançamentos que você já tinha (ficaram de fora)` : '',
               r.invoice ? `${r.invoice} pagamentos de fatura` : '',
@@ -170,14 +175,30 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
         ))}
         {bank.error && <div className="note neg">{bank.error}</div>}
         {errors.map((e) => (<div className="note neg" key={e}>{e}</div>))}
-        {linked.map((a) => {
-          const l = b.links[a.id];
-          if (l.kind !== 'conta') return null;
-          const acc = data.accounts.find((x) => x.id === l.id);
-          if (!acc) return null;
-          const gap = balanceGap(a.balance, accountBalance(acc, data));
-          return <div className="kv" key={a.id}><span>{acc.name}<br /><span className="hint">banco {formatBRL(Math.round(a.balance * 100))} · app {formatBRL(accountBalance(acc, data))}</span></span><b className={'num ' + (Math.abs(gap) <= 100 ? 'pos' : 'warn')}>{Math.abs(gap) <= 100 ? 'confere' : `diferença ${formatBRL(gap)}`}</b></div>;
+        {appAccounts.map(({ acc, from }) => {
+          const bankCents = from.reduce((t, a) => t + Math.round(a.balance * 100), 0);
+          const appCents = accountBalance(acc, data);
+          const gap = balanceGap(bankCents / 100, appCents);
+          const ok = Math.abs(gap) <= 100;
+          return (
+            <div key={acc.id}>
+              <div className="kv"><span>{acc.name}<br /><span className="hint">banco {formatBRL(bankCents)}{from.length > 1 ? ` (${from.length} contas do banco somadas)` : ''} · app {formatBRL(appCents)}</span></span><b className={'num ' + (ok ? 'pos' : 'warn')}>{ok ? 'confere' : `diferença ${formatBRL(gap)}`}</b></div>
+              {!ok && (
+                <div className="btnrow"><button className="btn ghost sm" onClick={async () => {
+                  if (typeof window.confirm === 'function' && !window.confirm(`"${acc.name}" passa a começar com o saldo do banco (${formatBRL(bankCents)}). O histórico continua nos relatórios; nada é apagado. Continuar?`)) return;
+                  await startAccountAtBankBalance(acc.id);
+                  toast('Saldo igual ao do banco');
+                }}>Começar com o saldo do banco</button></div>
+              )}
+            </div>
+          );
         })}
+        {(bank.report ?? []).length > 0 && (
+          <div className="btnrow"><button className="btn ghost sm" disabled={!!busy} onClick={() => {
+            if (typeof window.confirm === 'function' && !window.confirm('Refazer a importação? O que veio pela conexão é apagado (com cópia de segurança antes) e entra de novo com as regras novas: categoria do banco e transferências/investimentos fora das despesas. O que você lançou à mão fica. Categorias que você trocou nesses lançamentos voltam ao palpite.')) return;
+            void run('refazer');
+          }}>Refazer a importação com as regras novas</button></div>
+        )}
         <Note>
           {isNative() ? 'O app sincroniza sozinho ao abrir, no máximo a cada 12 horas. ' : ''}O Meu Pluggy atualiza os bancos a cada 24 h; o saldo do banco é o da última atualização dele
           {Object.values(bank.items)[0]?.lastUpdatedAt ? ` (${formatDateBR(Object.values(bank.items)[0].lastUpdatedAt!.slice(0, 10))})` : ''}.

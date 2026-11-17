@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapas 1 a 11b). Etapa 12 (conexão bancária pelo Meu Pluggy) no branch `claude/etapa-12-pluggy` (versão 1.9.2, 254 testes).
+Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapas 1 a 11b). Etapa 12 (conexão bancária pelo Meu Pluggy) no branch `claude/etapa-12-pluggy` (versão 1.10.0, 258 testes; inclui 12b).
 
 ## Concluído e no `main`
 
@@ -35,6 +35,12 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 12b (correções depois do primeiro uso real, 17/11/2026):
+- **Categorias:** a classificação da Pluggy (campo `category`) vira a categoria do app; regra sua e "como antes" continuam valendo. A Pluggy diz que a categorização é liberada no trial e depois é opcional: sem ela, voltam as palavras-chave.
+- **Não é gasto:** transferência entre contas suas ("Same person transfer") e aplicação/resgate de investimento viram transferência com o outro lado "fora do app": mexem no saldo, não em receitas/despesas.
+- **Saldo:** conta antiga ligada à conexão recebia 90 dias de histórico no saldo. Botão "Começar com o saldo do banco" (nada é apagado). Contas do banco ligadas à mesma conta do app têm os saldos somados.
+- **Refazer a importação com as regras novas:** apaga o que veio da conexão (cópia de segurança antes) e importa de novo; o que foi lançado à mão fica.
 
 Detalhes da Etapa 11b:
 - **Achado:** a fonte padrão era a brapi, que no plano grátis não traz proventos, e a busca só acontecia ao tocar no botão. Na prática, nada era buscado sozinho.

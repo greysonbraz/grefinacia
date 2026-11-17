@@ -17,7 +17,7 @@ export interface PreviewRow {
   type: 'income' | 'expense';
   amountCents: number; // sempre positivo
   categoryId: string;
-  categorySource: 'regra' | 'historico' | 'palavra' | 'padrao';
+  categorySource: 'regra' | 'historico' | 'banco' | 'palavra' | 'padrao';
   /** Situação que pede atenção: já importado, parecido com um lançamento existente, pagamento de fatura, repetido no arquivo. */
   flag?: 'importado' | 'possivel' | 'fatura' | 'repetido';
   flagNote?: string;

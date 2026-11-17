@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AppData, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
+import type { AppData, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, Transfer, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -14,7 +14,7 @@ import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError } from '../services/quotes';
 import { isNative } from '../services/platform';
 import { forgetPluggyKey, getItem, listAccounts, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
-import { autoSelect, localDay, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
+import { applyBankCategories, autoSelect, localDay, neutralKind, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
 import { buildPreview, buildTransactions, makeBatch } from '../domain/importer';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
@@ -601,12 +601,14 @@ export async function undoImport(id: string): Promise<number> {
   await db.createSafetyCopy('importacao', state.data, state.settings);
   const ids = state.data.transactions.filter((t) => t.importId === id).map((t) => t.id);
   await remove('transactions', ids);
+  const moves = (state.data.transfers ?? []).filter((t) => t.importId === id).map((t) => t.id);
+  if (moves.length) await remove('transfers', moves);
   await upsert('imports', { ...batch, undoneAt: new Date().toISOString() });
   return ids.length;
 }
 
 // ---------- conexão bancária (Meu Pluggy) ----------
-export interface SyncReport { account: string; from: string; received: number; imported: number; already: number; similar: number; invoice: number; pending: number; payments: number; foreign: number; error?: string }
+export interface SyncReport { account: string; from: string; received: number; imported: number; moved?: number; already: number; similar: number; invoice: number; pending: number; payments: number; foreign: number; error?: string }
 async function saveBank(patch: Partial<BankState>): Promise<void> {
   const bank = { ...state.bank, ...patch };
   set({ bank });
@@ -689,15 +691,27 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
     try {
       const txs = await listTransactions(key, acc.id, from);
       const st = toStatement(acc, txs);
-      const rows = autoSelect(buildPreview(st, target, state.data, state.settings), cardsSynced);
-      const count = (f: string) => rows.filter((r) => r.flag === f && !r.include).length;
+      const preview = autoSelect(applyBankCategories(buildPreview(st, target, state.data, state.settings)), cardsSynced);
+      const count = (f: string) => preview.filter((r) => r.flag === f && !r.include).length;
       const id = uid('imp_');
+      // entre contas suas e aplicação/resgate de investimento: viram transferência (mexem no saldo, não em receitas/despesas)
+      const moves: Transfer[] = [];
+      const rows = preview.map((r) => {
+        const kind = target.kind === 'conta' && r.include ? neutralKind(r.row.bankCategory, r.row.description) : null;
+        if (!kind || target.kind !== 'conta') return r;
+        if (!(r.row.fitId && (state.data.transfers ?? []).some((t) => t.fitId === r.row.fitId))) {
+          const out = r.type === 'expense';
+          moves.push({ id: uid('tr_'), fromAccountId: out ? target.accountId : '', toAccountId: out ? '' : target.accountId, amountCents: r.amountCents, date: r.row.date, note: r.row.description.slice(0, 80), kind, importId: id, fitId: r.row.fitId, createdAt: Date.now() + moves.length });
+        }
+        return { ...r, include: false };
+      });
       const built = buildTransactions(rows, target, state.data, id, () => uid('t_'), state.today);
-      if (built.length) {
+      if (built.length || moves.length) {
+        if (moves.length) await upsert('transfers', moves);
         await applyImport(makeBatch(id, `Meu Pluggy · ${acc.bankName} · ${acc.marketingName || acc.name}`, st, target, rows), built, state.settings.importRules ?? [], { safetyCopy: false });
-        imported += built.length;
+        imported += built.length + moves.length;
       }
-      report.push({ account: name, from, received: txs.length, imported: built.length, already: count('importado') + count('repetido'), similar: count('possivel'), invoice: count('fatura'), ...st.skipped });
+      report.push({ account: name, from, received: txs.length, imported: built.length, moved: moves.length, already: count('importado') + count('repetido'), similar: count('possivel'), invoice: count('fatura'), ...st.skipped });
       // Banco ainda sem transações (o Meu Pluggy pode estar coletando): não avança a data, para o histórico vir depois.
       if (txs.length || lastByAcc[acc.id]) lastByAcc[acc.id] = attempt;
       accountsDone++;
@@ -709,6 +723,39 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
   }
   await saveBank({ report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
+}
+
+/**
+ * A conta do app passa a começar com o saldo do banco (soma das contas do banco ligadas a ela), no dia seguinte à
+ * última atualização da Pluggy. Nada é apagado: o histórico continua nos relatórios, só deixa de mexer no saldo de hoje.
+ */
+export async function startAccountAtBankBalance(appAccountId: string): Promise<void> {
+  const acc = state.data.accounts.find((a) => a.id === appAccountId);
+  if (!acc) return;
+  const linked = state.bank.accounts.filter((a) => { const l = state.settings.bank.links[a.id]; return l?.kind === 'conta' && l.id === appAccountId; });
+  if (!linked.length) return;
+  const cents = linked.reduce((s, a) => s + Math.round(a.balance * 100), 0);
+  const days = linked.map((a) => localDay(state.bank.items[a.itemId]?.lastUpdatedAt)).sort();
+  const balanceDay = days[days.length - 1];
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  await upsert('accounts', { ...acc, initialCents: cents, initialDate: addDays(balanceDay, 1) });
+}
+
+/**
+ * Refaz o que veio pela conexão com as regras novas: desfaz as importações do Meu Pluggy (com cópia de segurança
+ * antes) e busca de novo o histórico escolhido. Lançamentos que você criou à mão não são tocados.
+ */
+export async function reimportBank(): Promise<{ imported: number; accounts: number; errors: string[] }> {
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  for (const b of state.data.imports.filter((x) => !x.undoneAt && x.fileName.startsWith('Meu Pluggy'))) {
+    const ids = state.data.transactions.filter((t) => t.importId === b.id).map((t) => t.id);
+    if (ids.length) await remove('transactions', ids);
+    const moves = (state.data.transfers ?? []).filter((t) => t.importId === b.id).map((t) => t.id);
+    if (moves.length) await remove('transfers', moves);
+    await upsert('imports', { ...b, undoneAt: new Date().toISOString() });
+  }
+  await saveBank({ lastSyncByAccount: {} });
+  return syncBank();
 }
 
 /** Sincroniza sozinho ao abrir o app (Android), no máximo a cada 12 h, se houver conta vinculada. */

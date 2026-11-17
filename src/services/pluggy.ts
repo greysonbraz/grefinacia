@@ -50,6 +50,9 @@ export interface PluggyTransaction {
   status: 'POSTED' | 'PENDING' | string;
   currencyCode?: string;
   creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null } | null;
+  /** Categoria da Pluggy (nome em inglês; null sem categorização). */
+  category?: string | null;
+  categoryId?: string | null;
 }
 
 async function call<T>(path: string, init: RequestInit & { apiKey?: string } = {}): Promise<T> {

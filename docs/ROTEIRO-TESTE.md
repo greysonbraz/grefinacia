@@ -69,6 +69,8 @@ Use quando sair uma versão nova. Marque cada item; se algo falhar, anote o núm
 | 6b.2 | Adicione o Item ID de cada banco → Buscar contas dos bancos | Aparecem as contas e cartões de cada banco |
 | 6b.3 | Escolha "Criar conta nova" (ou uma existente) para cada uma → Sincronizar agora | Lançamentos em Movimentações; o saldo mostra "confere" |
 | 6b.4 | Sincronizar agora de novo | "Nada novo desde a última vez" (sem duplicar) |
+| 6b.6 | Conta com "diferença" → Começar com o saldo do banco | Passa a "confere"; lançamentos continuam |
+| 6b.7 | Refazer a importação com as regras novas | Gráfico por categoria sem quase tudo em "Outros"; transferências entre contas suas fora das despesas |
 | 6b.5 | Movimentações → Importar → Importações anteriores | Cada sincronização aparece com "Desfazer" |
 
 ## 7. Grefinacia AI

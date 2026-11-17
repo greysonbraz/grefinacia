@@ -16,6 +16,8 @@ export interface StatementRow {
   amount: number; // em centavos; positivo = entrou dinheiro, negativo = saiu
   description: string;
   fitId?: string;
+  /** Categoria dada pelo banco/Pluggy (em inglês), quando houver. */
+  bankCategory?: string;
 }
 export interface Statement {
   format: 'ofx' | 'csv';
