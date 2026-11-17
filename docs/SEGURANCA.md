@@ -31,6 +31,7 @@ Com os Secrets cadastrados, o fluxo *Gerar APK* publica o artefato `grefinacia-a
 | Atualização do banco | Versões novas só acrescentam estruturas, nunca apagam; uma cópia é guardada na primeira abertura |
 | Código da página | Content-Security-Policy: só scripts do próprio app, sem `eval`, conexões só com os sites listados em `src/lib/csp.ts` |
 | Nuvem | Criptografia ponta a ponta (a chave fica no aparelho) e RLS: cada linha só é lida pelo dono; sem login, nada |
+| Conexão bancária (Meu Pluggy) | Só leitura. Client ID e Client Secret no cofre do Android, fora da nuvem, do backup e das cópias; a API key da Pluggy (2 h) só em memória. A Pluggy recomenda guardar o Secret em servidor: como o app é de um usuário só e lê só os dados dele, o cofre do aparelho é a alternativa sem custo. A varredura de segredos reconhece `pluggy_sk_…`. A autorização pode ser revogada no app do banco ou no Meu Pluggy |
 | Importação de extrato | Arquivo lido só no aparelho, limite de 5 MB, cópia de segurança antes de importar e de desfazer |
 | IA no aparelho | Gemini Nano desligado por padrão; o texto não sai do celular; o app avisa das métricas de uso que o ML Kit envia ao Google |
 | Rede | Só HTTPS; backup automático do Google desligado |

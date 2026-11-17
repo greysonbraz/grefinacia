@@ -19,6 +19,7 @@ import { brapiQuota, getUsage } from '../services/usage';
 import { PinPad } from './Lock';
 import { nanoDownload, nanoStatus, NANO_STATE_LABEL, type NanoStatus } from '../services/nano';
 import { ImportStatement } from './Import';
+import { BankConnect } from './Bank';
 
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
   ['salary', 'Salário', 'No dia do pagamento e ao confirmar o recebimento'],
@@ -45,6 +46,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [transfer, setTransfer] = useState(false);
   const accName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? 'conta removida';
   const [pin, setPin] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [bk, setBk] = useState<'create' | 'restore' | null>(null);
   const [perm, setPerm] = useState<string>('');
@@ -145,9 +147,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div className="section">Bancos e pagamentos (Open Finance)</div>
       <div className="card">
         <div className="kv"><span>Importar extrato (OFX ou CSV)</span><button className="btn sm" onClick={() => setImporting(true)}>Importar</button></div>
-        <div className="kv"><span>Conexão bancária automática</span><b>Não disponível nesta versão</b></div>
+        <div className="kv"><span>Conexão bancária (Meu Pluggy){st.bank.items.length ? ` · ${st.bank.items.length} ${st.bank.items.length === 1 ? 'banco' : 'bancos'}` : ''}</span><button className="btn sm" onClick={() => setBankOpen(true)}>Abrir</button></div>
         <div className="kv"><span>Pagamentos automáticos</span><b>Não disponível nesta versão</b></div>
-        <Note>Ler saldos e extratos ou iniciar pagamentos exige contrato com um provedor autorizado pelo Banco Central (por exemplo Pluggy ou Belvo) e um servidor para guardar as credenciais do provedor. Enquanto isso não existir, você cadastra ou importa o extrato exportado pelo banco; o app só lembra dos vencimentos e nunca movimenta dinheiro. Nenhuma senha bancária é pedida ou armazenada.</Note>
+        <Note>A leitura de saldos e extratos usa o Meu Pluggy, gratuito para uso pessoal e regulado pelo Banco Central: você autoriza cada banco no Open Finance e pode revogar quando quiser. Pagamentos automáticos não existem: o app só lê e nunca movimenta dinheiro. Nenhuma senha bancária é pedida ou armazenada.</Note>
       </div>
 
       <div className="section">Backup e outros aparelhos</div>
@@ -173,6 +175,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {pin && <PinSheet onClose={() => setPin(false)} />}
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
       {importing && <ImportStatement onClose={() => setImporting(false)} />}
+      {bankOpen && <BankConnect onClose={() => setBankOpen(false)} />}
     </Full>
   );
 }

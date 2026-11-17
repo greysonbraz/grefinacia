@@ -148,7 +148,8 @@ describe('cofre de segredos', () => {
       remove: async (k) => void data.delete(k),
     };
   }
-  const withSecretsSet: Settings = { ...DEFAULT_SETTINGS, api: api({ brapiToken: 'TOKEN-BRAPI' }), ai: { ...DEFAULT_SETTINGS.ai, apiKey: 'CHAVE-IA' } };
+  const withSecretsSet: Settings = { ...DEFAULT_SETTINGS, api: api({ brapiToken: 'TOKEN-BRAPI' }), ai: { ...DEFAULT_SETTINGS.ai, apiKey: 'CHAVE-IA' }, bank: { ...DEFAULT_SETTINGS.bank, clientId: 'ID-PLUGGY', clientSecret: 'SEGREDO-PLUGGY' } };
+  const all = { brapiToken: 'TOKEN-BRAPI', aiApiKey: 'CHAVE-IA', pluggyClientId: 'ID-PLUGGY', pluggyClientSecret: 'SEGREDO-PLUGGY' };
 
   it('com cofre: os segredos saem do que vai para o banco e voltam na leitura', async () => {
     const store = fakeStore();
@@ -156,9 +157,10 @@ describe('cofre de segredos', () => {
     const forDb = await settingsForDb(withSecretsSet);
     expect(JSON.stringify(forDb)).not.toContain('TOKEN-BRAPI');
     expect(JSON.stringify(forDb)).not.toContain('CHAVE-IA');
-    expect([...store.data.values()].sort()).toEqual(['CHAVE-IA', 'TOKEN-BRAPI']);
+    expect(JSON.stringify(forDb)).not.toContain('PLUGGY');
+    expect([...store.data.values()].sort()).toEqual(['CHAVE-IA', 'ID-PLUGGY', 'SEGREDO-PLUGGY', 'TOKEN-BRAPI']);
     const back = await hydrateSecrets(forDb);
-    expect(extractSecrets(back.settings)).toEqual({ brapiToken: 'TOKEN-BRAPI', aiApiKey: 'CHAVE-IA' });
+    expect(extractSecrets(back.settings)).toEqual(all);
     expect(back.migrated).toBe(false);
   });
 
@@ -172,7 +174,7 @@ describe('cofre de segredos', () => {
   it('se o cofre falhar ao gravar, o segredo continua no banco (não se perde)', async () => {
     setSecretStoreForTests(fakeStore({ failOnSet: true }));
     const forDb = await settingsForDb(withSecretsSet);
-    expect(extractSecrets(forDb)).toEqual({ brapiToken: 'TOKEN-BRAPI', aiApiKey: 'CHAVE-IA' });
+    expect(extractSecrets(forDb)).toEqual(all);
   });
 
   it('sem cofre (navegador): nada muda', async () => {
@@ -186,7 +188,7 @@ describe('cofre de segredos', () => {
     setSecretStoreForTests(store);
     await settingsForDb(withSecretsSet);
     await settingsForDb({ ...withSecretsSet, api: api({ brapiToken: '' }) });
-    expect([...store.data.values()]).toEqual(['CHAVE-IA']);
+    expect([...store.data.values()].sort()).toEqual(['CHAVE-IA', 'ID-PLUGGY', 'SEGREDO-PLUGGY']); // só o token saiu
     await clearSecrets();
     expect(store.data.size).toBe(0);
   });
@@ -200,13 +202,14 @@ describe('varredura de segredos do repositório', () => {
       { path: 'src/b.ts', content: `const k = "${fake('AIza', 35)}";` },
       { path: 'src/c.ts', content: `x\n${fake('ghp_', 36)}` },
       { path: 'src/d.ts', content: `${fake('sb_secret_', 30)}` },
+      { path: 'src/e.ts', content: `secret: '${fake('pluggy' + '_sk_', 46)}'` },
       { path: 'cert.txt', content: '-----BEGIN ' + 'PRIVATE KEY-----' }, // montado em partes para este arquivo não ser acusado
       { path: 'android/release.jks' },
       { path: 'android/keystore.properties', content: 'storePassword=x' },
       { path: '.env', content: 'A=1' },
       { path: 'meu-backup.gfbackup' },
     ]) as { path: string; line?: number; problem: string }[];
-    expect(found.map((f) => f.path).sort()).toEqual(['.env', 'android/keystore.properties', 'android/release.jks', 'cert.txt', 'meu-backup.gfbackup', 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts']);
+    expect(found.map((f) => f.path).sort()).toEqual(['.env', 'android/keystore.properties', 'android/release.jks', 'cert.txt', 'meu-backup.gfbackup', 'src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts']);
     expect(found.find((f) => f.path === 'src/c.ts')!.line).toBe(2);
   });
 
@@ -232,7 +235,7 @@ describe('política de conteúdo (CSP)', () => {
     expect(csp).toContain("frame-src 'none'");
   });
   it('só fala com as fontes de dados conhecidas; a IA paga fica de fora', () => {
-    expect(ALLOWED_HOSTS.slice(0, 5)).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://api.coingecko.com', 'https://api.bcb.gov.br', 'https://slgiagmfbbjifjkapusr.supabase.co']);
+    expect(ALLOWED_HOSTS.slice(0, 6)).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://api.coingecko.com', 'https://api.bcb.gov.br', 'https://api.pluggy.ai', 'https://slgiagmfbbjifjkapusr.supabase.co']);
     expect(csp).not.toContain('anthropic');
     expect(ALLOWED_HOSTS.every((h) => h.startsWith('https://'))).toBe(true);
   });

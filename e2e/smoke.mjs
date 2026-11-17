@@ -246,6 +246,17 @@ try {
   t = await text();
   ok(t.includes('Só funciona no app Android') && t.includes('métricas de uso'), 'Gemini Nano: opção com aviso de métricas; no navegador avisa que é só no Android');
   await shot('12-gemini-nano');
+  await page.locator('.kv', { hasText: 'Conexão bancária (Meu Pluggy)' }).getByRole('button', { name: 'Abrir' }).click();
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Chaves da sua aplicação na Pluggy') && t.includes('Um Item ID por banco'.replace('Um', 'um')) && t.includes('No navegador a conexão não funciona'), 'conexão bancária: tela com chaves, bancos e aviso de que só funciona no Android');
+  await page.fill('input[name=pluggy_item]', 'nao-e-um-id');
+  await page.getByRole('button', { name: 'Adicionar banco' }).click();
+  await page.waitForTimeout(300);
+  ok((await text()).includes('O Item ID tem o formato'), 'conexão bancária: recusa Item ID em formato errado');
+  await shot('13-conexao-bancaria');
+  await page.getByRole('button', { name: 'Voltar', exact: true }).last().click(); // fecha a tela de cima
+  await page.waitForTimeout(300);
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await page.waitForTimeout(500);
   await shot('12-inicio-claro');

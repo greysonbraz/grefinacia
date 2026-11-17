@@ -99,7 +99,9 @@ export function buildPreview(st: Statement, target: Target, data: AppData, setti
       pr.flag = 'fatura';
       pr.flagNote = target.kind === 'conta' ? 'Pagamento de fatura: os gastos já vêm da fatura do cartão. Marque só se não for importar a fatura.' : 'Pagamento da fatura anterior, não é compra';
     } else {
-      const match = data.transactions.find((t) => t.type === type && t.amountCents === amountCents && Math.abs(diffDays(t.date, row.date)) <= 2 && (normDesc(t.description) === n || (n && normDesc(t.description).split(' ')[0] === n.split(' ')[0]) || sameTarget(t)));
+      // identificador estável do banco (Open Finance) diferente do que já existe: é outra transação, mesmo parecida
+      const distinct = (t: Transaction) => !!row.fitId && !!t.fitId && row.fitId.startsWith('of:') && t.fitId.startsWith('of:') && t.fitId !== row.fitId;
+      const match = data.transactions.find((t) => !distinct(t) && t.type === type && t.amountCents === amountCents && Math.abs(diffDays(t.date, row.date)) <= 2 && (normDesc(t.description) === n || (n && normDesc(t.description).split(' ')[0] === n.split(' ')[0]) || sameTarget(t)));
       if (match) {
         pr.flag = 'possivel';
         pr.flagNote = `Parece com "${match.description}" de ${match.date.split('-').reverse().slice(0, 2).join('/')}`;

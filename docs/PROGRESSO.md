@@ -1,6 +1,6 @@
 # Grefinacia — progresso
 
-Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardando merge: nº 7 (8a), nº 8 (9), nº 9 (8b), nº 10 (10), nº 11 (11a). Etapa 11b no branch `claude/etapa-11b-fontes` (versão 1.8.0, 241 testes), feito em cima da 11a.
+Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapas 1 a 11b). Etapa 12 (conexão bancária pelo Meu Pluggy) no branch `claude/etapa-12-pluggy` (versão 1.9.0, 253 testes).
 
 ## Concluído e no `main`
 
@@ -13,17 +13,28 @@ Checkpoint de **16/11/2026**. `main` em `3a84942` (versão 1.2.0). PRs aguardand
 | 6 | Categorias próprias, transferência entre contas, limite do cartão, leitura da linha digitável de boletos, exportação JSON | 5 |
 | 9 (parte) | Notícias do mercado financeiro por RSS, 12 fontes em 5 assuntos | 3 |
 | 7 | Selo e contador de cota nas cotações, histórico de preços, desempenho x CDI/IPCA, carteira de cripto | 6 |
+| 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | 7 |
+| 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | 8 |
+| 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | 9 |
+| 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | 10 |
+| 11a | Proventos: status completos, só confirmado conta como recebido, confirmação pelo extrato, histórico de correções, painel de renda passiva, rentabilidade total, alertas novos | 11 |
+| 11b | Fonte automática de proventos (brapi no pago, Yahoo no grátis), busca sozinha 1×/dia, aviso de fonte fora do ar; B3 decidida contra | 12 |
 
 ## Pronto no branch, aguardando teste no aparelho
 
 | Etapa | Entrega | Branch |
 |---|---|---|
-| 8a | Motor local ampliado: previsão de caixa, gastos fora do padrão, assinaturas, cobranças em dobro, raio-X da carteira, comparador de empréstimos | PR nº 7 (testada pelo dono) |
-| 9 | Importar extrato de conta e fatura de cartão (OFX e CSV), com prévia, duplicados, categoria automática, regras aprendidas e desfazer | PR nº 8 (testada com extrato do Inter) |
-| 8b | Gemini Nano no aparelho para perguntas livres (experimental, desligado por padrão) | PR nº 9 ("tudo ok") |
-| 10 | Testes completos, revisão final de segurança, roteiro de teste no celular, documentação das tecnologias | PR nº 10 |
-| 11a | Proventos: status completos, só confirmado conta como recebido, confirmação pelo extrato, histórico de correções, painel de renda passiva, rentabilidade total, alertas novos | PR nº 11 |
-| 11b | Fonte automática de proventos (brapi no pago, Yahoo no grátis), busca sozinha 1×/dia, aviso de fonte fora do ar; B3 decidida contra | `claude/etapa-11b-fontes` |
+| 12 | Conexão bancária pelo Meu Pluggy: saldos, extratos e cartões entrando sozinhos pelo importador, sem duplicar | `claude/etapa-12-pluggy` |
+
+Detalhes da Etapa 12:
+- **Por que Meu Pluggy:** a Belvo é paga e não atende uso pessoal. O Meu Pluggy é gratuito para uso pessoal, sem prazo, até 5 bancos do mesmo titular, atualização a cada 24 h (conferido em pluggy.ai e docs.pluggy.ai em 17/11/2026).
+- **Onde:** Ajustes → Bancos e pagamentos → Conexão bancária (Meu Pluggy) → Abrir.
+- **Passos do dono:** conectar os bancos em meu.pluggy.ai; no Dashboard, criar uma aplicação, em Demo → Conectar conta escolher "MeuPluggy" (um banco por vez) e copiar o Item ID de cada um; Client ID e Client Secret ficam na aplicação.
+- **No app:** chaves no cofre do Android (não vão para nuvem, backup nem GitHub); um Item ID por banco; "Buscar contas" e escolher o destino de cada conta (criar conta/cartão ou ligar a um existente); "Sincronizar agora". Depois sincroniza sozinho ao abrir, no máximo a cada 12 h.
+- **Sem duplicar:** identificador estável do banco (`providerId`, Open Finance) e, sem ele, a conferência por data, valor e descrição da importação. Pagamento da fatura dentro do cartão e lançamentos agendados ficam de fora. Cada sincronização é uma importação com "Desfazer".
+- **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
+- **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
+- **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
 
 Detalhes da Etapa 11b:
 - **Achado:** a fonte padrão era a brapi, que no plano grátis não traz proventos, e a busca só acontecia ao tocar no botão. Na prática, nada era buscado sozinho.
@@ -81,7 +92,7 @@ PIN, biometria, backup em arquivo cifrado, notificações.
 
 ## Em desenvolvimento
 
-Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o APK (de preferência com um extrato real) e autorizar o PR. A 8a está no PR nº 7, aguardando merge.
+Etapa 12 pronta no branch `claude/etapa-12-pluggy`, aguardando o dono testar o APK 1.9.0 com os bancos dele.
 
 ## Falta desenvolver
 
@@ -118,8 +129,9 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 
 ## Próximo passo
 
-1. Dono instala o APK 1.8.0 (branch `claude/etapa-11b-fontes`, contém todas as etapas) e testa: aba Dividendos (atualização sozinha, painel, histórico, "Recebi"), Bolsa (rentabilidade total) e o roteiro `docs/ROTEIRO-TESTE.md`.
-2. Dono faz (ou pede) os merges na ordem nº 7 → 8 → 9 → 10 → 11 → PR da 11b.
+1. Dono instala o APK 1.9.0, abre Ajustes → Conexão bancária, coloca Client ID, Client Secret e o Item ID de cada banco, busca as contas, escolhe o destino e sincroniza.
+2. Confere: lançamentos no mês certo, saldo "confere", nada duplicado, proventos confirmados.
+3. Com o OK, merge do PR da Etapa 12 (só com pedido).
 
 ## Serviços em uso (todos gratuitos)
 
@@ -132,4 +144,5 @@ Etapa 9 pronta no branch `claude/etapa-9-extratos`, aguardando o dono testar o A
 | CoinGecko (API pública, sem chave) | criptomoedas | nada a configurar |
 | Banco Central (SGS, dados abertos) | CDI e IPCA | nada a configurar |
 | Feeds RSS | notícias | lista em `src/domain/news.ts` |
+| Meu Pluggy (uso pessoal gratuito) | saldos, extratos e cartões dos seus bancos (Open Finance) | meu.pluggy.ai e dashboard.pluggy.ai; chaves em Ajustes → Conexão bancária |
 | Gemini Nano (ML Kit GenAI, no aparelho) | perguntas livres no chat (opcional) | Ajustes → Grefinacia AI; nada a pagar |

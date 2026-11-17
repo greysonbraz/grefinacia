@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   news: { disabledSources: [] },
   analysis: { ignoredDuplicates: [] },
   importRules: [],
+  bank: { clientId: '', clientSecret: '', items: [], links: {}, historyDays: 90 },
 };
 
 export function emptyData(): AppData {

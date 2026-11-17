@@ -8,7 +8,7 @@ import { monthOf, todayISO } from '../lib/dates';
  * O app conta as consultas que ele mesmo faz; outro aparelho com o mesmo token e a verificação de proventos
  * em segundo plano não entram na conta, então o número real pode ser um pouco maior, nunca menor.
  */
-export type UsageProvider = 'brapi' | 'yahoo' | 'coingecko' | 'bcb';
+export type UsageProvider = 'brapi' | 'yahoo' | 'coingecko' | 'bcb' | 'pluggy';
 export interface Usage {
   month: YearMonth;
   counts: Record<UsageProvider, number>;
@@ -18,7 +18,7 @@ export const BRAPI_MONTHLY_LIMIT: Record<Settings['api']['brapiPlan'], number> =
 /** Margem guardada para o fim do mês: acima disso o app só consulta quando você pede. */
 export const BRAPI_RESERVE = 0.1;
 
-const empty = (month: YearMonth): Usage => ({ month, counts: { brapi: 0, yahoo: 0, coingecko: 0, bcb: 0 } });
+const empty = (month: YearMonth): Usage => ({ month, counts: { brapi: 0, yahoo: 0, coingecko: 0, bcb: 0, pluggy: 0 } });
 
 let usage: Usage = empty(monthOf(todayISO()));
 let persist: ((u: Usage) => void) | null = null;

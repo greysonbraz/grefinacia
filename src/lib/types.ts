@@ -366,6 +366,15 @@ export interface Settings {
   };
   freedom: { yieldPct: number }; // rendimento anual que você assume para a meta de liberdade financeira
   news: { disabledSources: string[] }; // fontes de notícias desligadas pelo usuário
+  /** Conexão bancária pelo Meu Pluggy (Open Finance, uso pessoal gratuito). */
+  bank: {
+    clientId: string; // segredo: só no cofre do aparelho
+    clientSecret: string; // segredo: só no cofre do aparelho
+    items: { itemId: string; label: string }[]; // um por banco conectado no Meu Pluggy
+    /** Conta da Pluggy → onde os lançamentos entram no app. */
+    links: Record<string, { kind: 'conta' | 'cartao' | 'ignorar'; id?: string }>;
+    historyDays: number; // quanto histórico buscar na primeira vez
+  };
   analysis: { ignoredDuplicates: string[] };
   importRules: { pattern: string; categoryId: string }[]; // "descrição contém" → categoria, aprendido nas importações // pares "idA|idB" que o usuário disse não serem cobrança em dobro
 }

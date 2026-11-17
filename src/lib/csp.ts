@@ -21,6 +21,7 @@ export const ALLOWED_HOSTS: string[] = [
   'https://query1.finance.yahoo.com', // cotações e proventos (não oficial)
   'https://api.coingecko.com', // criptomoedas: preço e histórico (API pública, sem chave)
   'https://api.bcb.gov.br', // Banco Central: CDI e IPCA (dados abertos, sem chave)
+  'https://api.pluggy.ai', // conexão bancária pelo Meu Pluggy (Open Finance, uso pessoal gratuito)
   SUPABASE_URL, // nuvem: login e cópia cifrada dos dados
   ...NEWS_HOSTS, // notícias (feeds públicos)
   ...(PAID_AI_ENABLED ? ['https://api.anthropic.com'] : []),

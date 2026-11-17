@@ -13,6 +13,9 @@ import { computePositions, operationsAreValid, quantityAt } from '../domain/port
 import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError } from '../services/quotes';
 import { isNative } from '../services/platform';
+import { forgetPluggyKey, getItem, listAccounts, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
+import { autoSelect, localDay, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
+import { buildPreview, buildTransactions, makeBatch } from '../domain/importer';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
 import { setPrivacyScreen } from '../services/security';
@@ -32,7 +35,21 @@ export interface State {
   toast: { id: number; text: string; tone: 'ok' | 'err' } | null;
   /** Saúde da fonte de proventos neste aparelho (não sincroniza). */
   divHealth: DivHealth;
+  /** Conexão bancária neste aparelho (não sincroniza): contas vistas na Pluggy, situação e última busca. */
+  bank: BankState;
 }
+
+export interface BankState {
+  lastAttempt?: string;
+  lastOkAt?: string;
+  error?: string;
+  items: Record<string, { name: string; status: string; consentExpiresAt?: string; lastUpdatedAt?: string; error?: string }>;
+  accounts: (PluggyAccount & { bankName: string })[];
+  lastSyncByAccount: Record<string, string>;
+}
+const BANK_META = 'bankState';
+/** Sincronização bancária automática: no máximo a cada 12 h (o Meu Pluggy atualiza a cada 24 h). */
+export const AUTO_BANK_HOURS = 12;
 
 export interface DivHealth {
   lastAttempt?: string; // última busca (automática ou pelo botão)
@@ -44,7 +61,7 @@ const DIV_HEALTH_META = 'divHealth';
 /** Busca automática de proventos: no máximo a cada 20 h, só no app Android (no navegador os sites recusam). */
 export const AUTO_DIVIDEND_HOURS = 20;
 
-let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS, today: todayISO(), locked: false, toast: null, divHealth: {} };
+let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS, today: todayISO(), locked: false, toast: null, divHealth: {}, bank: { items: {}, accounts: [], lastSyncByAccount: {} } };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch };
@@ -133,7 +150,7 @@ export async function applyRemote(upserts: { collection: string; id: string; val
   if (remoteSettings) {
     const merged = db.mergeSettings(remoteSettings);
     // o PIN e os segredos são de cada aparelho
-    settings = { ...merged, security: state.settings.security, onboarded: true, api: { ...merged.api, brapiToken: state.settings.api.brapiToken }, ai: { ...merged.ai, apiKey: state.settings.ai.apiKey } };
+    settings = { ...merged, security: state.settings.security, onboarded: true, api: { ...merged.api, brapiToken: state.settings.api.brapiToken }, ai: { ...merged.ai, apiKey: state.settings.ai.apiKey }, bank: { ...merged.bank, clientId: state.settings.bank.clientId, clientSecret: state.settings.bank.clientSecret } };
     await db.saveSettings(await settingsForDb(settings));
     applyTheme(settings.theme);
   }
@@ -222,7 +239,7 @@ export async function init(): Promise<void> {
   void db.requestPersistentStorage();
   void setPrivacyScreen(settings.security.enabled && settings.security.hideInRecents);
   await ensureChannels().catch(() => undefined);
-  set({ divHealth: (await db.getMeta<DivHealth>(DIV_HEALTH_META)) ?? {} });
+  set({ divHealth: (await db.getMeta<DivHealth>(DIV_HEALTH_META)) ?? {}, bank: { items: {}, accounts: [], lastSyncByAccount: {}, ...((await db.getMeta<BankState>(BANK_META)) ?? {}) } });
   // uma vez: quem estava na brapi gratuita (que não traz proventos) passa para a fonte automática
   if (!(await db.getMeta<boolean>('divAutoV1'))) {
     const api = state.settings.api;
@@ -230,7 +247,7 @@ export async function init(): Promise<void> {
     await db.setMeta('divAutoV1', true);
   }
   await rollDay();
-  if (isNative()) void autoRefreshDividends();
+  if (isNative()) void autoRefreshDividends().then(() => autoSyncBank());
 }
 
 /**
@@ -568,8 +585,9 @@ export async function confirmDividend(eventId: string, accountId?: string): Prom
  * Grava uma importação: guarda antes uma cópia de segurança de tudo, depois os lançamentos e o registro da importação
  * (para poder desfazer), e as regras de categoria que você ensinou na prévia.
  */
-export async function applyImport(batch: ImportBatch, txs: Transaction[], rules: Settings['importRules']): Promise<void> {
-  await db.createSafetyCopy('importacao', state.data, state.settings);
+export async function applyImport(batch: ImportBatch, txs: Transaction[], rules: Settings['importRules'], opts: { safetyCopy?: boolean } = {}): Promise<void> {
+  // a sincronização bancária diária não gira as cópias de segurança: só acrescenta e cada lote tem "Desfazer"
+  if (opts.safetyCopy !== false) await db.createSafetyCopy('importacao', state.data, state.settings);
   await upsert('transactions', txs);
   await upsert('imports', batch);
   if (JSON.stringify(rules) !== JSON.stringify(state.settings.importRules)) await updateSettings({ importRules: rules });
@@ -583,6 +601,123 @@ export async function undoImport(id: string): Promise<number> {
   await remove('transactions', ids);
   await upsert('imports', { ...batch, undoneAt: new Date().toISOString() });
   return ids.length;
+}
+
+// ---------- conexão bancária (Meu Pluggy) ----------
+async function saveBank(patch: Partial<BankState>): Promise<void> {
+  const bank = { ...state.bank, ...patch };
+  set({ bank });
+  await db.setMeta(BANK_META, bank).catch(() => undefined);
+}
+export const bankConfigured = (): boolean => !!(state.settings.bank.clientId && state.settings.bank.clientSecret && state.settings.bank.items.length);
+
+/** Busca na Pluggy as contas de cada banco (sem importar nada) para você vincular. */
+export async function loadBankAccounts(): Promise<{ errors: string[] }> {
+  const b = state.settings.bank;
+  const errors: string[] = [];
+  const key = await pluggyApiKey(b.clientId, b.clientSecret);
+  const items: BankState['items'] = {};
+  const accounts: BankState['accounts'] = [];
+  for (const it of b.items) {
+    try {
+      const item = await getItem(key, it.itemId);
+      const bankName = it.label || item.connector?.name || 'Banco';
+      items[it.itemId] = { name: bankName, status: item.status, consentExpiresAt: item.consentExpiresAt, lastUpdatedAt: item.lastUpdatedAt, error: item.error?.message ?? undefined };
+      for (const a of await listAccounts(key, it.itemId)) accounts.push({ ...a, bankName });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      items[it.itemId] = { name: it.label || 'Banco', status: 'ERRO', error: msg };
+      errors.push(`${it.label || it.itemId}: ${msg}`);
+    }
+  }
+  await saveBank({ items, accounts });
+  return { errors };
+}
+
+/** Vincula uma conta do banco: "novo" cria conta (ou cartão) no app; ou liga a uma existente; ou ignora. */
+export async function linkBankAccount(pluggyAccountId: string, choice: string): Promise<void> {
+  const acc = state.bank.accounts.find((a) => a.id === pluggyAccountId);
+  if (!acc) return;
+  let link: Settings['bank']['links'][string];
+  if (choice === 'ignorar') link = { kind: 'ignorar' };
+  else if (choice.startsWith('conta:')) link = { kind: 'conta', id: choice.slice(6) };
+  else if (choice.startsWith('cartao:')) link = { kind: 'cartao', id: choice.slice(7) };
+  else if (acc.type === 'CREDIT') {
+    // o cartão é pago pela conta do mesmo banco, se ela já estiver vinculada
+    const sameBank = state.bank.accounts.find((a) => a.itemId === acc.itemId && a.type !== 'CREDIT' && state.settings.bank.links[a.id]?.kind === 'conta');
+    const card = newCardFor(acc, acc.bankName, uid('cd_'), (sameBank && state.settings.bank.links[sameBank.id]?.id) || defaultAccountId());
+    await upsert('cards', card);
+    link = { kind: 'cartao', id: card.id };
+  } else {
+    const account = newAccountFor(acc, acc.bankName, localDay(state.bank.items[acc.itemId]?.lastUpdatedAt), uid('ac_'));
+    await upsert('accounts', account);
+    link = { kind: 'conta', id: account.id };
+  }
+  await updateSettings({ bank: { ...state.settings.bank, links: { ...state.settings.bank.links, [pluggyAccountId]: link } } });
+}
+
+/**
+ * Sincroniza: para cada conta vinculada, busca as transações novas e importa pelo mesmo caminho da importação de
+ * extrato (sem duplicar, com categorias e "Desfazer"). O que a prévia marcaria para conferir fica de fora.
+ * Um banco com erro não impede os outros.
+ */
+export async function syncBank(): Promise<{ imported: number; accounts: number; errors: string[] }> {
+  const attempt = new Date().toISOString();
+  const errors: string[] = [];
+  let imported = 0, accountsDone = 0;
+  try {
+    const loaded = await loadBankAccounts();
+    errors.push(...loaded.errors);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await saveBank({ lastAttempt: attempt, error: msg });
+    return { imported: 0, accounts: 0, errors: [msg] };
+  }
+  const b = state.settings.bank;
+  const key = await pluggyApiKey(b.clientId, b.clientSecret);
+  const cardsSynced = state.bank.accounts.some((a) => b.links[a.id]?.kind === 'cartao');
+  const lastByAcc = { ...state.bank.lastSyncByAccount };
+  for (const acc of state.bank.accounts) {
+    const target = targetFor(b.links[acc.id]);
+    if (!target) continue;
+    try {
+      const txs = await listTransactions(key, acc.id, syncFrom(lastByAcc[acc.id], b.historyDays, state.today));
+      const st = toStatement(acc, txs);
+      const rows = autoSelect(buildPreview(st, target, state.data, state.settings), cardsSynced);
+      const id = uid('imp_');
+      const built = buildTransactions(rows, target, state.data, id, () => uid('t_'), state.today);
+      if (built.length) {
+        await applyImport(makeBatch(id, `Meu Pluggy · ${acc.bankName} · ${acc.marketingName || acc.name}`, st, target, rows), built, state.settings.importRules ?? [], { safetyCopy: false });
+        imported += built.length;
+      }
+      lastByAcc[acc.id] = attempt;
+      accountsDone++;
+    } catch (e) {
+      errors.push(`${acc.bankName} · ${acc.name}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  await saveBank({ lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
+  return { imported, accounts: accountsDone, errors };
+}
+
+/** Sincroniza sozinho ao abrir o app (Android), no máximo a cada 12 h, se houver conta vinculada. */
+export async function autoSyncBank(now = Date.now()): Promise<boolean> {
+  if (!bankConfigured() || !Object.values(state.settings.bank.links).some((l) => l.kind !== 'ignorar')) return false;
+  const last = state.bank.lastAttempt ? Date.parse(state.bank.lastAttempt) : 0;
+  if (now - last < AUTO_BANK_HOURS * 3_600_000) return false;
+  try {
+    await syncBank();
+  } catch {
+    /* registrado em bank.error */
+  }
+  return true;
+}
+
+/** Remove a conexão deste aparelho: apaga as credenciais do cofre e os vínculos. Os lançamentos já importados ficam. */
+export async function disconnectBank(): Promise<void> {
+  forgetPluggyKey();
+  await updateSettings({ bank: { ...DEFAULT_SETTINGS.bank } });
+  await saveBank({ items: {}, accounts: [], lastSyncByAccount: {}, error: undefined, lastAttempt: undefined, lastOkAt: undefined });
 }
 
 // ---------- metas ----------
@@ -612,6 +747,7 @@ export async function restoreAll(data: AppData, settings: Omit<Settings, 'securi
     ...merged,
     api: { ...merged.api, brapiToken: merged.api.brapiToken || current.brapiToken },
     ai: { ...merged.ai, apiKey: merged.ai.apiKey || current.aiApiKey },
+    bank: { ...merged.bank, clientId: merged.bank.clientId || current.pluggyClientId, clientSecret: merged.bank.clientSecret || current.pluggyClientSecret },
     security: state.settings.security,
     onboarded: true,
   };
@@ -646,6 +782,8 @@ export async function wipeAll(): Promise<void> {
   sync = emptySyncState();
   await db.replaceEverything(d, DEFAULT_SETTINGS);
   await db.setMeta(SYNC_META, sync);
-  set({ data: d, settings: DEFAULT_SETTINGS, locked: false });
+  forgetPluggyKey();
+  await db.setMeta(BANK_META, { items: {}, accounts: [], lastSyncByAccount: {} });
+  set({ data: d, settings: DEFAULT_SETTINGS, locked: false, bank: { items: {}, accounts: [], lastSyncByAccount: {} } });
   applyTheme('dark');
 }
