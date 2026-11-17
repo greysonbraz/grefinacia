@@ -18,9 +18,9 @@ function when(iso: string): string {
 }
 
 /** Notícias do mercado financeiro: título, resumo e link para a matéria no site de origem. */
-export function News({ onClose }: { onClose: () => void }) {
+export function News({ onClose, initialTopic = 'economia' }: { onClose: () => void; initialTopic?: NewsTopic }) {
   const disabled = useStore((s) => s.settings.news.disabledSources);
-  const [topic, setTopic] = useState<NewsTopic>('economia');
+  const [topic, setTopic] = useState<NewsTopic>(initialTopic);
   const [res, setRes] = useState<NewsResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [sources, setSources] = useState(false);

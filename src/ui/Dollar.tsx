@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Newspaper, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { News } from './News';
 import { refreshDollar, refreshUsQuotes, remove, toast, upsert, useStore } from '../state/store';
 import { dollarSummary, formatUSD, holdingCostUsd, holdingUsd, isAsset, KIND_LABEL, rateChange, USD_HISTORY_ID } from '../domain/dollar';
 import { formatBRL, parseDecimal } from '../lib/money';
@@ -15,6 +16,7 @@ export function DollarHome() {
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<UsdHolding | 'novo' | null>(null);
   const [range, setRange] = useState<'30' | '90' | '365'>('90');
+  const [news, setNews] = useState(false);
   const sum = useMemo(() => dollarSummary(data), [data]);
   const hist = data.marketHistory.find((h) => h.id === USD_HISTORY_ID);
   const pts = (hist?.points ?? []).filter(([d]) => d >= addDays(today, -Number(range)));
@@ -79,6 +81,8 @@ export function DollarHome() {
         ))}
       </div>
       <button className="btn" onClick={() => setEdit('novo')}><Plus size={18} /> Adicionar</button>
+      <button className="btn ghost" onClick={() => setNews(true)}><Newspaper size={18} /> Notícias dos EUA e Wall Street</button>
+      {news && <News initialTopic="eua" onClose={() => setNews(false)} />}
       <Note>A conta em dólar dos bancos (como a Conta Global do Inter) normalmente não vem pelo Open Finance: informe o saldo aqui e atualize quando quiser. Ações e ETFs dos EUA usam a cotação do Yahoo Finance (não oficial, com atraso); o dólar usa a PTAX do Banco Central, publicada no fim de cada dia útil. O total em reais entra no patrimônio da tela inicial como "Dólar".</Note>
       {edit && <HoldingSheet h={edit === 'novo' ? null : edit} onClose={() => setEdit(null)} />}
       <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>

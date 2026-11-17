@@ -13,6 +13,9 @@ export const NEWS_HOSTS: string[] = [
   'https://portaldobitcoin.uol.com.br',
   'https://livecoins.com.br',
   'https://www.bcb.gov.br',
+  'https://br.investing.com',
+  'https://search.cnbc.com',
+  'https://feeds.content.dowjones.io',
 ];
 
 /** Endereços com que o app pode falar. Qualquer fonte nova precisa entrar aqui de propósito. */

@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 16 | Notícias dos EUA e Wall Street: assunto novo com 5 fontes (3 em português, 2 em inglês) e atalho na aba Dólar | `claude/etapa-16-noticias-eua` |
 | 15 | Aba Dólar na tela inicial (R$ / US$): conta em dólar, ações e ETFs dos EUA, investimentos em dólar do banco, PTAX com gráfico e conversor | `claude/etapa-15-dolar` |
 | 14 | Investimentos dos bancos pela conexão (renda fixa, ações, fundos, previdência) em Investimentos → Nos bancos e no patrimônio | `claude/etapa-14-investimentos` |
 | 13 | Tela inicial nova: gasto do mês dia a dia × mês passado, maiores categorias, previsão do mês inteiro e do mês que vem | `claude/etapa-13-inicio` |
@@ -38,6 +39,11 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 16:
+- Assunto "EUA e Wall Street" em Notícias: InfoMoney Wall Street, Money Times Internacional, Investing.com Brasil (ações), CNBC Markets e MarketWatch (estes dois em inglês). Feeds conferidos e lidos pelo leitor do app em 17/11/2026.
+- Hosts novos na CSP: br.investing.com, search.cnbc.com, feeds.content.dowjones.io (só leitura do feed; a matéria abre no site).
+- Atalho "Notícias dos EUA e Wall Street" na aba Dólar.
 
 Detalhes da Etapa 15:
 - Botão "R$ Reais / US$ Dólar" no topo da tela inicial; o painel em dólar tem total em US$ e em R$, divisão por tipo, cotação do dia com gráfico (30/90 dias, 12 meses), variação e conversor.
