@@ -37,7 +37,7 @@ const splitKey = (k: string): { collection: string; id: string } => ({ collectio
  * Coleções que viajam. Retratos de patrimônio, controle de alertas e histórico de preços são recriados
  * por cada aparelho (o histórico se busca de novo nas fontes e iria pesar na cota gratuita da nuvem).
  */
-export const SYNCED = new Set(['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'transfers', 'cryptoAssets', 'cryptoOps', 'imports', 'bankInvestments', 'meta']);
+export const SYNCED = new Set(['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'transfers', 'cryptoAssets', 'cryptoOps', 'imports', 'bankInvestments', 'usdHoldings', 'meta']);
 
 export interface SyncResult {
   state: SyncState;

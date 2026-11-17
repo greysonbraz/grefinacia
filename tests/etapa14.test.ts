@@ -23,10 +23,11 @@ describe('investimentos pelo banco (regras)', () => {
     data.assets = [{ id: 'a', ticker: 'ITSA4', type: 'acao' }];
     data.operations = [{ id: 'o', assetId: 'a', side: 'buy', quantity: 10, priceCents: 1000, feesCents: 0, date: '2026-01-02', createdAt: 1 } as never];
     const { list, skippedForeign } = mergeInvestments([], [CDB, ITSA, GONE, USD], 'item', 'Inter', data, '2026-11-17T12:00:00Z');
-    expect(skippedForeign).toBe(1);
-    expect(list.map((i) => [i.id, i.balanceCents, i.counted, i.countedReason])).toEqual([['i-cdb', 105050, true, 'auto'], ['i-itsa', 50000, false, 'manual-duplicado']]);
+    expect(skippedForeign).toBe(0);
+    expect(list.map((i) => [i.id, i.balanceCents, i.counted, i.countedReason, i.currency])).toEqual([['i-cdb', 105050, true, 'auto', undefined], ['i-itsa', 50000, false, 'manual-duplicado', undefined], ['i-usd', 10000, true, 'auto', 'USD']]);
     expect(list[0]).toMatchObject({ grossCents: 106000, originalCents: 100000, dueDate: '2028-01-10', bankName: 'Inter' });
     expect(bankInvestTotal(list)).toBe(105050);
+    expect(mergeInvestments([], [{ ...USD, currencyCode: 'EUR' }], 'item', 'Inter', data, 'x').skippedForeign).toBe(1);
     expect(groupByType(list).map((g) => [g.label, g.cents])).toEqual([['Renda fixa', 105050], ['Bolsa', 0]]);
   });
   it('sua escolha de contar ou não vale nas próximas sincronizações', () => {
@@ -50,8 +51,8 @@ describe('investimentos pelo banco (regras)', () => {
     expect(calls[0]).toContain('/investments?itemId=item&pageSize=500&page=1');
   });
   it('nova coleção sobe as versões do banco local e do backup; backup antigo abre vazio', () => {
-    expect(DB_VERSION).toBe(6);
-    expect(DATA_SCHEMA).toBe(5);
+    expect(DB_VERSION).toBeGreaterThanOrEqual(6);
+    expect(DATA_SCHEMA).toBeGreaterThanOrEqual(5);
     expect(validateImported({ schema: 4, data: { ...emptyData(), bankInvestments: undefined }, settings: {} }).data.bankInvestments).toEqual([]);
   });
 });

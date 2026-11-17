@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 15 | Aba Dólar na tela inicial (R$ / US$): conta em dólar, ações e ETFs dos EUA, investimentos em dólar do banco, PTAX com gráfico e conversor | `claude/etapa-15-dolar` |
 | 14 | Investimentos dos bancos pela conexão (renda fixa, ações, fundos, previdência) em Investimentos → Nos bancos e no patrimônio | `claude/etapa-14-investimentos` |
 | 13 | Tela inicial nova: gasto do mês dia a dia × mês passado, maiores categorias, previsão do mês inteiro e do mês que vem | `claude/etapa-13-inicio` |
 | 12 | Conexão bancária pelo Meu Pluggy: saldos, extratos e cartões entrando sozinhos pelo importador, sem duplicar | `claude/etapa-12-pluggy` |
@@ -37,6 +38,12 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 15:
+- Botão "R$ Reais / US$ Dólar" no topo da tela inicial; o painel em dólar tem total em US$ e em R$, divisão por tipo, cotação do dia com gráfico (30/90 dias, 12 meses), variação e conversor.
+- Cotação: PTAX de venda do Banco Central (SGS série 1, dados abertos, sem chave; mesmo host do CDI/IPCA), 1 busca por dia. Ações/ETFs/REITs dos EUA: Yahoo Finance (não oficial), em dólar.
+- Coleção nova `usdHoldings` (banco local v7, backup formato 6). A Conta Global do Inter normalmente não vem pelo Open Finance: saldo informado à mão. Investimentos em dólar vindos do banco (Etapa 14) aparecem aqui.
+- O total em reais entra no patrimônio como "Dólar".
 
 Detalhes da Etapa 14:
 - `GET /investments?itemId=` da Pluggy a cada sincronização; Inter, Itaú e Santander constam com investimentos no Open Finance (tabela de cobertura da Pluggy, 30/10/2026).

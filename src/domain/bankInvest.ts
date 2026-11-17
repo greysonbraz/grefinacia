@@ -45,7 +45,9 @@ export function mergeInvestments(prev: BankInvestment[], incoming: PluggyInvestm
   const list: BankInvestment[] = [];
   for (const i of incoming) {
     if (i.status === 'TOTAL_WITHDRAWAL') continue;
-    if (i.currencyCode && i.currencyCode !== 'BRL') { skippedForeign++; continue; }
+    const currency = i.currencyCode && i.currencyCode !== 'BRL' ? i.currencyCode : undefined;
+    // dólar vai para a aba Dólar; outras moedas ficam de fora (o app só converte dólar)
+    if (currency && currency !== 'USD') { skippedForeign++; continue; }
     const balance = cents(i.balance);
     if (balance === undefined || balance <= 0) continue;
     const old = kept.get(i.id);
@@ -73,6 +75,7 @@ export function mergeInvestments(prev: BankInvestment[], incoming: PluggyInvestm
       fixedAnnualRate: i.fixedAnnualRate ?? undefined,
       date: day(i.date),
       status: i.status ?? undefined,
+      currency,
       counted,
       countedReason: old?.countedReason === 'voce' ? 'voce' : dup ? 'manual-duplicado' : 'auto',
       updatedAt: nowIso,
@@ -82,7 +85,7 @@ export function mergeInvestments(prev: BankInvestment[], incoming: PluggyInvestm
 }
 
 /** Total que entra no patrimônio (só os marcados para contar). */
-export const bankInvestTotal = (list: BankInvestment[] = []): Cents => list.filter((i) => i.counted).reduce((s, i) => s + i.balanceCents, 0);
+export const bankInvestTotal = (list: BankInvestment[] = []): Cents => list.filter((i) => i.counted && !i.currency).reduce((s, i) => s + i.balanceCents, 0);
 
 /** "110% do CDI", "IPCA + 6%", "12,5% ao ano". */
 export function rateLabel(i: Pick<BankInvestment, 'rate' | 'rateType' | 'fixedAnnualRate'>): string | null {
@@ -98,6 +101,7 @@ export function rateLabel(i: Pick<BankInvestment, 'rate' | 'rateType' | 'fixedAn
 export function groupByType(list: BankInvestment[]): { label: string; cents: Cents; items: BankInvestment[] }[] {
   const g = new Map<string, BankInvestment[]>();
   for (const i of list) {
+    if (i.currency) continue; // em dólar: aba Dólar
     const k = TYPE_LABEL[i.type] ?? 'Outros';
     g.set(k, [...(g.get(k) ?? []), i]);
   }

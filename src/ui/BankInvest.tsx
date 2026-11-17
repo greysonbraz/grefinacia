@@ -16,9 +16,9 @@ export function BankInvestments() {
   const [open, setOpen] = useState<string | null>(null);
   const groups = useMemo(() => groupByType(list), [list]);
   const total = groups.reduce((s, g) => s + g.cents, 0);
-  const gross = list.filter((i) => i.counted).reduce((s, i) => s + i.grossCents, 0);
-  const applied = list.filter((i) => i.counted && i.originalCents).reduce((s, i) => s + (i.originalCents ?? 0), 0);
-  const appliedBal = list.filter((i) => i.counted && i.originalCents).reduce((s, i) => s + i.balanceCents, 0);
+  const gross = list.filter((i) => i.counted && !i.currency).reduce((s, i) => s + i.grossCents, 0);
+  const applied = list.filter((i) => i.counted && !i.currency && i.originalCents).reduce((s, i) => s + (i.originalCents ?? 0), 0);
+  const appliedBal = list.filter((i) => i.counted && !i.currency && i.originalCents).reduce((s, i) => s + i.balanceCents, 0);
   const pal = seriesColors();
   const sync = async () => {
     setBusy(true);
@@ -48,7 +48,7 @@ export function BankInvestments() {
       </div>
 
       {report.filter((r) => r.error || r.foreign).map((r) => (
-        <div key={r.bank} className="note neg">{r.bank}: {r.error ? r.error : `${r.foreign} investimento(s) em moeda estrangeira ficaram de fora (veja a aba Dólar).`}</div>
+        <div key={r.bank} className="note neg">{r.bank}: {r.error ? r.error : `${r.foreign} investimento(s) em moeda que não é real nem dólar ficaram de fora.`}</div>
       ))}
       {list.length === 0 && <Note>Nenhum investimento veio dos bancos ainda. Toque em "Atualizar agora". Se continuar vazio, no Meu Pluggy confira se o banco foi conectado com o produto "Investimentos" autorizado.</Note>}
 

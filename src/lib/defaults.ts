@@ -41,6 +41,7 @@ export function emptyData(): AppData {
     firedAlerts: [],
     transfers: [],
     bankInvestments: [],
+    usdHoldings: [],
     cryptoAssets: [],
     cryptoOps: [],
     marketHistory: [],
@@ -48,4 +49,4 @@ export function emptyData(): AppData {
   };
 }
 
-export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers', 'cryptoAssets', 'cryptoOps', 'marketHistory', 'imports', 'bankInvestments'];
+export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers', 'cryptoAssets', 'cryptoOps', 'marketHistory', 'imports', 'bankInvestments', 'usdHoldings'];

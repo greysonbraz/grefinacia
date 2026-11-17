@@ -3,6 +3,7 @@ import { endOfMonth, lastMonths, monthOf } from '../lib/dates';
 import { accountBalance } from './ledger';
 import { computePositions } from './portfolio';
 import { bankInvestTotal } from './bankInvest';
+import { abroadBrl } from './dollar';
 
 export interface NetWorth {
   accountsCents: Cents;
@@ -13,6 +14,8 @@ export interface NetWorth {
   cryptoCents: Cents;
   /** Investimentos lidos do banco pela conexão (valor de hoje; datas passadas usam os registros diários). */
   bankInvestCents: Cents;
+  /** Dólar (contas, ações dos EUA e investimentos em dólar do banco), convertido pela PTAX. */
+  abroadCents: Cents;
   totalCents: Cents;
   marketBased: boolean;
 }
@@ -32,7 +35,8 @@ export function netWorthAt(data: AppData, asOf: ISODate, today: ISODate): NetWor
   const cryptoCents = computePositions(data.cryptoAssets ?? [], data.cryptoOps ?? [], current ? undefined : asOf, current).reduce((s, p) => s + p.valueCents, 0);
   // posição do banco é uma foto de hoje: só entra no patrimônio atual (o passado vem dos registros diários)
   const bankInvestCents = current ? bankInvestTotal(data.bankInvestments) : 0;
-  return { accountsCents, goalsCents, fixedIncomeCents, equityMarketCents, equityCostCents, cryptoCents, bankInvestCents, totalCents: accountsCents + goalsCents + fixedIncomeCents + equityMarketCents + cryptoCents + bankInvestCents, marketBased: current };
+  const abroadCents = current ? abroadBrl(data) : 0;
+  return { accountsCents, goalsCents, fixedIncomeCents, equityMarketCents, equityCostCents, cryptoCents, bankInvestCents, abroadCents, totalCents: accountsCents + goalsCents + fixedIncomeCents + equityMarketCents + cryptoCents + bankInvestCents + abroadCents, marketBased: current };
 }
 
 export interface NetWorthPoint {

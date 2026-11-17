@@ -5,7 +5,7 @@ import { DATA_KEYS, emptyData } from '../lib/defaults';
  * Versão do formato dos dados dentro de um backup. Sobe quando entram coleções ou campos que uma versão
  * antiga do app não saberia guardar; assim um app antigo recusa o arquivo em vez de restaurar pela metade.
  */
-export const DATA_SCHEMA = 5; // 2: transferências entre contas · 3: carteira de cripto e histórico de preços · 4: importações de extratos · 5: investimentos pelo banco
+export const DATA_SCHEMA = 6; // 6: dólar · 2: transferências entre contas · 3: carteira de cripto e histórico de preços · 4: importações de extratos · 5: investimentos pelo banco
 
 export class ImportError extends Error {}
 

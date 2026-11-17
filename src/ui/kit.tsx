@@ -141,7 +141,7 @@ export type ChartKind = 'line' | 'bar' | 'doughnut';
 export interface Series { label: string; data: (number | null)[]; color?: string; fill?: boolean; dashed?: boolean }
 
 /** Gráfico interativo (toque para ver valores). Valores em centavos, ou em % com `format="pct"`. */
-export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl' }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' }) {
+export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl' }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' | 'rate' }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const theme = useStore((s) => s.settings.theme);
   useEffect(() => {
@@ -166,9 +166,9 @@ export function ChartBox({ kind, labels, series, small, stacked, colors, format 
         interaction: { mode: kind === 'doughnut' ? 'nearest' : 'index', intersect: kind === 'doughnut' },
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: cssVar('--surface2'), titleColor: cssVar('--text'), bodyColor: cssVar('--text'), borderColor: line, borderWidth: 1, padding: 10, cornerRadius: 10, boxPadding: 4, callbacks: { label: (ctx: any) => ` ${kind === 'doughnut' ? ctx.label : ctx.dataset.label}: ${format === 'pct' ? formatPct(Number(ctx.raw), true) : formatBRL(Number(ctx.raw))}` } },
+          tooltip: { backgroundColor: cssVar('--surface2'), titleColor: cssVar('--text'), bodyColor: cssVar('--text'), borderColor: line, borderWidth: 1, padding: 10, cornerRadius: 10, boxPadding: 4, callbacks: { label: (ctx: any) => ` ${kind === 'doughnut' ? ctx.label : ctx.dataset.label}: ${format === 'pct' ? formatPct(Number(ctx.raw), true) : format === 'rate' ? 'R$ ' + Number(ctx.raw).toLocaleString('pt-BR', { minimumFractionDigits: 4 }) : formatBRL(Number(ctx.raw))}` } },
         },
-        ...(kind === 'doughnut' ? { cutout: '68%' } : { scales: { x: { stacked, grid: { display: false }, ticks: { color: text, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 8 }, border: { color: line } }, y: { stacked, grid: { color: line + '80' }, border: { display: false }, ticks: { color: text, font: { size: 11 }, maxTicksLimit: 5, callback: (v: string | number) => (format === 'pct' ? formatPct(Number(v)) : formatCompact(Number(v))) } } } }),
+        ...(kind === 'doughnut' ? { cutout: '68%' } : { scales: { x: { stacked, grid: { display: false }, ticks: { color: text, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 8 }, border: { color: line } }, y: { stacked, grid: { color: line + '80' }, border: { display: false }, ticks: { color: text, font: { size: 11 }, maxTicksLimit: 5, callback: (v: string | number) => (format === 'pct' ? formatPct(Number(v)) : format === 'rate' ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formatCompact(Number(v))) } } } }),
       } as never,
     };
     const chart = new Chart(ref.current, cfg);

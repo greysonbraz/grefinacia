@@ -13,6 +13,7 @@ import { formatBRL, pctChange } from '../lib/money';
 import type { AppData, ISODate } from '../lib/types';
 import type { Nav } from './App';
 import { News } from './News';
+import { DollarHome } from './Dollar';
 import { ChartBox, cssVar, Delta, Legend, Money, Note, Seg, seriesColors } from './kit';
 
 type Period = 'dia' | 'semana' | 'mes' | 'ano';
@@ -37,6 +38,7 @@ export function Home({ nav }: { nav: Nav }) {
   const [period, setPeriod] = useState<Period>('mes');
   const [news, setNews] = useState(false);
   const [chart, setChart] = useState<ChartTab>('patrimonio');
+  const [cur, setCur] = useState<'brl' | 'usd'>('brl');
   const o = useMemo(() => computeOverview(data, settings, today), [data, settings, today]);
   const insights = useMemo(() => generateInsights(o, data, settings), [o, data, settings]);
   const [from, to] = periodRange(period, today);
@@ -49,6 +51,7 @@ export function Home({ nav }: { nav: Nav }) {
     { label: 'Bolsa', cents: nw.equityMarketCents, color: cssVar('--s7') },
     { label: 'Cripto', cents: nw.cryptoCents, color: cssVar('--s8') },
     { label: 'Nos bancos', cents: nw.bankInvestCents, color: cssVar('--s5') },
+    { label: 'Dólar', cents: nw.abroadCents, color: cssVar('--s6') },
   ].filter((c) => c.cents > 0);
   const compTotal = comp.reduce((s, c) => s + c.cents, 0);
   const planInvestLeft = Math.min(Math.max(o.spend.plan.investCents - Math.max(o.cur.investedCents, 0), 0), Math.max(o.projectedEndBalanceCents, 0));
@@ -67,6 +70,13 @@ export function Home({ nav }: { nav: Nav }) {
         </div>
       </div>
 
+      <Seg value={cur} onChange={setCur} options={[['brl', 'R$ Reais'], ['usd', 'US$ Dólar']]} />
+      {cur === 'usd' ? (
+        <>
+          <DollarHome />
+          {news && <News onClose={() => setNews(false)} />}
+        </>
+      ) : (<>
       <SpendingCard onOpen={() => nav.go('transactions')} />
       <NextMonthCard onOpen={() => nav.go('planning', 'salario')} />
 
@@ -145,6 +155,7 @@ export function Home({ nav }: { nav: Nav }) {
       ))}
       <button className="btn ghost" onClick={() => nav.go('ai')}>Conversar com a Grefinacia AI <ChevronRight size={18} /></button>
       {news && <News onClose={() => setNews(false)} />}
+      </>)}
     </div>
   );
 }

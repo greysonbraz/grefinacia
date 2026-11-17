@@ -23,7 +23,7 @@ import { setPrivacyScreen } from '../services/security';
 import { clearSecrets, extractSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
 import { formatBRL } from '../lib/money';
 import { historyId, localDate, mergePoints } from '../domain/market';
-import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, type IndexName } from '../services/market';
+import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, fetchUsQuotes, type IndexName } from '../services/market';
 import { brapiQuota, initUsage, type Usage } from '../services/usage';
 import { addDays, addMonths } from '../lib/dates';
 
@@ -252,7 +252,7 @@ export async function init(): Promise<void> {
     await db.setMeta('divAutoV1', true);
   }
   await rollDay();
-  if (isNative()) void autoRefreshDividends().then(() => autoSyncBank());
+  if (isNative()) void autoRefreshDividends().then(() => autoSyncBank()).then(() => ((state.data.usdHoldings ?? []).length || (state.data.bankInvestments ?? []).some((i) => i.currency === 'USD') ? refreshDollar() : undefined)).catch(() => undefined);
 }
 
 /**
@@ -388,7 +388,7 @@ const findHistory = (id: string) => state.data.marketHistory.find((h) => h.id ==
 function mergedHistory(kind: MarketHistory['kind'], symbol: string, points: HistoryPoint[], source: string, fetched: boolean): MarketHistory {
   const id = historyId(kind, symbol);
   const old = findHistory(id);
-  return { id, kind, symbol, unit: kind === 'indice' ? 'pct' : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
+  return { id, kind, symbol, unit: kind === 'indice' ? (symbol === 'USD' ? 'brl' : 'pct') : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
 }
 
 /** Cada cotação buscada vira um ponto do dia no histórico (sem gastar consulta a mais). */
@@ -421,6 +421,33 @@ export async function refreshIndices(force = false): Promise<FetchError[]> {
     else out.push(mergedHistory('indice', name, r.points, r.source, true));
   }
   await saveHistoryLocal(out);
+  return errors;
+}
+
+/** Cotação do dólar (PTAX do Banco Central): no máximo uma busca por dia; na primeira vez, 1 ano de histórico. */
+export async function refreshDollar(force = false): Promise<FetchError[]> {
+  const id = historyId('indice', 'USD');
+  const old = findHistory(id);
+  if (!force && fetchedToday(id) && old?.points.length) return [];
+  const from = old?.points.length ? addDays(old.points[old.points.length - 1][0], -10) : addMonths(state.today, -12);
+  const r = await fetchBcbSeries('USD', from, state.today);
+  if ('message' in r) return [r];
+  await saveHistoryLocal([mergedHistory('indice', 'USD', r.points, r.source, true)]);
+  return [];
+}
+
+/** Cotações dos ativos americanos cadastrados na aba Dólar (respeita "cotação manual" nos Ajustes). */
+export async function refreshUsQuotes(): Promise<FetchError[]> {
+  if (state.settings.api.quoteProvider === 'manual') return [];
+  const assets = (state.data.usdHoldings ?? []).filter((h) => h.ticker && h.kind !== 'conta' && h.kind !== 'outro');
+  if (!assets.length) return [];
+  const { quotes, errors } = await fetchUsQuotes(assets.map((h) => h.ticker!));
+  const now = new Date().toISOString();
+  const upd = assets.flatMap((h) => {
+    const q = quotes.find((x) => x.ticker === h.ticker!.toUpperCase());
+    return q ? [{ ...h, priceUsdCents: q.priceUsdCents, priceTime: q.time, changePct: q.changePct, name: h.name || q.name || h.ticker!, updatedAt: now }] : [];
+  });
+  if (upd.length) await upsert('usdHoldings', upd);
   return errors;
 }
 

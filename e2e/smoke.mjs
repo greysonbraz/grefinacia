@@ -236,6 +236,19 @@ try {
   await shot('01-inicio');
   t = await text();
   ok(t.includes('Patrimônio total') && t.includes('Total de dívidas') && t.includes('R$ 10.000,00'), 'painel mostra patrimônio e dívidas');
+  ok(t.includes('Gastos de') && t.includes('Previsão de'), 'início mostra gastos do mês e previsão do mês que vem');
+  // aba Dólar: conta em dólar e ETF
+  await seg('US$ Dólar');
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await page.locator('.sheet input').nth(0).fill('Conta Global Inter');
+  await page.locator('.sheet input').nth(1).fill('250,00');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await page.waitForTimeout(300);
+  t = await text();
+  ok(t.includes('Total em dólar') && t.includes('$250.00'), 'aba Dólar soma a conta em dólar');
+  await shot('01b-dolar');
+  await seg('R$ Reais');
   // tema claro + persistência
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await seg('Claro');

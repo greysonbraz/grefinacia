@@ -181,7 +181,7 @@ export interface MarketHistory {
   id: string; // ex.: "b3:PETR4", "cripto:bitcoin", "indice:CDI"
   kind: 'b3' | 'cripto' | 'indice';
   symbol: string;
-  unit: 'cents' | 'pct';
+  unit: 'cents' | 'pct' | 'brl'; // brl: reais por unidade (cotação do dólar)
   points: HistoryPoint[]; // ordenado por data
   source: string;
   updatedAt: string; // última busca na fonte (ISO)
@@ -284,6 +284,21 @@ export interface FiredAlert {
   at: number;
 }
 
+/** Dinheiro e investimentos em dólar (Etapa 15). Valores em centavos de dólar. */
+export interface UsdHolding {
+  id: string;
+  kind: 'conta' | 'acao' | 'etf' | 'reit' | 'outro';
+  name: string; // ex.: "Conta Global Inter", "Apple"
+  ticker?: string; // ações/ETFs/REITs americanos (cotação pelo Yahoo Finance)
+  quantity?: number;
+  avgCostUsdCents?: number; // preço médio pago por unidade (centavos de dólar; aceita fração)
+  balanceUsdCents?: number; // conta ou "outro": saldo informado por você
+  priceUsdCents?: number; // última cotação
+  priceTime?: string;
+  changePct?: number;
+  updatedAt: string;
+}
+
 /** Investimento lido do banco pela conexão (Etapa 14). É uma foto da posição, atualizada a cada sincronização. */
 export interface BankInvestment {
   id: string; // id da Pluggy
@@ -307,6 +322,8 @@ export interface BankInvestment {
   date?: ISODate; // data de referência do valor
   status?: string; // ACTIVE, PENDING, TOTAL_WITHDRAWAL
   /** Conta no patrimônio? Fica de fora quando o mesmo ativo já está cadastrado à mão (para não contar em dobro). */
+  /** Moeda do investimento; sem valor = reais. Em dólar, os valores estão em centavos de dólar. */
+  currency?: string;
   counted: boolean;
   countedReason?: 'auto' | 'manual-duplicado' | 'voce';
   updatedAt: string;
@@ -333,6 +350,7 @@ export interface AppData {
   marketHistory: MarketHistory[];
   imports: ImportBatch[];
   bankInvestments: BankInvestment[];
+  usdHoldings: UsdHolding[];
 }
 
 export type CollectionName = keyof AppData;
