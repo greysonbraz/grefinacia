@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 13 | Tela inicial nova: gasto do mês dia a dia × mês passado, maiores categorias, previsão do mês inteiro e do mês que vem | `claude/etapa-13-inicio` |
 | 12 | Conexão bancária pelo Meu Pluggy: saldos, extratos e cartões entrando sozinhos pelo importador, sem duplicar | `claude/etapa-12-pluggy` |
 
 Detalhes da Etapa 12:
@@ -35,6 +36,12 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 13:
+- **Topo da tela inicial:** gasto do mês até hoje, gráfico acumulado dia a dia contra o mês passado, diferença até o mesmo dia, as 5 maiores categorias e a previsão do mês inteiro (já gasto + contas a vencer + recorrências + média do dia a dia).
+- **Previsão do mês que vem:** entradas, contas e faturas já lançadas, parcelas de dívidas, média do dia a dia (3 meses fechados), quanto deve sobrar ou faltar e o saldo previsto.
+- Resumo, patrimônio e gráficos seguem abaixo. Regras em `src/domain/home.ts`.
+- **APK parado:** a auditoria do GitHub Actions bloqueia por alerta em `picomatch` (só ferramenta de build, sem versão corrigida em 17/11/2026). Dono escolheu esperar a correção.
 
 Detalhes da Etapa 12b (correções depois do primeiro uso real, 17/11/2026):
 - **Categorias:** a classificação da Pluggy (campo `category`) vira a categoria do app; regra sua e "como antes" continuam valendo. A Pluggy diz que a categorização é liberada no trial e depois é opcional: sem ela, voltam as palavras-chave.
