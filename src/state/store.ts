@@ -46,6 +46,8 @@ export interface BankState {
   items: Record<string, { name: string; status: string; consentExpiresAt?: string; lastUpdatedAt?: string; error?: string }>;
   accounts: (PluggyAccount & { bankName: string })[];
   lastSyncByAccount: Record<string, string>;
+  /** Resumo da última sincronização, por conta (para mostrar o que veio e por que algo ficou de fora). */
+  report?: SyncReport[];
 }
 const BANK_META = 'bankState';
 /** Sincronização bancária automática: no máximo a cada 12 h (o Meu Pluggy atualiza a cada 24 h). */
@@ -604,6 +606,7 @@ export async function undoImport(id: string): Promise<number> {
 }
 
 // ---------- conexão bancária (Meu Pluggy) ----------
+export interface SyncReport { account: string; from: string; received: number; imported: number; already: number; similar: number; invoice: number; pending: number; payments: number; foreign: number; error?: string }
 async function saveBank(patch: Partial<BankState>): Promise<void> {
   const bank = { ...state.bank, ...patch };
   set({ bank });
@@ -677,26 +680,34 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
   const key = await pluggyApiKey(b.clientId, b.clientSecret);
   const cardsSynced = state.bank.accounts.some((a) => b.links[a.id]?.kind === 'cartao');
   const lastByAcc = { ...state.bank.lastSyncByAccount };
+  const report: SyncReport[] = [];
   for (const acc of state.bank.accounts) {
     const target = targetFor(b.links[acc.id]);
     if (!target) continue;
+    const name = `${acc.bankName} · ${acc.marketingName || acc.name}`;
+    const from = syncFrom(lastByAcc[acc.id], b.historyDays, state.today);
     try {
-      const txs = await listTransactions(key, acc.id, syncFrom(lastByAcc[acc.id], b.historyDays, state.today));
+      const txs = await listTransactions(key, acc.id, from);
       const st = toStatement(acc, txs);
       const rows = autoSelect(buildPreview(st, target, state.data, state.settings), cardsSynced);
+      const count = (f: string) => rows.filter((r) => r.flag === f && !r.include).length;
       const id = uid('imp_');
       const built = buildTransactions(rows, target, state.data, id, () => uid('t_'), state.today);
       if (built.length) {
         await applyImport(makeBatch(id, `Meu Pluggy · ${acc.bankName} · ${acc.marketingName || acc.name}`, st, target, rows), built, state.settings.importRules ?? [], { safetyCopy: false });
         imported += built.length;
       }
-      lastByAcc[acc.id] = attempt;
+      report.push({ account: name, from, received: txs.length, imported: built.length, already: count('importado') + count('repetido'), similar: count('possivel'), invoice: count('fatura'), ...st.skipped });
+      // Banco ainda sem transações (o Meu Pluggy pode estar coletando): não avança a data, para o histórico vir depois.
+      if (txs.length || lastByAcc[acc.id]) lastByAcc[acc.id] = attempt;
       accountsDone++;
     } catch (e) {
-      errors.push(`${acc.bankName} · ${acc.name}: ${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      report.push({ account: name, from, received: 0, imported: 0, already: 0, similar: 0, invoice: 0, pending: 0, payments: 0, foreign: 0, error: msg });
+      errors.push(`${name}: ${msg}`);
     }
   }
-  await saveBank({ lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
+  await saveBank({ report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
 }
 
@@ -717,7 +728,7 @@ export async function autoSyncBank(now = Date.now()): Promise<boolean> {
 export async function disconnectBank(): Promise<void> {
   forgetPluggyKey();
   await updateSettings({ bank: { ...DEFAULT_SETTINGS.bank } });
-  await saveBank({ items: {}, accounts: [], lastSyncByAccount: {}, error: undefined, lastAttempt: undefined, lastOkAt: undefined });
+  await saveBank({ items: {}, accounts: [], lastSyncByAccount: {}, report: undefined, error: undefined, lastAttempt: undefined, lastOkAt: undefined });
 }
 
 // ---------- metas ----------

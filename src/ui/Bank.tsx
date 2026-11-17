@@ -9,6 +9,15 @@ import { isNative } from '../services/platform';
 import { Field, Full, Note } from './kit';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STATUS: Record<string, string> = {
+  UPDATED: 'atualizado',
+  UPDATING: 'o Meu Pluggy ainda está coletando os dados; tente de novo em alguns minutos',
+  LOGIN_ERROR: 'a autorização no banco falhou; reconecte o banco no Meu Pluggy',
+  OUTDATED: 'a última atualização falhou; o Meu Pluggy tenta de novo sozinho',
+  WAITING_USER_INPUT: 'o banco pede uma confirmação sua no Meu Pluggy',
+  WAITING_USER_ACTION: 'o banco pede uma confirmação sua no Meu Pluggy',
+  ERRO: 'erro ao consultar',
+};
 const when = (iso?: string) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 
 /** Conexão bancária pelo Meu Pluggy (Open Finance, uso pessoal gratuito). */
@@ -97,7 +106,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
       <div className="card">
         {b.items.map((i) => (
           <div className="kv" key={i.itemId}>
-            <span>{i.label || bank.items[i.itemId]?.name || 'Banco'}<br /><span className="hint">{i.itemId.slice(0, 8)}…{bank.items[i.itemId]?.status ? ` · ${bank.items[i.itemId].status}` : ''}</span></span>
+            <span>{i.label || bank.items[i.itemId]?.name || 'Banco'}<br /><span className="hint">{i.itemId.slice(0, 8)}…{bank.items[i.itemId]?.status ? ` · ${STATUS[bank.items[i.itemId].status] ?? bank.items[i.itemId].status}` : ''}{bank.items[i.itemId]?.error ? ` · ${bank.items[i.itemId].error}` : ''}</span></span>
             <button className="link" onClick={() => removeItem(i.itemId)} aria-label={`Remover ${i.label || i.itemId}`}><Trash2 size={16} /></button>
           </div>
         ))}
@@ -115,6 +124,8 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
 
       <div className="section">3. Onde cada conta entra no app</div>
       <div className="card">
+        {!hasCreds && <Note>Guarde as chaves no passo 1 para liberar este botão.</Note>}
+        {hasCreds && !b.items.length && <Note>Adicione pelo menos um banco no passo 2 (botão "Adicionar banco").</Note>}
         <button className="btn ghost" disabled={!hasCreds || !b.items.length || !!busy} onClick={() => run('contas')}><RefreshCw size={16} style={busy === 'contas' ? { animation: 'spin 1s linear infinite' } : undefined} /> Buscar contas dos bancos</button>
         {bank.accounts.map((a) => (
           <Field key={a.id} label={`${a.bankName} · ${a.marketingName || a.name}${a.number ? ` (${String(a.number).slice(-4)})` : ''} · ${a.type === 'CREDIT' ? 'cartão' : 'conta'}`}>
@@ -128,6 +139,7 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
             </select>
           </Field>
         ))}
+        {Object.keys(bank.items).length > 0 && bank.accounts.length === 0 && <Note>O Meu Pluggy não devolveu nenhuma conta ainda. Veja o status do banco no passo 2; se estiver coletando, espere uns minutos e busque de novo.</Note>}
         {bank.accounts.length > 0 && <Note>Escolha um destino para cada conta (escolher "Criar…" cria na hora). Conta criada pela conexão começa com o saldo do banco; o histórico importado entra nos relatórios sem mudar esse saldo.</Note>}
         <Field label="Na primeira vez, buscar histórico de">
           <select value={b.historyDays} onChange={(e) => updateSettings({ bank: { ...b, historyDays: Number(e.target.value) } })}>
@@ -139,7 +151,23 @@ export function BankConnect({ onClose }: { onClose: () => void }) {
       <div className="section">4. Sincronizar</div>
       <div className="card">
         <button className="btn" disabled={!linked.length || !!busy} onClick={() => run('sync')}><RefreshCw size={16} style={busy === 'sync' ? { animation: 'spin 1s linear infinite' } : undefined} /> Sincronizar agora</button>
+        {!linked.length && bank.accounts.length > 0 && <Note>Escolha o destino de cada conta no passo 3 para liberar este botão.</Note>}
         <div className="kv"><span>Última sincronização</span><b>{when(bank.lastOkAt)}</b></div>
+        {(bank.report ?? []).map((r) => (
+          <div className="kv" key={r.account}>
+            <span>{r.account}<br /><span className="hint">{r.error ? r.error : [
+              `desde ${formatDateBR(r.from)}: ${r.received} ${r.received === 1 ? 'lançamento' : 'lançamentos'} no banco`,
+              r.already ? `${r.already} já estavam no app` : '',
+              r.similar ? `${r.similar} parecidos com lançamentos que você já tinha (ficaram de fora)` : '',
+              r.invoice ? `${r.invoice} pagamentos de fatura` : '',
+              r.pending ? `${r.pending} agendados/pendentes` : '',
+              r.payments ? `${r.payments} pagamentos do cartão` : '',
+              r.foreign ? `${r.foreign} em moeda estrangeira sem valor em reais` : '',
+              r.received === 0 ? 'o banco ainda não mandou nada para esse período' : '',
+            ].filter(Boolean).join(' · ')}</span></span>
+            <b className={'num ' + (r.error ? 'warn' : r.imported ? 'pos' : '')}>{r.error ? 'erro' : `+${r.imported}`}</b>
+          </div>
+        ))}
         {bank.error && <div className="note neg">{bank.error}</div>}
         {errors.map((e) => (<div className="note neg" key={e}>{e}</div>))}
         {linked.map((a) => {

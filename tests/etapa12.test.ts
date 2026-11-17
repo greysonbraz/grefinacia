@@ -157,9 +157,12 @@ describe('no app: vincular, sincronizar sem duplicar e confirmar proventos', () 
     await afterChange();
     expect(getState().data.dividends[0]).toMatchObject({ receivedAt: '2026-11-10', confirmedBy: 'extrato' });
 
+    expect(getState().bank.report).toEqual([expect.objectContaining({ account: 'Inter · Conta Corrente', received: 2, imported: 2, already: 0 })]);
+
     // segunda sincronização: nada novo
     const r2 = await syncBank();
     expect(r2.imported).toBe(0);
+    expect(getState().bank.report![0]).toMatchObject({ received: 2, imported: 0, already: 2 });
     expect(getState().data.transactions.filter((t) => t.source === 'import')).toHaveLength(2);
 
     // automática: não repete antes de 12 h
@@ -175,6 +178,31 @@ describe('no app: vincular, sincronizar sem duplicar e confirmar proventos', () 
     const r = await syncBank();
     expect(r.errors[0]).toMatch(/Client ID e o Client Secret/);
     expect(getState().bank.error).toMatch(/Client ID/);
+    await new Promise((r2) => setTimeout(r2, 600));
+  });
+
+  it('banco ainda coletando (nada devolvido): não avança a data, e o histórico vem na próxima', async () => {
+    await init();
+    await updateSettings({ bank: { ...DEFAULT_SETTINGS.bank, clientId: 'id', clientSecret: 'sec', items: [{ itemId: 'item-1', label: 'Inter' }] } });
+    let txs: unknown[] = [];
+    const froms: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (u: string) => {
+      if (u.endsWith('/auth')) return res(200, { apiKey: 'K' });
+      if (u.includes('/items/')) return res(200, { id: 'item-1', status: 'UPDATING', connector: { name: 'Banco Inter' } });
+      if (u.includes('/accounts')) return res(200, { results: [CHECKING] });
+      if (u.includes('/v2/transactions')) { froms.push(new URL(u).searchParams.get('dateFrom')!); return res(200, { results: txs, next: null }); }
+      return res(404, {});
+    }));
+    await syncBank();
+    await linkBankAccount('acc-1', 'novo');
+    await syncBank();
+    expect(getState().bank.report![0]).toMatchObject({ received: 0, imported: 0 });
+    expect(getState().bank.lastSyncByAccount['acc-1']).toBeUndefined();
+    txs = [tx({ id: 'x1', providerId: 'P1', description: 'PIX', amount: -10, type: 'DEBIT', date: '2026-10-01T00:00:00.000Z' })];
+    const r = await syncBank();
+    expect(r.imported).toBe(1);
+    expect(froms[0]).toBe(froms[1]); // mesma janela de histórico nas duas vezes
+    expect(getState().bank.lastSyncByAccount['acc-1']).toBeDefined();
     await new Promise((r2) => setTimeout(r2, 600));
   });
 });
