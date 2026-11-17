@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Newspaper, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { News } from './News';
-import { refreshDollar, refreshUsQuotes, remove, toast, upsert, useStore } from '../state/store';
+import { applyCambio, dismissCambio, refreshDollar, refreshUsQuotes, remove, toast, upsert, useStore } from '../state/store';
+import { valueAt } from '../domain/market';
 import { dollarSummary, formatUSD, holdingCostUsd, holdingUsd, isAsset, KIND_LABEL, rateChange, USD_HISTORY_ID } from '../domain/dollar';
 import { formatBRL, parseDecimal } from '../lib/money';
 import { addDays, formatDateBR, formatDayMonth } from '../lib/dates';
@@ -63,6 +64,7 @@ export function DollarHome() {
         <button className="btn ghost sm" disabled={busy} onClick={() => refresh(true)}><RefreshCw size={16} style={busy ? { animation: 'spin 1s linear infinite' } : undefined} /> Atualizar cotações</button>
       </div>
 
+      <Cambios />
       <div className="section">Contas e investimentos em dólar</div>
       <div className="card" style={{ padding: '4px 14px' }}>
         {holdings.length === 0 && bankUsd.length === 0 && <div className="empty">Cadastre sua conta em dólar (ex.: Conta Global do Inter) e suas ações ou ETFs americanos.</div>}
@@ -86,6 +88,44 @@ export function DollarHome() {
       <Note>A conta em dólar e os investimentos no exterior (Conta Global do Inter, Inter Dólar+, Meu Porquinho USD) ficam numa instituição fora do Brasil e não vêm pelo Open Finance: informe o saldo aqui e atualize quando quiser. Ações e ETFs dos EUA usam a cotação do Yahoo Finance (não oficial, com atraso); o dólar usa a PTAX do Banco Central, publicada no fim de cada dia útil. O total em reais entra no patrimônio da tela inicial como "Dólar".</Note>
       {edit && <HoldingSheet h={edit === 'novo' ? null : edit} onClose={() => setEdit(null)} />}
       <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
+    </>
+  );
+}
+
+/** Compras de dólar vistas no extrato em reais (pela conexão): somar na conta em dólar com um toque. */
+function Cambios() {
+  const data = useStore((s) => s.data);
+  const pend = (data.transfers ?? []).filter((t) => t.kind === 'cambio' && !t.usdApplied && t.fromAccountId).sort((a, b) => b.date.localeCompare(a.date));
+  const contas = (data.usdHoldings ?? []).filter((h) => h.kind === 'conta' || h.kind === 'deposito');
+  const hist = data.marketHistory.find((h) => h.id === USD_HISTORY_ID);
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [dest, setDest] = useState(contas[0]?.id ?? '');
+  if (!pend.length) return null;
+  return (
+    <>
+      <div className="section">Compras de dólar no extrato</div>
+      <div className="card">
+        <Note>O banco mostra só o valor em reais. O valor em dólar abaixo é uma estimativa pela PTAX do dia (sem spread e IOF): ajuste para o valor exato do comprovante antes de somar.</Note>
+        {contas.length === 0 && <div className="hint">Cadastre primeiro sua conta em dólar (botão Adicionar abaixo).</div>}
+        {contas.length > 1 && <Field label="Somar em"><select value={dest} onChange={(e) => setDest(e.target.value)}>{contas.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>}
+        {pend.map((t) => {
+          const rate = hist ? valueAt(hist.points, t.date) : null;
+          const est = rate ? (t.amountCents / 100 / rate).toFixed(2).replace('.', ',') : '';
+          const v = vals[t.id] ?? est;
+          return (
+            <div key={t.id} style={{ borderBottom: '1px solid var(--line)', padding: '8px 0' }}>
+              <div className="kv" style={{ border: 0, padding: 0 }}><span>{formatDateBR(t.date)} · {t.note ?? 'Câmbio'}</span><b className="num">{formatBRL(t.amountCents)}</b></div>
+              <div className="two" style={{ alignItems: 'end' }}>
+                <Field label={rate ? `US$ (PTAX ${rate.toLocaleString('pt-BR', { minimumFractionDigits: 4 })})` : 'US$'}><input inputMode="decimal" value={v} onChange={(e) => setVals({ ...vals, [t.id]: e.target.value })} /></Field>
+                <div className="btnrow" style={{ margin: 0 }}>
+                  <button className="btn sm" disabled={!contas.length} onClick={async () => { const n = parseDecimal(v); if (!n || n <= 0) return toast('Informe o valor em dólar', 'err'); await applyCambio(t.id, dest || contas[0].id, Math.round(n * 100)); toast('Somado na conta em dólar'); }}>Somar</button>
+                  <button className="btn ghost sm" onClick={() => void dismissCambio(t.id)}>Ignorar</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }

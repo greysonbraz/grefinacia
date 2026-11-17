@@ -153,7 +153,7 @@ export function ChartBox({ kind, labels, series, small, stacked, colors, format 
     const datasets = series.map((s, i) => {
       const c = s.color ?? pal[i % pal.length];
       if (kind === 'doughnut') return { label: s.label, data: s.data, backgroundColor: colors ?? s.data.map((_, j) => pal[j % pal.length]), borderColor: surface, borderWidth: 2, hoverOffset: 4 };
-      if (kind === 'bar') return { label: s.label, data: s.data, backgroundColor: c, borderRadius: 4, maxBarThickness: 22, borderColor: surface, borderWidth: stacked ? 1 : 0 };
+      if (kind === 'bar') return { label: s.label, data: s.data, backgroundColor: colors && series.length === 1 ? colors : c, borderRadius: 4, maxBarThickness: 22, borderColor: surface, borderWidth: stacked ? 1 : 0 };
       return { label: s.label, data: s.data, borderColor: c, backgroundColor: c + '22', borderWidth: 2, tension: 0.3, pointRadius: s.data.length > 14 ? 0 : 3, pointHoverRadius: 6, pointBackgroundColor: c, pointBorderColor: surface, pointBorderWidth: 2, fill: !!s.fill, borderDash: s.dashed ? [5, 4] : undefined };
     });
     const cfg: ChartConfiguration = {

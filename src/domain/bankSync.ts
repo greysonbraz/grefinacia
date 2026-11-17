@@ -24,7 +24,7 @@ const CARD_PAYMENT = /\b(pagamento|pagto|pgto|pag\.?) (recebido|efetuado|de fatu
  *   cartão pode mudar no fechamento da fatura (aí a conferência por data, valor e descrição evita duplicar).
  * - Moeda estrangeira só entra se a Pluggy informar o valor em reais.
  */
-export function toStatement(acc: PluggyAccount, txs: PluggyTransaction[]): Statement & { skipped: { pending: number; payments: number; foreign: number } } {
+export function toStatement(acc: PluggyAccount, txs: PluggyTransaction[], billDue: Record<string, ISODate> = {}): Statement & { skipped: { pending: number; payments: number; foreign: number } } {
   const card = acc.type === 'CREDIT';
   const rows: StatementRow[] = [];
   const skipped = { pending: 0, payments: 0, foreign: 0 };
@@ -57,7 +57,8 @@ export function toStatement(acc: PluggyAccount, txs: PluggyTransaction[]): State
     const inst = t.creditCardMetadata;
     const parcel = inst && (inst.totalInstallments ?? 0) > 1 && inst.installmentNumber ? ` (${inst.installmentNumber}/${inst.totalInstallments})` : '';
     const description = (t.description ?? '').replace(/\s+/g, ' ').trim() + (parcel && !(t.description ?? '').includes(`${inst!.installmentNumber}/`) ? parcel : '');
-    rows.push({ date, amount, description: description || (amount > 0 ? 'Crédito' : 'Débito'), fitId: t.providerId ? `of:${t.providerId}` : `pg:${t.id}`, bankCategory: t.category || undefined });
+    const billId = inst?.billId ?? undefined;
+    rows.push({ date, amount, description: description || (amount > 0 ? 'Crédito' : 'Débito'), fitId: t.providerId ? `of:${t.providerId}` : `pg:${t.id}`, bankCategory: t.category || undefined, dueDate: card && billId ? billDue[billId] : undefined });
   }
   return { format: 'csv', kind: card ? 'cartao' : 'conta', bank: 'Meu Pluggy', rows, warnings: [], skipped };
 }
@@ -97,8 +98,11 @@ export function categoryFromBank(bankCategory: string | undefined, type: 'income
 }
 
 /** Dinheiro que só muda de lugar (não é gasto nem receita): entre contas suas e aplicação/resgate de investimento. */
-export function neutralKind(bankCategory: string | undefined, description: string): 'propria' | 'investimento' | null {
+export function neutralKind(bankCategory: string | undefined, description: string): 'propria' | 'investimento' | 'cambio' | null {
   const c = (bankCategory ?? '').trim();
+  const dd = description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // compra de dólar (ex.: Conta Global do Inter): dinheiro que vira dólar, não é gasto
+  if (/^transfer - foreign exchange$/i.test(c) || /\b(cambio|compra de dolar|compra dolar|global account|conta global|inter global|remessa internacional)\b/.test(dd)) return 'cambio';
   if (/^same person transfer/i.test(c)) return 'propria';
   if (/^(investments|automatic investment|fixed income|mutual funds|variable income|margin|pension)$/i.test(c)) return 'investimento';
   const d = description.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');

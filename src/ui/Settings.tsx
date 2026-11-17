@@ -73,7 +73,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <div className="card" style={{ padding: '4px 14px' }}>
           {[...data.transfers].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 5).map((t) => (
             <div className="row" key={t.id}>
-              <div className="mid"><div className="t">{accName(t.fromAccountId)} → {accName(t.toAccountId)}</div><div className="s">{formatDateBR(t.date)}{t.kind === 'investimento' ? ' · investimento' : t.kind === 'propria' ? ' · entre contas suas' : ''}{t.note ? ' · ' + t.note : ''}</div></div>
+              <div className="mid"><div className="t">{accName(t.fromAccountId)} → {accName(t.toAccountId)}</div><div className="s">{formatDateBR(t.date)}{t.kind === 'investimento' ? ' · investimento' : t.kind === 'propria' ? ' · entre contas suas' : t.kind === 'cambio' ? ' · câmbio (dólar)' : ''}{t.note ? ' · ' + t.note : ''}</div></div>
               <div className="end num">{formatBRL(t.amountCents)}</div>
               <button className="btn danger sm" onClick={async () => { if (confirm('Desfazer esta transferência?')) { await remove('transfers', t.id); toast('Transferência desfeita'); } }}>Desfazer</button>
             </div>

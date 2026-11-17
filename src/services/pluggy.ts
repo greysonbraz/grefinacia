@@ -49,7 +49,7 @@ export interface PluggyTransaction {
   type: 'DEBIT' | 'CREDIT' | string;
   status: 'POSTED' | 'PENDING' | string;
   currencyCode?: string;
-  creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null } | null;
+  creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null; purchaseDate?: string | null; billId?: string | null } | null;
   /** Categoria da Pluggy (nome em inglês; null sem categorização). */
   category?: string | null;
   categoryId?: string | null;
@@ -127,6 +127,26 @@ export interface PluggyInvestment {
   rateType?: string | null;
   fixedAnnualRate?: number | null;
   status?: string | null;
+}
+
+/** Fatura do cartão (Open Finance): vencimento, fechamento e total informados pelo banco. */
+export interface PluggyBill {
+  id: string;
+  dueDate: string;
+  billClosingDate?: string | null;
+  totalAmount: number;
+  totalAmountCurrencyCode?: string | null;
+  minimumPaymentAmount?: number | null;
+}
+/** Faturas de um cartão. */
+export async function listBills(apiKey: string, accountId: string): Promise<PluggyBill[]> {
+  const out: PluggyBill[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = await call<{ results?: PluggyBill[]; totalPages?: number }>(`/bills?accountId=${encodeURIComponent(accountId)}&pageSize=500&page=${page}`, { apiKey });
+    if (Array.isArray(r.results)) out.push(...r.results);
+    if (!r.totalPages || page >= r.totalPages) break;
+  }
+  return out;
 }
 
 /** Investimentos de um banco (renda fixa, ações, fundos, previdência), em páginas de 500. */

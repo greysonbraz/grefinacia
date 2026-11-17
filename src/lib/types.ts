@@ -38,7 +38,9 @@ export interface Transfer {
   note?: string;
   createdAt: number;
   /** Conexão bancária: o outro lado fora do app (conta vazia ''): aplicação/resgate de investimento ou conta sua não cadastrada. */
-  kind?: 'propria' | 'investimento';
+  kind?: 'propria' | 'investimento' | 'cambio';
+  /** Câmbio: já somado na conta em dólar (aba Dólar). */
+  usdApplied?: boolean;
   importId?: string;
   fitId?: string;
 }

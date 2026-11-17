@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| 18 | Faturas do cartão como no banco: fatura de cada compra pelo Open Finance (billId), tela Faturas (paga/aberta/futura, total do banco para conferir); câmbio para dólar fora dos gastos e somado na aba Dólar | `claude/etapa-18-faturas` |
 | 17 | Compra no cartão conta no mês da fatura (padrão; chave em Ajustes → Cartões); previsão sem contar o cartão em dobro; "Renda fixa em dólar" na aba Dólar | `claude/etapa-17-cartao-fatura` |
 | 16 | Notícias dos EUA e Wall Street: assunto novo com 5 fontes (3 em português, 2 em inglês) e atalho na aba Dólar | `claude/etapa-16-noticias-eua` |
 | 15 | Aba Dólar na tela inicial (R$ / US$): conta em dólar, ações e ETFs dos EUA, investimentos em dólar do banco, PTAX com gráfico e conversor | `claude/etapa-15-dolar` |
@@ -40,6 +41,13 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes da Etapa 18 (dono comparou com o app do Inter: dezembro R$ 756,72 no app × R$ 1.894,43 no banco):
+- Causa: o app montava as faturas pelo dia de fechamento; parcelas futuras caíam um mês depois.
+- `GET /bills?accountId=` e `creditCardMetadata.billId` de cada compra: o vencimento vem do banco; sem fatura informada (aberta/futura), segue o dia de fechamento. Compra que o banco muda de fatura é acertada na sincronização (nada apagado).
+- Movimentações → "Faturas do cartão": barras por mês, fatura escolhida com situação, vencimento, "Total no banco" e as despesas.
+- Câmbio (categoria "Transfer - Foreign exchange" ou "câmbio/compra de dólar/conta global" na descrição) vira transferência; a aba Dólar oferece somar na conta em dólar com valor estimado pela PTAX (editável). Inter Global continua fora do Open Finance: o saldo exato vem do comprovante.
+- Depois de instalar: Conexão bancária → "Refazer a importação" para reprocessar o histórico com as faturas do banco.
 
 Detalhes da Etapa 17 (pedido do dono depois de testar o 1.14.0):
 - `costDate`/`costMonth` em `src/domain/ledger.ts`: compra no cartão pesa no mês do vencimento da fatura (quando o dinheiro sai). Vale para resumo do mês, tela inicial, Movimentações, Planejamento, salário e previsão. Ajustes → Cartões tem a chave para voltar ao "mês da compra".

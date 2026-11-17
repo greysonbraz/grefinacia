@@ -169,8 +169,9 @@ export function buildTransactions(rows: PreviewRow[], target: Target, data: AppD
     };
     if (target.kind === 'conta') return { ...base, accountId: target.accountId };
     if (!card) return base;
-    const due = cardInvoiceDue(card, r.row.date).dueDate;
-    if (income) return { ...base, paymentMethod: 'outro', cardId: card.id, accountId: undefined, paidDate: r.row.date }; // estorno ou crédito na fatura
+    // fatura informada pelo banco (Open Finance) vale mais que a conta pelo dia de fechamento
+    const due = r.row.dueDate ?? cardInvoiceDue(card, r.row.date).dueDate;
+    if (income) return { ...base, paymentMethod: 'outro', cardId: card.id, accountId: undefined, dueDate: due, paidDate: r.row.date }; // estorno ou crédito na fatura
     return due < today
       ? { ...base, cardId: card.id, dueDate: due, paidDate: due, accountId: card.accountId }
       : { ...base, cardId: card.id, dueDate: due, status: 'pending', paidDate: undefined, accountId: undefined };

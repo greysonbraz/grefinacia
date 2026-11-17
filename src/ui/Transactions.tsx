@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search, Repeat, CreditCard, FileUp } from 'lucide-react';
 import { ImportStatement } from './Import';
+import { CardBills } from './CardBills';
 import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
 import type { PaymentMethod, Transaction, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
@@ -24,6 +25,7 @@ export function Transactions() {
   const [view, setView] = useState<'lista' | 'graficos' | 'recorrentes'>('lista');
   const [edit, setEdit] = useState<Transaction | 'new' | null>(null);
   const [importing, setImporting] = useState(false);
+  const [bills, setBills] = useState(false);
   const mode = useStore((s) => s.settings.cardMonth);
   const sum = useMemo(() => monthSummary(data, ym), [data, ym, mode]);
   // modo "mês da fatura": o total do mês inclui a fatura que vence nele e deixa de fora as compras que vão para a próxima
@@ -49,13 +51,15 @@ export function Transactions() {
       {(cardIn > 0 || cardOut > 0) && (
         <div className="hint" style={{ margin: '-4px 4px 10px' }}>
           {cardIn > 0 ? `Despesas incluem ${formatBRL(cardIn)} da fatura do cartão que vence neste mês (compras do mês anterior). ` : ''}
-          {cardOut > 0 ? `${formatBRL(cardOut)} comprados no cartão neste mês contam no mês da fatura.` : ''}
+          {cardOut > 0 ? `${formatBRL(cardOut)} lançados no cartão com data neste mês contam no mês da fatura.` : ''}
         </div>
       )}
       <Seg value={view} onChange={setView} options={[['lista', 'Lançamentos'], ['graficos', 'Gráficos'], ['recorrentes', 'Recorrentes']]} />
 
       {view === 'lista' && (
         <>
+          {data.cards.length > 0 && <button className="btn ghost" onClick={() => setBills(true)}><CreditCard size={18} /> Faturas do cartão</button>}
+          {bills && <CardBills onClose={() => setBills(false)} />}
           {invoices.map((inv) => {
             const card = data.cards.find((c) => c.id === inv.cardId);
             return (

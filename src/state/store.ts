@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { AppData, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, Transfer, ISODate, Goal } from '../lib/types';
+import type { AppData, Cents, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, Transfer, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -13,7 +13,7 @@ import { computePositions, operationsAreValid, quantityAt } from '../domain/port
 import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError } from '../services/quotes';
 import { isNative } from '../services/platform';
-import { forgetPluggyKey, getItem, listAccounts, listInvestments, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
+import { forgetPluggyKey, getItem, listAccounts, listBills, listInvestments, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
 import { mergeInvestments } from '../domain/bankInvest';
 import { applyBankCategories, autoSelect, localDay, neutralKind, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
 import { buildPreview, buildTransactions, makeBatch } from '../domain/importer';
@@ -49,6 +49,8 @@ export interface BankState {
   lastSyncByAccount: Record<string, string>;
   /** Resumo da última sincronização, por conta (para mostrar o que veio e por que algo ficou de fora). */
   report?: SyncReport[];
+  /** Faturas informadas pelo banco, por conta de cartão da Pluggy (para conferir com o app). */
+  bills?: Record<string, { id: string; dueDate: ISODate; closingDate?: ISODate; totalCents: Cents }[]>;
   /** Investimentos: quantos vieram de cada banco na última sincronização, ou o erro. */
   investReport?: { bank: string; count: number; foreign: number; error?: string }[];
 }
@@ -714,6 +716,7 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
   const cardsSynced = state.bank.accounts.some((a) => b.links[a.id]?.kind === 'cartao');
   const lastByAcc = { ...state.bank.lastSyncByAccount };
   const report: SyncReport[] = [];
+  const bills: NonNullable<BankState['bills']> = { ...(state.bank.bills ?? {}) };
   for (const acc of state.bank.accounts) {
     const target = targetFor(b.links[acc.id]);
     if (!target) continue;
@@ -721,7 +724,19 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
     const from = syncFrom(lastByAcc[acc.id], b.historyDays, state.today);
     try {
       const txs = await listTransactions(key, acc.id, from);
-      const st = toStatement(acc, txs);
+      // cartão: a fatura de cada compra vem do banco (billId → vencimento); sem isso, o app usa o dia de fechamento
+      let billDue: Record<string, ISODate> = {};
+      if (acc.type === 'CREDIT') {
+        try {
+          const list = await listBills(key, acc.id);
+          bills[acc.id] = list.filter((x) => typeof x.dueDate === 'string').map((x) => ({ id: x.id, dueDate: x.dueDate.slice(0, 10), closingDate: x.billClosingDate ? x.billClosingDate.slice(0, 10) : undefined, totalCents: Math.round((x.totalAmount ?? 0) * 100) }));
+          billDue = Object.fromEntries(bills[acc.id].map((x) => [x.id, x.dueDate]));
+        } catch {
+          /* sem faturas: segue pelo dia de fechamento */
+        }
+      }
+      const st = toStatement(acc, txs, billDue);
+      if (target.kind === 'cartao') await fixCardDueDates(target.cardId, st.rows);
       const preview = autoSelect(applyBankCategories(buildPreview(st, target, state.data, state.settings)), cardsSynced);
       const count = (f: string) => preview.filter((r) => r.flag === f && !r.include).length;
       const id = uid('imp_');
@@ -768,8 +783,39 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
       investReport.push({ bank: bankName, count: 0, foreign: 0, error: e instanceof Error ? e.message : String(e) });
     }
   }
-  await saveBank({ investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
+  await saveBank({ bills, investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
+}
+
+/**
+ * Lançamentos do cartão já importados que o banco passou para outra fatura (ex.: fatura que fechou, parcela futura):
+ * acerta o vencimento e a situação (paga se a fatura já venceu, pendente se não). Nada é apagado.
+ */
+async function fixCardDueDates(cardId: string, rows: { fitId?: string; dueDate?: ISODate }[]): Promise<void> {
+  const card = state.data.cards.find((c) => c.id === cardId);
+  const byFit = new Map(rows.filter((r) => r.fitId && r.dueDate).map((r) => [r.fitId!, r.dueDate!]));
+  if (!byFit.size) return;
+  const today = state.today;
+  const upd = state.data.transactions.flatMap((t) => {
+    const due = t.cardId === cardId && t.fitId ? byFit.get(t.fitId) : undefined;
+    if (!due || t.dueDate === due) return [];
+    if (t.type === 'income') return [{ ...t, dueDate: due }];
+    return [due < today ? { ...t, dueDate: due, status: 'paid' as const, paidDate: due, accountId: card?.accountId } : { ...t, dueDate: due, status: 'pending' as const, paidDate: undefined, accountId: undefined }];
+  });
+  if (upd.length) await upsert('transactions', upd);
+}
+
+/** Soma um câmbio na conta em dólar escolhida (valor em centavos de dólar informado ou estimado pela PTAX). */
+export async function applyCambio(transferId: string, holdingId: string, usdCents: number): Promise<void> {
+  const tr = (state.data.transfers ?? []).find((x) => x.id === transferId);
+  const h = (state.data.usdHoldings ?? []).find((x) => x.id === holdingId);
+  if (!tr || !h || usdCents <= 0) return;
+  await upsert('usdHoldings', { ...h, balanceUsdCents: Math.round((h.balanceUsdCents ?? 0) + usdCents), updatedAt: new Date().toISOString() });
+  await upsert('transfers', { ...tr, usdApplied: true });
+}
+export async function dismissCambio(transferId: string): Promise<void> {
+  const tr = (state.data.transfers ?? []).find((x) => x.id === transferId);
+  if (tr) await upsert('transfers', { ...tr, usdApplied: true });
 }
 
 /** Conta (ou não) um investimento do banco no patrimônio. A escolha fica guardada nas próximas sincronizações. */
