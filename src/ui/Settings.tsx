@@ -270,7 +270,7 @@ function CategoryForm({ c, onClose }: { c: Category | null; onClose: () => void 
   );
 }
 
-function TransferForm({ onClose }: { onClose: () => void }) {
+export function TransferForm({ onClose }: { onClose: () => void }) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const accounts = data.accounts.filter((a) => !a.archived);

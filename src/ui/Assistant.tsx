@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { Send, TriangleAlert, CircleCheck, Info, Sparkles } from 'lucide-react';
+import { Mic, Send, TriangleAlert, CircleCheck, Info, Sparkles } from 'lucide-react';
 import { formatBRL } from '../lib/money';
 import { monthPace } from '../domain/home';
-import { useStore } from '../state/store';
+import { toast, useStore } from '../state/store';
+import { listen } from '../services/native';
+import { isNative } from '../services/platform';
 import { computeOverview } from '../domain/overview';
 import { generateInsights } from '../domain/insights';
 import { answerLocally, buildAiContext, SUGGESTED_QUESTIONS } from '../domain/chat';
@@ -112,7 +114,9 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
           {msgs.length > 0 && !busy && <div className="qchips small">{SUGGESTED_QUESTIONS.filter((q) => !msgs.some((m) => m.content === q)).slice(0, 4).map((q) => (<button key={q} onClick={() => ask(q)}>{q}</button>))}</div>}
           <form className="composer" onSubmit={(e) => { e.preventDefault(); void ask(text); }}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Escreva sua pergunta" aria-label="Pergunta" />
-            <button className="iconbtn send" disabled={busy || !text.trim()} aria-label="Enviar"><Send size={18} /></button>
+            {isNative() && !text.trim()
+              ? <button type="button" className="iconbtn send" disabled={busy} aria-label="Falar a pergunta" onClick={async () => { try { const said = await listen(); if (said) void ask(said); } catch (e) { toast(e instanceof Error ? e.message : 'Não foi possível ouvir agora.'); } }}><Mic size={18} /></button>
+              : <button className="iconbtn send" disabled={busy || !text.trim()} aria-label="Enviar"><Send size={18} /></button>}
           </form>
         </>
       )}

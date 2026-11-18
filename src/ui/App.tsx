@@ -20,7 +20,7 @@ import { LockScreen, Onboarding } from './Lock';
 export type Tab = 'home' | 'transactions' | 'invest' | 'ai' | 'planning';
 export interface Nav { go: (t: Tab, sub?: string) => void; openSettings: () => void }
 
-const TABS: [Tab, string, typeof HomeIco][] = [['home', 'Início', HomeIco], ['transactions', 'Movimentações', ArrowLeftRight], ['invest', 'Investimentos', LineChart], ['ai', 'Grefinacia AI', Sparkles], ['planning', 'Planejamento', Target]];
+const TABS: [Tab, string, typeof HomeIco][] = [['home', 'Início', HomeIco], ['transactions', 'Movimentações', ArrowLeftRight], ['ai', 'AI', Sparkles], ['invest', 'Investimentos', LineChart], ['planning', 'Planejamento', Target]];
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -75,7 +75,7 @@ export function App() {
       {tab === 'planning' && <Planning initial={sub} />}
       <nav className="nav" aria-label="Principal">
         {TABS.map(([id, label, I]) => (
-          <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => { if (tab !== id) tap(); nav.go(id); }}><span className="pill"><I size={21} strokeWidth={tab === id ? 2.2 : 1.8} /></span>{label}</button>
+          <button key={id} className={id === 'ai' ? 'nav-ai' : undefined} aria-label={id === 'ai' ? 'Grefinacia AI' : undefined} aria-current={tab === id ? 'page' : undefined} onClick={() => { if (tab !== id) tap(); nav.go(id); }}><span className="pill"><I size={21} strokeWidth={tab === id ? 2.2 : 1.8} /></span>{label}</button>
         ))}
       </nav>
       {settings && <Settings onClose={() => setSettings(false)} />}

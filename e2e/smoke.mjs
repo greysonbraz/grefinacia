@@ -19,7 +19,7 @@ page.on('console', (m) => m.type() === 'error' && !(expectCspBlock && /Content S
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 const ok = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); console.log('FALHOU:', msg); } else console.log('ok:', msg); };
 const shot = (n) => page.screenshot({ path: `shots/${n}.png` });
-const tab = (n) => page.locator('nav.nav button', { hasText: n }).click();
+const tab = (n) => page.getByRole('navigation', { name: 'Principal' }).getByRole('button', { name: n, exact: true }).click();
 const seg = (n) => page.locator('.seg button', { hasText: n }).first().click();
 const text = async () => (await page.locator('body').innerText()).replace(/ /g, ' ');
 try {

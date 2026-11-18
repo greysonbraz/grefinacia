@@ -145,7 +145,7 @@ export type ChartKind = 'line' | 'bar' | 'doughnut';
 export interface Series { label: string; data: (number | null)[]; color?: string; fill?: boolean; dashed?: boolean }
 
 /** Gráfico interativo (toque para ver valores). Valores em centavos, ou em % com `format="pct"`. */
-export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl', minimal }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' | 'rate'; /** sem eixo de valores e sem grade (gráfico de tendência) */ minimal?: boolean }) {
+export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl', minimal, onPick }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' | 'rate'; /** sem eixo de valores e sem grade (gráfico de tendência) */ minimal?: boolean; /** toque num ponto/barra: índice escolhido */ onPick?: (index: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const theme = useStore((s) => s.settings.theme);
   useEffect(() => {
@@ -164,6 +164,7 @@ export function ChartBox({ kind, labels, series, small, stacked, colors, format 
       type: kind,
       data: { labels, datasets: datasets as never },
       options: {
+        onClick: onPick ? (_e: unknown, els: { index: number }[]) => { if (els[0]) { tap(); onPick(els[0].index); } } : undefined,
         responsive: true,
         maintainAspectRatio: false,
         animation: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? false : { duration: 600, easing: 'easeOutQuart' },

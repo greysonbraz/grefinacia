@@ -3,7 +3,12 @@ package br.com.grefinacia.app;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.speech.RecognizerIntent;
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
+import java.util.ArrayList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.Base64;
@@ -21,6 +26,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 /**
  * Recursos nativos do Grefinacia:
  * - recognizeText: lê o texto de uma foto (cupom/nota) com o ML Kit, no próprio aparelho (modelo embutido, sem internet).
+ * - listen: abre o reconhecimento de voz do próprio Android (pt-BR) e devolve o texto falado.
  * - setWidget: guarda os valores do widget da tela inicial e pede para redesenhá-lo.
  */
 @CapacitorPlugin(name = "Grefinacia")
@@ -57,6 +63,30 @@ public class GrefinaciaPlugin extends Plugin {
                 call.reject("Não foi possível ler o texto da foto.", "leitura", e);
                 recognizer.close();
             });
+    }
+
+    @PluginMethod
+    public void listen(PluginCall call) {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Pergunte à Grefinacia AI");
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+            call.reject("Este aparelho não tem reconhecimento de voz.", "sem-voz");
+            return;
+        }
+        startActivityForResult(call, intent, "onSpeech");
+    }
+
+    @ActivityCallback
+    private void onSpeech(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Intent data = result.getData();
+        ArrayList<String> said = data == null ? null : data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        JSObject o = new JSObject();
+        o.put("text", said == null || said.isEmpty() ? "" : said.get(0));
+        call.resolve(o);
     }
 
     @PluginMethod

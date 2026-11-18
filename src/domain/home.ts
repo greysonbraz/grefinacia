@@ -200,3 +200,57 @@ export function monthAgenda(data: AppData, ym: YearMonth, today: ISODate): Map<I
   for (const it of items.sort((a, b) => a.date.localeCompare(b.date))) out.set(it.date, [...(out.get(it.date) ?? []), it]);
   return out;
 }
+
+// ---------- Nota de saúde financeira (0 a 100) ----------
+export interface HealthScore { score: number; label: 'Excelente' | 'Boa' | 'Atenção' | 'Crítica'; parts: { id: string; label: string; points: number; max: number }[] }
+
+/**
+ * Nota de 0 a 100 a partir dos mesmos indicadores da seção "Saúde financeira" (média dos 3 últimos meses fechados):
+ * quanto da renda sobra (até 40 pontos: 20% ou mais vale tudo), meses de reserva (até 35: 6 meses ou mais)
+ * e peso das parcelas de dívidas (até 25: sem parcelas vale tudo; 30% ou mais da renda vale zero).
+ * Sem um mês fechado com receitas e gastos, não há nota (null).
+ */
+export function healthScore(data: AppData, today: ISODate): HealthScore | null {
+  const ym = monthOf(today);
+  const sums = [1, 2, 3].map((i) => monthSummary(data, addMonthsYM(ym, -i))).filter((s) => s.incomeCents > 0 && s.expenseCents > 0);
+  if (!sums.length) return null;
+  const income = sums.reduce((s, x) => s + x.incomeCents, 0) / sums.length;
+  const expense = sums.reduce((s, x) => s + x.expenseCents, 0) / sums.length;
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const save = clamp((income - expense) / income / 0.2) * 40;
+  const reserve = clamp((totalBalance(data) + data.goalMoves.reduce((s, m) => s + m.amountCents, 0)) / expense / 6) * 35;
+  const inst = data.debts.filter((d) => d.remainingInstallments > 0).reduce((s, d) => s + d.installmentCents, 0);
+  const debt = clamp(1 - inst / income / 0.3) * 25;
+  const score = Math.round(save + reserve + debt);
+  return {
+    score,
+    label: score >= 80 ? 'Excelente' : score >= 60 ? 'Boa' : score >= 40 ? 'Atenção' : 'Crítica',
+    parts: [
+      { id: 'poupanca', label: 'Quanto sobra da renda', points: Math.round(save), max: 40 },
+      { id: 'reserva', label: 'Reserva', points: Math.round(reserve), max: 35 },
+      { id: 'dividas', label: 'Parcelas de dívidas', points: Math.round(debt), max: 25 },
+    ],
+  };
+}
+
+/** Saldo previsto nas contas no fim dos 3 próximos meses (≈ 30, 60 e 90 dias), pela previsão de caixa do app. */
+export function balanceOutlook(data: AppData, today: ISODate): { ym: YearMonth; endCents: Cents }[] {
+  return cashForecast(data, today, 4).months.slice(1).map((m) => ({ ym: m.ym, endCents: m.endBalanceCents }));
+}
+
+// ---------- Meu futuro financeiro ----------
+/** Valor futuro com aporte mensal e taxa anual (juros compostos mensais). Sem inflação: é em reais de hoje só se a taxa for real. */
+export function futureValue(startCents: Cents, monthlyCents: Cents, annualPct: number, months: number): Cents {
+  const r = Math.pow(1 + annualPct / 100, 1 / 12) - 1;
+  if (r === 0) return Math.round(startCents + monthlyCents * months);
+  const g = Math.pow(1 + r, months);
+  return Math.round(startCents * g + monthlyCents * ((g - 1) / r));
+}
+/** Aporte mensal necessário para chegar ao alvo em `months` meses, partindo de `startCents`. 0 se já chega sem aportar. */
+export function monthlyNeeded(startCents: Cents, targetCents: Cents, annualPct: number, months: number): Cents {
+  const r = Math.pow(1 + annualPct / 100, 1 / 12) - 1;
+  const g = Math.pow(1 + r, months);
+  const rest = targetCents - startCents * g;
+  if (rest <= 0) return 0;
+  return Math.round(r === 0 ? rest / months : (rest * r) / (g - 1));
+}

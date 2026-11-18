@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { marketStrip } from '../../domain/indicators';
-import { ArrowDownLeft, ArrowUpRight, CalendarClock, ChevronRight, Coins, CreditCard, FileUp, Plus, Receipt, Sparkles } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarClock, Minus, ChevronRight, Coins, CreditCard, FileUp, Plus, Receipt, Sparkles } from 'lucide-react';
 import { refreshMarketStrip, useStore } from '../../state/store';
 import { isNative } from '../../services/platform';
 import type { Overview } from '../../domain/overview';
 import { netWorthSeries } from '../../domain/networth';
-import { healthIndicators, upcomingItems } from '../../domain/home';
+import { healthIndicators, healthScore, upcomingItems } from '../../domain/home';
 import { passiveIncomeSeries } from '../../domain/reports';
 import { accountBalance } from '../../domain/ledger';
 import { capFirst, formatDayMonth, monthShort, relativeDays } from '../../lib/dates';
@@ -19,6 +19,8 @@ export function Hero({ o }: { o: Overview }) {
   const today = useStore((s) => s.today);
   const [period, setPeriod] = useState<'6' | '12'>('6');
   const series = useMemo(() => netWorthSeries(data, Number(period), today), [data, today, period]);
+  const [pick, setPick] = useState<number | null>(null);
+  const picked = pick !== null && series[pick] ? series[pick] : null;
   const nw = o.netWorth;
   const comp = [
     { label: 'Contas', cents: Math.max(nw.accountsCents, 0), color: cssVar('--s1') },
@@ -40,8 +42,9 @@ export function Hero({ o }: { o: Overview }) {
       </div>
       {series.length > 1 && (
         <div className="hero-chart">
-          <ChartBox kind="line" minimal labels={series.map((p) => capFirst(monthShort(p.ym)))} series={[{ label: 'Patrimônio', data: series.map((p) => p.totalCents), fill: true, color: cssVar('--accent-strong') }]} />
-          <div className="seg compact"><Seg value={period} onChange={setPeriod} options={[['6', '6 meses'], ['12', '12 meses']]} /></div>
+          {picked && <div className="picked" aria-live="polite"><span>{capFirst(monthShort(picked.ym))}</span><b className="num">{formatBRL(picked.totalCents)}</b><button className="link" onClick={() => setPick(null)}>fechar</button></div>}
+          <ChartBox kind="line" minimal labels={series.map((p) => capFirst(monthShort(p.ym)))} series={[{ label: 'Patrimônio', data: series.map((p) => p.totalCents), fill: true, color: cssVar('--accent-strong') }]} onPick={setPick} />
+          <div className="seg compact"><Seg value={period} onChange={(v) => { setPeriod(v); setPick(null); }} options={[['6', '6 meses'], ['12', '12 meses']]} /></div>
         </div>
       )}
       {total > 0 && (
@@ -156,9 +159,25 @@ export function Health() {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const ind = useMemo(() => healthIndicators(data, today), [data, today]);
+  const sc = useMemo(() => healthScore(data, today), [data, today]);
+  const C = 2 * Math.PI * 34;
   return (
     <section aria-labelledby="h-saude">
       <div className="ghead"><h2 id="h-saude">Saúde financeira</h2></div>
+      {sc && (
+        <div className="score">
+          <svg viewBox="0 0 80 80" width="92" height="92" role="img" aria-label={`Nota ${sc.score} de 100: ${sc.label}`}>
+            <circle cx="40" cy="40" r="34" className="score-bg" />
+            <circle cx="40" cy="40" r="34" className={'score-fg ' + (sc.score >= 60 ? 'good' : sc.score >= 40 ? 'warn' : 'bad')} strokeDasharray={`${(sc.score / 100) * C} ${C}`} />
+            <text x="40" y="44" textAnchor="middle" className="score-num">{sc.score}</text>
+          </svg>
+          <div className="score-txt">
+            <b>{sc.label}</b>
+            <span>nota de 0 a 100</span>
+            {sc.parts.map((p) => (<small key={p.id}>{p.label}: {p.points} de {p.max}</small>))}
+          </div>
+        </div>
+      )}
       <div className="group">
         {ind.map((i) => (
           <div className="health" key={i.id}>
@@ -175,7 +194,9 @@ export function Health() {
 /** Atalhos de uso diário (cada um leva a uma ação real). */
 export function Shortcuts({ nav, hasCards }: { nav: Nav; hasCards: boolean }) {
   const list: [string, typeof Plus, () => void][] = [
-    ['Nova movimentação', Plus, () => nav.go('transactions', 'nova')],
+    ['Despesa', Minus, () => nav.go('transactions', 'nova')],
+    ['Receita', Plus, () => nav.go('transactions', 'nova-receita')],
+    ['Transferir', ArrowLeftRight, () => nav.go('transactions', 'transferir')],
     ...(hasCards ? [['Faturas do cartão', CreditCard, () => nav.go('transactions', 'faturas')] as [string, typeof Plus, () => void]] : []),
     ['Importar extrato', FileUp, () => nav.go('transactions', 'importar')],
     ['Calendário financeiro', CalendarClock, () => nav.go('transactions', 'calendario')],

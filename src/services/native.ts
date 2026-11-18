@@ -6,6 +6,7 @@ import { parseReceipt, type ReceiptGuess } from '../domain/receipt';
 /** Plugin nativo do app (android/app/src/main/java/.../GrefinaciaPlugin.java). */
 interface GrefinaciaPlugin {
   recognizeText(o: { base64: string }): Promise<{ text: string }>;
+  listen(): Promise<{ text: string }>;
   setWidget(o: { free: string; freeLabel: string; balance: string; next: string; updated: string }): Promise<void>;
 }
 const Native = registerPlugin<GrefinaciaPlugin>('Grefinacia');
@@ -39,4 +40,15 @@ export function pushWidget(v: { free: string; freeLabel: string; balance: string
   if (key === lastWidget) return;
   lastWidget = key;
   void Native.setWidget(v).catch(() => undefined);
+}
+
+/** Ouve uma pergunta pelo reconhecimento de voz do Android (pt-BR). Devolve '' se você não falou nada. */
+export async function listen(): Promise<string> {
+  if (!isNative()) throw new ScanError('Falar com a AI funciona no app Android.');
+  try {
+    const { text } = await Native.listen();
+    return (text ?? '').trim();
+  } catch (e) {
+    throw new ScanError(e instanceof Error && e.message ? e.message : 'Não foi possível ouvir agora.');
+  }
 }

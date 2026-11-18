@@ -358,3 +358,30 @@ input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color:
 .cal.agenda .sel .marks i { box-shadow: 0 0 0 1px var(--accent-ink); }
 /* celulares estreitos: os 5 rótulos da barra de baixo cabem sem encostar */
 @media (max-width: 380px) { .nav button { font-size: 9.5px; letter-spacing: -0.03em; } .nav button .pill { width: 50px; } }
+
+/* nota de saúde, ponto escolhido no gráfico, previsão 30/60/90 */
+.score { display: flex; align-items: center; gap: 16px; padding: 14px; margin-bottom: 10px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
+.score-bg { fill: none; stroke: var(--surface2); stroke-width: 8; }
+.score-fg { fill: none; stroke-width: 8; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 40px 40px; transition: stroke-dasharray 0.8s var(--ease); }
+.score-fg.good { stroke: var(--good); } .score-fg.warn { stroke: var(--warn); } .score-fg.bad { stroke: var(--bad); }
+.score-num { fill: var(--text); font-size: 22px; font-weight: 700; font-family: inherit; }
+.score-txt { display: flex; flex-direction: column; gap: 2px; } .score-txt b { font-size: 17px; } .score-txt span { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; } .score-txt small { color: var(--muted); font-size: 12px; }
+.picked { display: flex; align-items: baseline; gap: 10px; margin: 0 4px 4px; } .picked span { color: var(--muted); font-size: 13px; } .picked b { font-size: 16px; } .picked .link { margin-left: auto; min-height: 32px; }
+.outlook { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.outlook > div { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface2); min-width: 0; }
+.outlook span { font-size: 11.5px; color: var(--muted); } .outlook b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .outlook small { font-size: 11px; color: var(--muted); }
+
+/* orbe vivo da AI: um halo cônico girando devagar (some com movimento reduzido) */
+.orb { position: relative; isolation: isolate; }
+.orb::before { content: ''; position: absolute; inset: -3px; border-radius: 50%; z-index: -1;
+  background: conic-gradient(from 0deg, #c4b5fd, var(--accent-deep), #f0abfc, var(--accent-strong), #c4b5fd); animation: orb-spin 6s linear infinite; filter: blur(1px); }
+.orb.thinking::before { animation-duration: 1.6s; }
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+/* botão central da AI na barra de baixo */
+.nav button.nav-ai { color: var(--accent); }
+.nav button.nav-ai .pill { width: 52px; height: 52px; margin-top: -22px; border-radius: 50%; color: #fff; position: relative; isolation: isolate;
+  background: radial-gradient(circle at 30% 25%, #c4b5fd 0%, var(--accent-strong) 45%, var(--accent-deep) 100%);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-strong) 50%, transparent), 0 0 0 4px var(--bg); }
+.nav button.nav-ai .pill::before { content: ''; position: absolute; inset: -2px; border-radius: 50%; z-index: -1; background: conic-gradient(from 0deg, #c4b5fd, var(--accent-deep), #f0abfc, var(--accent-strong), #c4b5fd); animation: orb-spin 8s linear infinite; }
+.nav button.nav-ai[aria-current='page'] .pill { background: radial-gradient(circle at 30% 25%, #ddd6fe 0%, var(--accent-strong) 50%, var(--accent-deep) 100%); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .orb::before, .nav button.nav-ai .pill::before { animation: none; } }

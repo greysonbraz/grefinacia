@@ -3,6 +3,7 @@ import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, 
 import { ImportStatement } from './Import';
 import { CardBills } from './CardBills';
 import { Agenda } from './Agenda';
+import { TransferForm } from './Settings';
 import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, remove, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
 import type { PaymentMethod, Transaction, Transfer, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
@@ -32,7 +33,8 @@ export function Transactions({ initial }: { initial?: string } = {}) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [q, setQ] = useState('');
   const [view, setView] = useState<'lista' | 'calendario' | 'graficos' | 'recorrentes'>(initial === 'calendario' ? 'calendario' : 'lista');
-  const [edit, setEdit] = useState<Transaction | 'new' | null>(initial === 'nova' ? 'new' : null);
+  const [edit, setEdit] = useState<Transaction | 'new' | null>(initial === 'nova' || initial === 'nova-receita' ? 'new' : null);
+  const [transferOpen, setTransferOpen] = useState(initial === 'transferir');
   const [move, setMove] = useState<Transfer | null>(null);
   const [importing, setImporting] = useState(initial === 'importar');
   const [bills, setBills] = useState(initial === 'faturas');
@@ -156,6 +158,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
       )}
       {filtersOpen && <FiltersSheet value={extra} onChange={setExtra} onClose={() => setFiltersOpen(false)} />}
       {move && <MoveSheet t={move} onClose={() => setMove(null)} />}
+      {transferOpen && <TransferForm onClose={() => setTransferOpen(false)} />}
       {view === 'calendario' && <Agenda ym={ym} />}
       {view === 'graficos' && <TxCharts ym={ym} />}
       {view === 'recorrentes' && (
@@ -171,7 +174,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
         </div>
       )}
       <button className="fab" onClick={() => setEdit('new')} aria-label="Nova movimentação"><Plus size={26} /></button>
-      {edit && <TxForm tx={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {edit && <TxForm tx={edit === 'new' ? null : edit} startType={initial === 'nova-receita' && edit === 'new' ? 'income' : 'expense'} onClose={() => setEdit(null)} />}
     </div>
   );
 }
@@ -215,14 +218,14 @@ function TxCharts({ ym }: { ym: string }) {
   );
 }
 
-function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }) {
+function TxForm({ tx, onClose, startType = 'expense' }: { tx: Transaction | null; onClose: () => void; startType?: TxType }) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
-  const [type, setType] = useState<TxType>(tx?.type ?? 'expense');
-  const [kind, setKind] = useState<TxKind>(tx?.kind ?? 'variavel');
+  const [type, setType] = useState<TxType>(tx?.type ?? startType);
+  const [kind, setKind] = useState<TxKind>(tx?.kind ?? (startType === 'income' ? 'outro_rendimento' : 'variavel'));
   const [desc, setDesc] = useState(tx?.description ?? '');
   const [amount, setAmount] = useState(tx ? centsToInput(tx.amountCents) : '');
-  const [categoryId, setCategoryId] = useState(tx?.categoryId ?? 'mercado');
+  const [categoryId, setCategoryId] = useState(tx?.categoryId ?? (startType === 'income' ? KIND_DEFAULT_CATEGORY.outro_rendimento : 'mercado'));
   const [date, setDate] = useState(tx?.date ?? today);
   const [method, setMethod] = useState<PaymentMethod>(tx?.paymentMethod ?? 'pix');
   const [boleto, setBoleto] = useState(tx?.boletoLine ? formatBoletoLine(tx.boletoLine) : '');

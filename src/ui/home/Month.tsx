@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useStore } from '../../state/store';
-import { cardThisMonthToNext, cumulativeSpending, monthPace, nextMonthForecast, topCategories } from '../../domain/home';
+import { balanceOutlook, cardThisMonthToNext, cumulativeSpending, monthPace, nextMonthForecast, topCategories } from '../../domain/home';
 import { addMonthsYM, capFirst, monthLong, monthName, monthShort } from '../../lib/dates';
 import { formatBRL } from '../../lib/money';
 import { ChartBox, Legend, seriesColors } from '../kit';
@@ -70,6 +70,7 @@ export function NextMonthCard({ onOpen }: { onOpen: () => void }) {
   const mode = useStore((s) => s.settings.cardMonth);
   const f = useMemo(() => nextMonthForecast(data, today), [data, today, mode]);
   const out = f.billsCents + f.debtCents + f.dailyCents;
+  const look = useMemo(() => balanceOutlook(data, today), [data, today, mode]);
   return (
     <button className="card" style={{ textAlign: 'left', width: '100%' }} onClick={onOpen}>
       <h2 style={{ marginTop: 0 }}>Previsão de {monthLong(f.ym)}</h2>
@@ -79,6 +80,9 @@ export function NextMonthCard({ onOpen }: { onOpen: () => void }) {
       <div className="kv"><span>Gasto do dia a dia (média)</span><b className="num">{formatBRL(f.dailyCents)}</b></div>
       <div className="kv" style={{ borderTop: '1px solid var(--line)' }}><span><b>{f.netCents >= 0 ? 'Deve sobrar' : 'Deve faltar'}</b></span><b className={'num ' + (f.netCents >= 0 ? 'pos' : 'neg')}>{formatBRL(Math.abs(f.netCents))}</b></div>
       <div className="hint">Saídas previstas {formatBRL(out)}. Saldo previsto nas contas no fim de {monthLong(f.ym)}: {formatBRL(f.endBalanceCents)}.{f.basisMonths < 3 ? ` A média do dia a dia usa ${f.basisMonths} ${f.basisMonths === 1 ? 'mês' : 'meses'} fechados; fica mais certa com o tempo.` : ''}{f.incomeCents === 0 ? ' Cadastre seu salário como recorrente para entrar aqui.' : ''}</div>
+      <div className="outlook" aria-label="Saldo previsto nos próximos meses">
+        {look.map((l, i) => (<div key={l.ym}><span>{i === 0 ? 'Em 1 mês' : `Em ${i + 1} meses`}</span><b className={'num ' + (l.endCents < 0 ? 'neg' : '')}>{formatBRL(l.endCents)}</b><small>fim de {monthShort(l.ym)}</small></div>))}
+      </div>
     </button>
   );
 }
