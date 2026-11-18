@@ -77,6 +77,7 @@ export function mergeSettings(saved: Partial<Settings> | undefined): Settings {
       items: Array.isArray(s.bank?.items) ? s.bank.items.filter((i) => i && typeof i.itemId === 'string' && i.itemId.trim()).slice(0, 10) : [],
       links: s.bank?.links && typeof s.bank.links === 'object' && !Array.isArray(s.bank.links) ? s.bank.links : {},
     },
+    challenges: Array.isArray(s.challenges) ? s.challenges.filter((c) => c && typeof c.id === 'string' && ['sem-gasto', 'limite', 'guardar'].includes(c.kind) && typeof c.start === 'string' && Number.isFinite(c.days) && c.days > 0).slice(-50) : [],
     importRules: Array.isArray(s.importRules) ? s.importRules.filter((r) => r && typeof r.pattern === 'string' && r.pattern && typeof r.categoryId === 'string').slice(-300) : [],
     analysis: { ignoredDuplicates: Array.isArray(s.analysis?.ignoredDuplicates) ? s.analysis.ignoredDuplicates.filter((x) => typeof x === 'string').slice(-500) : [] },
     budgets: { ...s.budgets },

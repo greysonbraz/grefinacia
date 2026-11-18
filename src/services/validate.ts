@@ -61,5 +61,6 @@ export function validateImported(parsed: unknown): { data: AppData; settings: Om
   delete settings.security; // o PIN de bloqueio nunca vem de um arquivo
   for (const k of NESTED_SETTINGS) if (settings[k] !== undefined && !isPlainObject(settings[k])) delete settings[k];
   if (settings.importRules !== undefined && !Array.isArray(settings.importRules)) delete settings.importRules;
+  if (settings.challenges !== undefined && !Array.isArray(settings.challenges)) delete settings.challenges;
   return { data, settings: settings as unknown as Omit<Settings, 'security'> };
 }

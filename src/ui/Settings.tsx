@@ -25,6 +25,7 @@ const NOTIF: [keyof S['notifications']['types'], string, string][] = [
   ['salary', 'Salário', 'No dia do pagamento e ao confirmar o recebimento'],
   ['billsDue', 'Contas perto do vencimento', 'Dias antes e no dia'],
   ['cardInvoice', 'Fatura do cartão', 'Vencimento (com o valor) e o dia antes de fechar'],
+  ['monthlyReport', 'Relatório do mês', 'No dia 1, quanto entrou, saiu e sobrou no mês que fechou'],
   ['overdue', 'Contas atrasadas', 'Lembrete diário por 3 dias'],
   ['dividendAnnounced', 'Proventos anunciados', 'Quando a fonte de dados trouxer um anúncio novo'],
   ['dividendSoon', 'Proventos perto do pagamento', 'Dias antes da data'],

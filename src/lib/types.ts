@@ -376,8 +376,25 @@ export interface NotificationPrefs {
     overBudget: boolean;
     lowBalance: boolean;
     goalReached: boolean;
+    /** No dia 1, o resumo do mês que fechou. */
+    monthlyReport?: boolean;
     backup: boolean;
   };
+}
+
+/**
+ * Desafio financeiro. 'sem-gasto': ficar `days` dias sem gastar na categoria ('*' = qualquer gasto variável);
+ * 'limite': gastar no máximo `limitCents` na categoria; 'guardar': guardar `targetCents` nos objetivos no período.
+ */
+export interface Challenge {
+  id: string;
+  kind: 'sem-gasto' | 'limite' | 'guardar';
+  categoryId?: string;
+  limitCents?: Cents;
+  targetCents?: Cents;
+  start: ISODate;
+  days: number;
+  createdAt: number;
 }
 
 export interface Settings {
@@ -435,5 +452,7 @@ export interface Settings {
     historyDays: number; // quanto histórico buscar na primeira vez
   };
   analysis: { ignoredDuplicates: string[] };
+  /** Desafios financeiros que você aceitou (progresso calculado dos seus lançamentos reais). */
+  challenges: Challenge[];
   importRules: { pattern: string; categoryId: string }[]; // "descrição contém" → categoria, aprendido nas importações // pares "idA|idB" que o usuário disse não serem cobrança em dobro
 }

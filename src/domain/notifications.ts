@@ -1,7 +1,7 @@
 import type { AppData, Cents, ISODate, Settings } from '../lib/types';
-import { addDays, addMonthsYM, daysInMonth, diffDays, formatDayMonth, makeDate, monthOf, parseISO } from '../lib/dates';
+import { addDays, addMonthsYM, daysInMonth, diffDays, formatDayMonth, makeDate, monthName, monthOf, parseISO } from '../lib/dates';
 import { formatBRL, formatPct } from '../lib/money';
-import { cardInvoiceDue, effectiveDue, isCredit, overdueBills } from './ledger';
+import { cardInvoiceDue, effectiveDue, isCredit, monthSummary, overdueBills } from './ledger';
 import { dividendRows } from './dividends';
 import { computeOverview } from './overview';
 import { goalProgress } from './goals';
@@ -153,7 +153,21 @@ export function planNotifications(data: AppData, settings: Settings, now: Date, 
     }
   }
 
-  // 5) Lembrete de backup
+  // 5) Relatório do mês, no dia 1. Hoje sendo dia 1: os números do mês que fechou (já completos).
+  //    O do mês que vem ainda não tem os números finais, então só avisa que fechou (nada inventado).
+  if (prefs.types.monthlyReport !== false && data.transactions.length > 0) {
+    const ym = monthOf(today);
+    const prev = addMonthsYM(ym, -1);
+    const s = monthSummary(data, prev);
+    if (s.incomeCents > 0 || s.expenseCents > 0) {
+      const net = s.incomeCents - s.expenseCents;
+      add(`report:${prev}`, makeDate(ym, 1), `Seu mês de ${monthName(prev)}`, `Entrou ${formatBRL(s.incomeCents)}, saiu ${formatBRL(s.expenseCents)} e ${net >= 0 ? `sobrou ${formatBRL(net)}` : `faltou ${formatBRL(-net)}`}. Toque para ver o relatório.`, 'alertas');
+    }
+    const next = makeDate(addMonthsYM(ym, 1), 1);
+    if (next <= horizon) add(`report:${ym}`, next, `${monthName(ym).replace(/^./, (c) => c.toUpperCase())} fechou`, 'Abra o app para ver quanto entrou, saiu e sobrou no mês, e baixar o relatório.', 'alertas');
+  }
+
+  // 6) Lembrete de backup
   if (prefs.types.backup && (data.transactions.length > 0 || data.operations.length > 0)) {
     const last = settings.lastBackupAt ? settings.lastBackupAt.slice(0, 10) : undefined;
     if (!last || diffDays(today, last) >= 30) add(`backup:${monthOf(today)}`, addDays(today, 1), 'Hora de fazer backup', 'Seus dados ficam só neste aparelho. Gere um backup criptografado em Ajustes → Backup.', 'alertas');

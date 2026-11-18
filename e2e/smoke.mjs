@@ -254,6 +254,12 @@ try {
   await seg('Liberdade');
   await page.waitForTimeout(500);
   await shot('11-liberdade');
+  ok((await text()).includes('Meu futuro') && (await text()).includes('Para chegar a R$ 1 milhão'), 'liberdade: meu futuro e R$ 1 milhão');
+  await seg('Desafios');
+  await page.getByRole('button', { name: /7 dias sem comer fora/ }).click();
+  await page.waitForTimeout(400);
+  ok((await text()).includes('7 dias sem alimentação fora'), 'desafio começou');
+  await shot('11b-desafios');
 
   // início + notificações planejadas
   await tab('Início');

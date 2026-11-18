@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { LoanCompare } from './Xray';
 import { Plus, TriangleAlert, FileText, Sheet as SheetIco } from 'lucide-react';
 import { defaultAccountId, deleteGoal, moveGoal, remove, saveSalary, saveTransaction, toast, updateSettings, upsert, useStore } from '../state/store';
-import type { Debt, DebtKind, Goal } from '../lib/types';
+import type { Challenge, Debt, DebtKind, Goal } from '../lib/types';
 import { spendableView } from '../domain/salary';
 import { goalProgress } from '../domain/goals';
 import { monthSummary, costMonth } from '../domain/ledger';
@@ -10,23 +10,26 @@ import { budgetStatuses } from '../domain/overview';
 import { annualFromMonthly, debtTotals, presentValue, simulateAnticipation, simulateExtra, simulateRefinance, simulateStrategy } from '../domain/debts';
 import { financialFreedom, monthlyClosing } from '../domain/reports';
 import { simulateGrowth } from '../domain/fixedincome';
+import { futureValue, monthlyNeeded } from '../domain/home';
+import { CHALLENGE_TEMPLATES, challengeProgress } from '../domain/challenges';
 import { exportClosingPdf } from '../services/reports';
 import { exportOpenJson, saveAndShare, transactionsToCSV } from '../services/backup';
 import { centsToInput, formatBRL, formatPct, parseDecimal, parseMoney } from '../lib/money';
-import { formatDateBR, monthLong, monthOf } from '../lib/dates';
+import { addMonths, diffDays, formatDateBR, monthLong, monthOf } from '../lib/dates';
 import { uid } from '../lib/ids';
 import { ChartBox, cssVar, Empty, Field, Full, Ico, Legend, MoneyInput, MonthNav, Note, Progress, Seg, seriesColors, Sheet } from './kit';
 
-type Sub = 'salario' | 'reservas' | 'orcamento' | 'dividas' | 'liberdade' | 'relatorios';
+type Sub = 'salario' | 'reservas' | 'desafios' | 'orcamento' | 'dividas' | 'liberdade' | 'relatorios';
 
 export function Planning({ initial }: { initial?: string }) {
   const [sub, setSub] = useState<Sub>((initial as Sub) ?? 'salario');
   return (
     <div className="screen">
       <div className="head"><h1>Planejamento</h1></div>
-      <Seg value={sub} onChange={setSub} options={[['salario', 'Salário'], ['reservas', 'Reservas'], ['orcamento', 'Orçamento'], ['dividas', 'Dívidas'], ['liberdade', 'Liberdade'], ['relatorios', 'Relatórios']]} />
+      <Seg value={sub} onChange={setSub} options={[['salario', 'Salário'], ['reservas', 'Reservas'], ['desafios', 'Desafios'], ['orcamento', 'Orçamento'], ['dividas', 'Dívidas'], ['liberdade', 'Liberdade'], ['relatorios', 'Relatórios']]} />
       {sub === 'salario' && <Salario />}
       {sub === 'reservas' && <Reservas />}
+      {sub === 'desafios' && <Desafios />}
       {sub === 'orcamento' && <Orcamento />}
       {sub === 'dividas' && <Dividas />}
       {sub === 'liberdade' && <Liberdade />}
@@ -118,6 +121,13 @@ function Reservas() {
             <Progress pct={p.pct} tone={p.status === 'concluida' ? 'done' : undefined} />
             <div className="kv" style={{ marginTop: 8 }}><span>Alcançado</span><b className="num">{formatPct(Math.min(p.pct, 999))}</b></div>
             <div className="kv"><span>Previsão</span><b>{p.status === 'concluida' ? 'Meta alcançada' : p.etaDate ? `${formatDateBR(p.etaDate)} (${p.etaMonths} ${p.etaMonths === 1 ? 'mês' : 'meses'})` : 'Defina um aporte mensal'}</b></div>
+            {g.deadline && p.requiredMonthlyCents && p.status !== 'concluida' && (
+              <div className="smart">
+                <span>Para chegar até {formatDateBR(g.deadline)}</span>
+                <b className="num">{formatBRL(p.requiredMonthlyCents)} por mês</b>
+                {g.monthlyPlanCents !== p.requiredMonthlyCents && <button className="link" onClick={async () => { await upsert('goals', { ...g, monthlyPlanCents: p.requiredMonthlyCents }); toast('Aporte mensal ajustado'); }}>Usar esse valor</button>}
+              </div>
+            )}
             {p.basis !== 'nenhum' && p.status !== 'concluida' && <div className="hint">Considerando {formatBRL(p.monthlyCents)} por mês ({p.basis === 'plano' ? 'aporte planejado' : 'média dos últimos 90 dias'}).{p.status === 'atrasada' && p.requiredMonthlyCents ? ` Para cumprir o prazo de ${formatDateBR(g.deadline!)}: ${formatBRL(p.requiredMonthlyCents)} por mês.` : ''}</div>}
             <div className="btnrow"><button className="btn sm" style={{ flex: 1 }} onClick={() => setMove(g)}>Depositar ou retirar</button></div>
           </div>
@@ -139,6 +149,22 @@ function GoalForm({ g, onClose }: { g: Goal | null; onClose: () => void }) {
   const [deadline, setDeadline] = useState(g?.deadline ?? '');
   const [initial, setInitial] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const goalMoves = useStore((s) => s.data.goalMoves);
+  // meta inteligente: com prazo, quanto guardar por mês; só com aporte, quando chega lá
+  const smart = (() => {
+    const t = parseMoney(target) ?? 0;
+    const have = g ? goalMoves.filter((m) => m.goalId === g.id).reduce((s, m) => s + m.amountCents, 0) : parseMoney(initial) ?? 0;
+    const rest = t - have;
+    if (t <= 0 || rest <= 0) return null;
+    if (deadline && deadline > today) {
+      const months = Math.max(Math.ceil(diffDays(deadline, today) / 30.4375), 1);
+      const need = Math.ceil(rest / months);
+      return { label: `Para chegar até ${formatDateBR(deadline)} (${months} ${months === 1 ? 'mês' : 'meses'})`, value: `${formatBRL(need)} por mês`, fill: need };
+    }
+    const m = parseMoney(monthly) ?? 0;
+    if (m > 0) { const n = Math.ceil(rest / m); return { label: `Guardando ${formatBRL(m)} por mês`, value: `chega em ${formatDateBR(addMonths(today, n))}`, fill: undefined }; }
+    return null;
+  })();
   const save = async () => {
     const t = parseMoney(target);
     if (!name.trim()) return setErr('Dê um nome ao objetivo.');
@@ -160,6 +186,7 @@ function GoalForm({ g, onClose }: { g: Goal | null; onClose: () => void }) {
         <Field label="Prazo (opcional)"><input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></Field>
         {!g && <Field label="Já tenho guardado"><MoneyInput name="inicial" value={initial} onChange={setInitial} /></Field>}
       </div>
+      {smart && <div className="smart"><span>{smart.label}</span><b className="num">{smart.value}</b>{smart.fill && <button className="link" onClick={() => setMonthly(centsToInput(smart.fill!))}>Usar esse valor</button>}</div>}
       {err && <div className="neg" role="alert">{err}</div>}
       <div className="btnrow"><button className="btn" onClick={save}>Salvar</button>{g && <button className="btn danger" onClick={async () => { await deleteGoal(g.id); toast('Objetivo excluído'); onClose(); }}>Excluir</button>}</div>
     </Sheet>
@@ -406,8 +433,22 @@ function Liberdade() {
   const g = simulateGrowth(Math.max(f.netWorthCents, 0), monthly, settings.freedom.yieldPct, 240);
   const hit = f.requiredCents ? g.find((x) => x.valueCents >= f.requiredCents!) : undefined;
   const pal = seriesColors();
+  const start = Math.max(f.netWorthCents, 0);
+  const [years, setYears] = useState<'10' | '20' | '30'>('20');
+  const million = monthlyNeeded(start, 100000000, settings.freedom.yieldPct, Number(years) * 12);
   return (
     <>
+      <div className="card future">
+        <h2>Meu futuro</h2>
+        <div className="hint" style={{ marginBottom: 10 }}>Se você aportar {formatBRL(monthly)} por mês (guardar + investir do seu plano) com {String(settings.freedom.yieldPct).replace('.', ',')}% ao ano:</div>
+        <div className="future-row">
+          {[1, 5, 10].map((y) => (<div key={y}><span>{y} {y === 1 ? 'ano' : 'anos'}</span><b className="num">{formatBRL(Math.round(futureValue(start, monthly, settings.freedom.yieldPct, y * 12) / 100) * 100).replace(/,00$/, '')}</b></div>))}
+        </div>
+        <h3 style={{ margin: '16px 0 8px' }}>Para chegar a R$ 1 milhão</h3>
+        <Seg value={years} onChange={setYears} options={[['10', 'em 10 anos'], ['20', 'em 20 anos'], ['30', 'em 30 anos']]} />
+        <div className="smart"><span>Aporte necessário</span><b className="num">{million === 0 ? 'já chega sem aportar' : `${formatBRL(million)} por mês`}</b></div>
+        <Note>Taxa constante e sem inflação, partindo do seu patrimônio de hoje. Serve para comparar cenários, não é promessa de rentabilidade.</Note>
+      </div>
       <div className="grid2">
         <div className="tile"><div className="lbl">Patrimônio líquido</div><div className="val num">{formatBRL(f.netWorthCents)}</div></div>
         <div className="tile"><div className="lbl">Renda passiva mensal</div><div className="val num">{formatBRL(f.passiveMonthlyCents)}</div><div className="foot">média de proventos em 12 meses</div></div>
@@ -465,5 +506,74 @@ function Relatorios() {
       <button className="btn ghost" onClick={() => { if (confirm('O arquivo JSON sai sem criptografia: quem tiver o arquivo consegue ler seus dados. Para guardar com segurança, use o backup em Ajustes. Exportar mesmo assim?')) void run(() => saveAndShare(`grefinacia-dados-${today}.json`, exportOpenJson(data, settings), 'application/json'), 'Arquivo gerado'); }}>Exportar todos os dados em JSON</button>
       <Note>Juros pagos somam as despesas na categoria "Juros e encargos" (o botão "Registrar pagamento de parcela" das dívidas já separa os juros). Este fechamento é uma ferramenta de organização pessoal e não substitui um contador habilitado.</Note>
     </>
+  );
+}
+
+/** Desafios financeiros: progresso vem dos seus lançamentos reais no período. */
+function Desafios() {
+  const data = useStore((s) => s.data);
+  const settings = useStore((s) => s.settings);
+  const today = useStore((s) => s.today);
+  const [custom, setCustom] = useState(false);
+  const list = settings.challenges ?? [];
+  const catName = (id?: string) => (!id || id === '*' ? 'gastos variáveis' : data.categories.find((c) => c.id === id)?.name.toLowerCase() ?? id);
+  const title = (c: Challenge) => c.kind === 'guardar' ? `Guardar ${formatBRL(c.targetCents ?? 0)} em ${c.days} dias` : c.kind === 'limite' ? `${catName(c.categoryId).replace(/^./, (x) => x.toUpperCase())} até ${formatBRL(c.limitCents ?? 0)} em ${c.days} dias` : `${c.days} dias sem ${catName(c.categoryId)}`;
+  const start = async (c: Omit<Challenge, 'id' | 'start' | 'createdAt'>) => {
+    await updateSettings({ challenges: [...list, { ...c, id: uid('ch_'), start: today, createdAt: Date.now() }] });
+    toast('Desafio começou hoje');
+  };
+  const drop = async (id: string) => { await updateSettings({ challenges: list.filter((c) => c.id !== id) }); toast('Desafio removido'); };
+  const rows = list.map((c) => ({ c, p: challengeProgress(c, data, today) })).sort((a, b) => (a.p.status === 'andamento' ? 0 : 1) - (b.p.status === 'andamento' ? 0 : 1) || b.c.createdAt - a.c.createdAt);
+  return (
+    <>
+      {rows.length === 0 && <div className="card"><Empty title="Nenhum desafio ainda" text="Escolha um abaixo. O app acompanha sozinho pelos seus lançamentos." /></div>}
+      {rows.map(({ c, p }) => (
+        <div className="card challenge" key={c.id}>
+          <div className="cardhead"><h2>{title(c)}</h2><span className={'badge ' + (p.status === 'concluido' ? 'good' : p.status === 'falhou' ? 'bad' : 'warn')}>{p.status === 'concluido' ? 'Conseguiu' : p.status === 'falhou' ? 'Não deu' : p.status === 'agendado' ? 'Começa depois' : `${p.daysLeft} ${p.daysLeft === 1 ? 'dia' : 'dias'}`}</span></div>
+          <Progress pct={p.pct} tone={p.status === 'concluido' ? 'done' : undefined} />
+          <div className="hint" style={{ marginTop: 6 }}>
+            {c.kind === 'sem-gasto' ? (p.cents > 0 ? `Teve ${formatBRL(p.cents)} em ${catName(c.categoryId)} no período.` : `Nenhum gasto até agora. Termina em ${formatDateBR(p.end)}.`)
+              : c.kind === 'limite' ? `Gastou ${formatBRL(p.cents)} de ${formatBRL(c.limitCents ?? 0)}. Termina em ${formatDateBR(p.end)}.`
+              : `Guardou ${formatBRL(Math.max(p.cents, 0))} de ${formatBRL(c.targetCents ?? 0)} nos seus objetivos. Termina em ${formatDateBR(p.end)}.`}
+          </div>
+          <div className="btnrow"><button className="btn ghost sm" onClick={() => void drop(c.id)}>{p.status === 'andamento' || p.status === 'agendado' ? 'Desistir' : 'Remover'}</button>{p.status !== 'andamento' && p.status !== 'agendado' && <button className="btn sm" onClick={() => void start({ kind: c.kind, categoryId: c.categoryId, limitCents: c.limitCents, targetCents: c.targetCents, days: c.days })}>Repetir</button>}</div>
+        </div>
+      ))}
+      <div className="ghead"><h2>Começar um desafio</h2></div>
+      <div className="group">
+        {CHALLENGE_TEMPLATES.map((t) => (
+          <button className="row" key={t.title} onClick={() => void start(t.make())}><div className="ic"><Ico name="Trophy" size={18} /></div><div className="mid"><div className="t">{t.title}</div><div className="s">começa hoje</div></div><Plus size={18} /></button>
+        ))}
+        <button className="row" onClick={() => setCustom(true)}><div className="ic"><Ico name="SlidersHorizontal" size={18} /></div><div className="mid"><div className="t">Criar o meu</div><div className="s">categoria, valor e dias do seu jeito</div></div><Plus size={18} /></button>
+      </div>
+      {custom && <ChallengeForm onClose={() => setCustom(false)} onSave={start} />}
+    </>
+  );
+}
+
+function ChallengeForm({ onClose, onSave }: { onClose: () => void; onSave: (c: Omit<Challenge, 'id' | 'start' | 'createdAt'>) => Promise<void> }) {
+  const cats = useStore((s) => s.data.categories).filter((c) => c.type === 'expense');
+  const [kind, setKind] = useState<Challenge['kind']>('sem-gasto');
+  const [categoryId, setCategoryId] = useState('alimentacao');
+  const [value, setValue] = useState('');
+  const [days, setDays] = useState('7');
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    const d = Math.round(Number(days));
+    if (!Number.isFinite(d) || d < 1 || d > 365) return setErr('Escolha de 1 a 365 dias.');
+    const v = parseMoney(value) ?? 0;
+    if (kind !== 'sem-gasto' && v <= 0) return setErr('Informe o valor.');
+    await onSave(kind === 'guardar' ? { kind, targetCents: v, days: d } : kind === 'limite' ? { kind, categoryId, limitCents: v, days: d } : { kind, categoryId, days: d });
+    onClose();
+  };
+  return (
+    <Sheet title="Criar desafio" onClose={onClose}>
+      <Seg value={kind} onChange={setKind} options={[['sem-gasto', 'Sem gastar'], ['limite', 'Limite'], ['guardar', 'Guardar']]} />
+      {kind !== 'guardar' && <Field label="Categoria"><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="*">Qualquer gasto variável</option>{cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>}
+      {kind !== 'sem-gasto' && <Field label={kind === 'guardar' ? 'Quanto guardar' : 'Gastar no máximo'}><MoneyInput value={value} onChange={setValue} /></Field>}
+      <Field label="Quantos dias"><input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ''))} /></Field>
+      {err && <div className="neg" role="alert">{err}</div>}
+      <div className="btnrow"><button className="btn" onClick={save}>Começar hoje</button></div>
+    </Sheet>
   );
 }

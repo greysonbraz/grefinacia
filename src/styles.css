@@ -393,3 +393,11 @@ input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color:
 .txdesc { font-size: 15px; color: var(--muted); max-width: 32ch; overflow-wrap: anywhere; }
 div.bigamount { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 .group > .kv { padding: 12px 16px; margin: 0; } .group > .kv b { text-align: right; overflow-wrap: anywhere; }
+
+/* metas inteligentes, meu futuro, desafios */
+.smart { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 10px 0 4px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--accent-soft); }
+.smart span { font-size: 13px; color: var(--muted); flex-basis: 100%; } .smart b { font-size: 17px; color: var(--text); } .smart .link { margin-left: auto; min-height: 36px; }
+.future-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.future-row > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-sm); background: var(--surface2); min-width: 0; }
+.future-row span { font-size: 12px; color: var(--muted); } .future-row b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.challenge .cardhead h2 { font-size: 15.5px; }
