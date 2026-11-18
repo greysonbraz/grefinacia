@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import { ImportStatement } from './Import';
 import { CardBills } from './CardBills';
+import { Agenda } from './Agenda';
 import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, remove, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
 import type { PaymentMethod, Transaction, Transfer, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
@@ -28,7 +29,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
   const [extra, setExtra] = useState<Extra>(NO_EXTRA);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [q, setQ] = useState('');
-  const [view, setView] = useState<'lista' | 'graficos' | 'recorrentes'>('lista');
+  const [view, setView] = useState<'lista' | 'calendario' | 'graficos' | 'recorrentes'>(initial === 'calendario' ? 'calendario' : 'lista');
   const [edit, setEdit] = useState<Transaction | 'new' | null>(initial === 'nova' ? 'new' : null);
   const [move, setMove] = useState<Transfer | null>(null);
   const [importing, setImporting] = useState(initial === 'importar');
@@ -73,7 +74,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
           {cardOut > 0 ? `${formatBRL(cardOut)} lançados no cartão com data neste mês contam no mês da fatura.` : ''}
         </div>
       )}
-      <Seg value={view} onChange={setView} options={[['lista', 'Lançamentos'], ['graficos', 'Gráficos'], ['recorrentes', 'Recorrentes']]} />
+      <Seg value={view} onChange={setView} options={[['lista', 'Lançamentos'], ['calendario', 'Calendário'], ['graficos', 'Gráficos'], ['recorrentes', 'Recorrentes']]} />
 
       {view === 'lista' && (
         <>
@@ -153,6 +154,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
       )}
       {filtersOpen && <FiltersSheet value={extra} onChange={setExtra} onClose={() => setFiltersOpen(false)} />}
       {move && <MoveSheet t={move} onClose={() => setMove(null)} />}
+      {view === 'calendario' && <Agenda ym={ym} />}
       {view === 'graficos' && <TxCharts ym={ym} />}
       {view === 'recorrentes' && (
         <div className="card">

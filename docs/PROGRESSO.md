@@ -51,7 +51,12 @@ Detalhes do redesign Purple Edition (pedido do dono, 18/11/2026; plano em 10 eta
 - Etapa 5 (Movimentações): resumo receitas/despesas/resultado; busca + filtros (categoria, conta, cartão, origem) com contador e chips; aba Transferências; transferências (entre contas, investimento, câmbio) na lista com detalhe e "Desfazer"; total do dia; faturas em grupo com atalho "Faturas do cartão"; cadastro com valor em destaque e categoria sugerida pela descrição (`suggestCategory`, a mesma da importação); "Veio de" nos importados.
 - Etapa 6 (Investimentos): aba "Visão geral" (padrão): total, distribuição por classe (ações, FIIs, ETFs, renda fixa, bancos, exterior, cripto), rentabilidade, proventos recebidos e previstos, maiores posições, evolução. Cálculo em `src/domain/investOverview.ts` (só leitura).
 - Skill UI UX Pro Max instalada no claude-brain (checklist de app: toque 48dp, retorno ≤150 ms, cor nunca é o único sinal).
-- Próximas: 7 AI, 8 Planejamento, 9 navegação/animações, 10 testes finais.
+- Cripto ao vivo: canal público de dados da Binance (`wss://data-stream.binance.vision`, sem chave), só com a aba Cripto aberta; par em reais ou via USDT/BRL; fecha em segundo plano; sem conexão vale a CoinGecko (`src/services/liveCrypto.ts`). Não deu para testar o canal daqui (a rede da nuvem não abre WebSocket): conferir no celular.
+- Etapa 7 (Grefinacia AI): orbe roxo que pulsa ao analisar, "Resumo de hoje" com números reais, alertas em cartões, perguntas em botões, indicador de digitação, "Ver a conta". Motor intocado.
+- Etapas 8 e 9: controles nativos no roxo, transição curta ao trocar de aba (sem `fill-mode` para não prender janelas fixas), esqueleto nas notícias.
+- Ideias de apps profissionais e fontes grátis: faixa "Mercado hoje" no Início (Ibovespa pelo Yahoo, dólar PTAX, Selic meta SGS 432, CDI SGS 4389, IPCA 12 meses SGS 13522; 1 busca/dia, só no Android) e **calendário financeiro** em Movimentações (entradas, contas, uma fatura por vencimento, proventos).
+- APK: o dono pediu para gerar só depois de um salto grande. Versão 1.20.0 no código, sem APK desde 1.19.0.
+- Próxima: 10 testes finais e refinamento; ideias na fila (com aprovação): escanear cupom/nota (ML Kit), lembrete de fatura, widget Android.
 
 Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
 - Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).

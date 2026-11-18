@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { marketStrip } from '../../domain/indicators';
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, ChevronRight, Coins, CreditCard, FileUp, Plus, Receipt, Sparkles } from 'lucide-react';
-import { useStore } from '../../state/store';
+import { refreshMarketStrip, useStore } from '../../state/store';
+import { isNative } from '../../services/platform';
 import type { Overview } from '../../domain/overview';
 import { netWorthSeries } from '../../domain/networth';
 import { healthIndicators, upcomingItems } from '../../domain/home';
@@ -176,7 +178,8 @@ export function Shortcuts({ nav, hasCards }: { nav: Nav; hasCards: boolean }) {
     ['Nova movimentação', Plus, () => nav.go('transactions', 'nova')],
     ...(hasCards ? [['Faturas do cartão', CreditCard, () => nav.go('transactions', 'faturas')] as [string, typeof Plus, () => void]] : []),
     ['Importar extrato', FileUp, () => nav.go('transactions', 'importar')],
-    ['Agenda de proventos', CalendarClock, () => nav.go('invest', 'dividendos')],
+    ['Calendário financeiro', CalendarClock, () => nav.go('transactions', 'calendario')],
+    ['Agenda de proventos', Coins, () => nav.go('invest', 'dividendos')],
     ['Perguntar à AI', Sparkles, () => nav.go('ai')],
   ];
   return (
@@ -187,3 +190,24 @@ export function Shortcuts({ nav, hasCards }: { nav: Nav; hasCards: boolean }) {
 }
 
 export { ChevronRight };
+
+/** Mercado hoje: Ibovespa, dólar, Selic, CDI e IPCA (Banco Central e Yahoo), atualizados no máximo 1×/dia. */
+export function MarketStrip() {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const items = useMemo(() => marketStrip(data, today), [data, today]);
+  // no navegador os sites recusam a leitura (CORS); no app Android a busca é nativa
+  useEffect(() => { if (isNative()) void refreshMarketStrip().catch(() => undefined); }, []);
+  if (!items.length) return null;
+  return (
+    <section className="mstrip" aria-label="Mercado hoje">
+      {items.map((i) => (
+        <div className="mitem" key={i.id}>
+          <span className="ml">{i.label}</span>
+          <b className="mv">{i.value}</b>
+          <span className={'mc ' + (i.changePct === undefined ? '' : i.changePct >= 0 ? 'pos' : 'neg')}>{i.changePct === undefined ? i.note : `${i.changePct >= 0 ? '+' : ''}${i.changePct.toFixed(2).replace('.', ',')}%`}</span>
+        </div>
+      ))}
+    </section>
+  );
+}

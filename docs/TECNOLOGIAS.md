@@ -1,6 +1,6 @@
 # Tecnologias do Grefinacia
 
-Versão 1.19.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
+Versão 1.20.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
 
 ## Aplicativo
 
@@ -43,6 +43,7 @@ Mínimo: **Android 8** (API 26). Alvo: API 36.
 | Feeds RSS | Notícias | Sem custo; só título, resumo e link | `src/domain/news.ts` |
 | Gemini Nano (no aparelho) | Perguntas livres no chat (opcional) | Sem custo; cota por app do AICore; envia métricas de uso ao Google | Ajustes → Grefinacia AI |
 | Meu Pluggy (Pluggy, regulada pelo Banco Central) | Saldos, extratos e cartões dos seus bancos pelo Open Finance | Grátis para uso pessoal, sem prazo; até 5 bancos do mesmo titular; atualiza a cada 24 h; autorização vale 1 ano | meu.pluggy.ai, dashboard.pluggy.ai; chaves em Ajustes → Conexão bancária |
+| Binance (dados públicos de mercado) | Preço de cripto ao vivo na aba Cripto | Grátis, sem chave, só leitura; WebSocket aberto só com a aba aberta | nada a configurar |
 | GitHub Actions | Gerar o APK assinado | Gratuito para o repositório | Secrets `ANDROID_KEYSTORE_BASE64` e `ANDROID_KEYSTORE_PASSWORD` |
 
 Hosts liberados na CSP: `src/lib/csp.ts` (um teste falha se entrar host novo sem querer).
@@ -70,7 +71,7 @@ restaurar, importar ou atualizar.
 
 ```bash
 npm ci
-npm test                 # varredura de segredos + 292 testes
+npm test                 # varredura de segredos + 296 testes
 npm run test:coverage    # mesmos testes com relatório de cobertura
 npm run build            # TypeScript + Vite (com CSP)
 PW_ROOT=<pasta do playwright> npm run e2e

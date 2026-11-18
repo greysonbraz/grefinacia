@@ -179,6 +179,9 @@ export const BCB_SERIES = {
   CDI: { code: 12, label: 'CDI', note: '% ao dia, dias úteis' },
   IPCA: { code: 433, label: 'IPCA', note: '% no mês' },
   USD: { code: 1, label: 'Dólar (PTAX venda)', note: 'reais por dólar, dias úteis' },
+  SELIC: { code: 432, label: 'Selic (meta)', note: '% ao ano' },
+  IPCA12: { code: 13522, label: 'IPCA em 12 meses', note: '% acumulado' },
+  CDIA: { code: 4389, label: 'CDI', note: '% ao ano' },
 } as const;
 export type IndexName = keyof typeof BCB_SERIES;
 
@@ -243,4 +246,20 @@ export async function fetchUsQuotes(tickers: string[]): Promise<{ quotes: UsQuot
     }
   }
   return { quotes, errors };
+}
+
+/** Ibovespa (pontos), pelo mesmo Yahoo Finance não oficial usado nas cotações. */
+export async function fetchIbovespa(): Promise<{ points: HistoryPoint[]; source: string } | FetchError> {
+  try {
+    countRequest('yahoo');
+    const { status, json } = await getJson('https://query1.finance.yahoo.com/v8/finance/chart/%5EBVSP?range=1mo&interval=1d');
+    const r = json?.chart?.result?.[0];
+    const ts: number[] = r?.timestamp ?? [];
+    const close: (number | null)[] = r?.indicators?.quote?.[0]?.close ?? [];
+    const points: HistoryPoint[] = ts.flatMap((t, i) => (typeof close[i] === 'number' ? [[localDate(t * 1000), Math.round(close[i] as number)] as HistoryPoint] : []));
+    if (!points.length) return { ticker: 'IBOV', message: `Yahoo Finance: sem dados do Ibovespa (HTTP ${status}).` };
+    return { points, source: 'Yahoo Finance (não oficial)' };
+  } catch (e) {
+    return { ticker: 'IBOV', message: 'Yahoo Finance: ' + explain(e) };
+  }
 }

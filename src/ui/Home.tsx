@@ -10,7 +10,7 @@ import type { Nav } from './App';
 import { News } from './News';
 import { DollarHome } from './Dollar';
 import { Money, Seg } from './kit';
-import { Health, Hero, InvestSummary, MonthPulse, Shortcuts, Upcoming } from './home/Blocks';
+import { Health, Hero, InvestSummary, MarketStrip, MonthPulse, Shortcuts, Upcoming } from './home/Blocks';
 import { NextMonthCard, SpendingCard } from './home/Month';
 import { Analyses } from './home/Analyses';
 
@@ -49,6 +49,7 @@ export function Home({ nav }: { nav: Nav }) {
       {cur === 'usd' ? <DollarHome /> : (
         <>
           <Hero o={o} />
+          <MarketStrip />
 
           {o.salaryPending && (
             <button className="alert good" onClick={async () => { await markPaid(o.salaryPending!); toast('Salário registrado como recebido'); }}>

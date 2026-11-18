@@ -54,6 +54,10 @@ try {
   ok((await text()).includes('R$ 1.700,00'), 'despesas do mês somam 1.700');
   await seg('Recorrentes');
   ok((await text()).includes('Aluguel'), 'despesa fixa virou recorrente');
+  await seg('Calendário');
+  await page.waitForTimeout(300);
+  ok((await text()).includes('Contas e faturas no mês') && (await text()).includes('Aluguel'), 'calendário financeiro mostra as contas do mês');
+  await shot('03b-calendario');
   await seg('Gráficos');
   await page.waitForTimeout(600);
   await shot('03-movimentacoes-graficos');

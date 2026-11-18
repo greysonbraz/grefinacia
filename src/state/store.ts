@@ -24,7 +24,7 @@ import { setPrivacyScreen } from '../services/security';
 import { clearSecrets, extractSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
 import { formatBRL } from '../lib/money';
 import { historyId, localDate, mergePoints } from '../domain/market';
-import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, fetchUsQuotes, type IndexName } from '../services/market';
+import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, fetchIbovespa, fetchUsQuotes, type IndexName } from '../services/market';
 import { brapiQuota, initUsage, type Usage } from '../services/usage';
 import { addDays, addMonths } from '../lib/dates';
 
@@ -396,7 +396,7 @@ const findHistory = (id: string) => state.data.marketHistory.find((h) => h.id ==
 function mergedHistory(kind: MarketHistory['kind'], symbol: string, points: HistoryPoint[], source: string, fetched: boolean): MarketHistory {
   const id = historyId(kind, symbol);
   const old = findHistory(id);
-  return { id, kind, symbol, unit: kind === 'indice' ? (symbol === 'USD' ? 'brl' : 'pct') : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
+  return { id, kind, symbol, unit: kind === 'indice' ? (symbol === 'USD' ? 'brl' : symbol === 'IBOV' ? 'pts' : 'pct') : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
 }
 
 /** Cada cotação buscada vira um ponto do dia no histórico (sem gastar consulta a mais). */
@@ -442,6 +442,28 @@ export async function refreshDollar(force = false): Promise<FetchError[]> {
   if ('message' in r) return [r];
   await saveHistoryLocal([mergedHistory('indice', 'USD', r.points, r.source, true)]);
   return [];
+}
+
+/** Faixa "Mercado hoje": Selic, CDI, IPCA 12 meses (Banco Central), dólar (PTAX) e Ibovespa. No máximo 1 busca por dia cada. */
+export async function refreshMarketStrip(force = false): Promise<FetchError[]> {
+  const errors: FetchError[] = [];
+  const out: MarketHistory[] = [];
+  for (const name of ['SELIC', 'CDIA', 'IPCA12'] as IndexName[]) {
+    const id = historyId('indice', name);
+    if (!force && fetchedToday(id) && findHistory(id)?.points.length) continue;
+    const r = await fetchBcbSeries(name, addMonths(state.today, name === 'IPCA12' ? -3 : -1), addDays(state.today, 60));
+    if ('message' in r) errors.push(r);
+    else out.push(mergedHistory('indice', name, r.points, r.source, true));
+  }
+  const ib = historyId('indice', 'IBOV');
+  if (force || !fetchedToday(ib)) {
+    const r = await fetchIbovespa();
+    if ('message' in r) errors.push(r);
+    else out.push(mergedHistory('indice', 'IBOV', r.points, r.source, true));
+  }
+  if (out.length) await saveHistoryLocal(out);
+  errors.push(...(await refreshDollar(force)));
+  return errors;
 }
 
 /** Cotações dos ativos americanos cadastrados na aba Dólar (respeita "cotação manual" nos Ajustes). */

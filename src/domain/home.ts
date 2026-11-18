@@ -161,3 +161,42 @@ export function healthIndicators(data: AppData, today: ISODate): HealthIndicator
   }
   return out;
 }
+
+export interface AgendaItem { id: string; kind: 'entrada' | 'conta' | 'fatura' | 'provento'; title: string; date: ISODate; cents: Cents; done: boolean }
+
+/**
+ * Calendário financeiro do mês: entradas (pela data), contas (pelo vencimento), faturas do cartão (uma por vencimento)
+ * e proventos (pela data de pagamento). `done` = já pago/recebido.
+ */
+export function monthAgenda(data: AppData, ym: YearMonth, today: ISODate): Map<ISODate, AgendaItem[]> {
+  const items: AgendaItem[] = [];
+  const invoices = new Map<string, AgendaItem>();
+  for (const t of data.transactions) {
+    if (t.type === 'income') {
+      if (monthOf(t.date) === ym) items.push({ id: t.id, kind: 'entrada', title: t.description, date: t.date, cents: t.amountCents, done: t.status === 'paid' });
+      continue;
+    }
+    const due = t.cardId ? t.dueDate ?? t.date : t.status === 'pending' ? effectiveDue(t) : t.paidDate ?? t.date;
+    if (monthOf(due) !== ym) continue;
+    if (t.cardId) {
+      const k = `${t.cardId}|${due}`;
+      const card = data.cards.find((c) => c.id === t.cardId);
+      const inv = invoices.get(k) ?? { id: 'inv:' + k, kind: 'fatura' as const, title: `Fatura ${card?.name ?? 'do cartão'}`, date: due, cents: 0, done: true };
+      inv.cents += t.amountCents;
+      inv.done = inv.done && t.status === 'paid';
+      invoices.set(k, inv);
+    } else if (t.status === 'pending' || ['fixa', 'assinatura', 'parcelada'].includes(t.kind)) {
+      // gastos do dia a dia já pagos ficam no extrato; aqui entram contas (pendentes ou de compromisso)
+      items.push({ id: t.id, kind: 'conta', title: t.description, date: due, cents: t.amountCents, done: t.status === 'paid' });
+    }
+  }
+  items.push(...invoices.values());
+  for (const r of dividendRows(data, today)) {
+    const pay = r.event.receivedAt ?? r.event.paymentDate;
+    if (!pay || monthOf(pay) !== ym || r.status === 'cancelado') continue;
+    items.push({ id: 'div:' + r.event.id, kind: 'provento', title: r.asset.ticker, date: pay, cents: r.netCents, done: r.status === 'pago' });
+  }
+  const out = new Map<ISODate, AgendaItem[]>();
+  for (const it of items.sort((a, b) => a.date.localeCompare(b.date))) out.set(it.date, [...(out.get(it.date) ?? []), it]);
+  return out;
+}

@@ -183,7 +183,7 @@ export interface MarketHistory {
   id: string; // ex.: "b3:PETR4", "cripto:bitcoin", "indice:CDI"
   kind: 'b3' | 'cripto' | 'indice';
   symbol: string;
-  unit: 'cents' | 'pct' | 'brl'; // brl: reais por unidade (cotação do dólar)
+  unit: 'cents' | 'pct' | 'brl' | 'pts'; // brl: reais por unidade (cotação do dólar); pts: pontos de índice
   points: HistoryPoint[]; // ordenado por data
   source: string;
   updatedAt: string; // última busca na fonte (ISO)

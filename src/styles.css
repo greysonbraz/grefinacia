@@ -339,3 +339,20 @@ input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color:
 .app > .screen { animation: tabin 180ms var(--ease); }
 @keyframes tabin { from { opacity: 0; transform: translateY(6px); } }
 .news-skel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Mercado hoje */
+.mstrip { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: -2px -16px 14px; padding: 0 16px; }
+.mstrip::-webkit-scrollbar { display: none; }
+.mitem { flex: 0 0 auto; display: flex; flex-direction: column; gap: 1px; padding: 9px 12px; min-width: 104px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.mitem .ml { font-size: 11.5px; color: var(--muted); } .mitem .mv { font-size: 15px; font-weight: 640; font-variant-numeric: tabular-nums; }
+.mitem .mc { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mitem .mc.pos { color: var(--good); } .mitem .mc.neg { color: var(--bad); }
+
+/* calendário financeiro */
+.cal.agenda button, .cal.agenda span { flex-direction: column; gap: 2px; }
+.cal.agenda button { display: flex; align-items: center; justify-content: center; min-height: 44px; }
+.cal.agenda .has::after { display: none; }
+.cal .marks { display: flex; gap: 3px; height: 6px; }
+.cal .marks i { width: 6px; height: 6px; border-radius: 50%; }
+.cal .marks i.in { background: var(--good); } .cal .marks i.out { background: var(--bad); }
+.cal.agenda .sel .marks i { box-shadow: 0 0 0 1px var(--accent-ink); }
