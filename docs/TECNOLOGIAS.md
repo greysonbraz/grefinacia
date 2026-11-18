@@ -1,6 +1,6 @@
 # Tecnologias do Grefinacia
 
-Versão 1.21.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
+Versão 1.22.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
 
 ## Aplicativo
 

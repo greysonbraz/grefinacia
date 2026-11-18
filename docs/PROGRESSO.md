@@ -62,7 +62,8 @@ Detalhes do redesign Purple Edition (pedido do dono, 18/11/2026; plano em 10 eta
   - **Widget Android** (`GrefinaciaWidget`): livre para gastar, saldo disponível, próxima conta; o app envia os valores (`GrefinaciaPlugin.setWidget`); respeita "ocultar valores"; tocar abre o app.
   - Plugin nativo novo `GrefinaciaPlugin` (registrado em `MainActivity`); dependência `com.google.mlkit:text-recognition:16.0.1`.
 - Teste instável observado: `tests/vault.test.ts` falhou uma vez na bateria completa e passou isolado e na repetição (tempo de criptografia).
-- Próxima: 10 testes finais e refinamento; depois o APK do salto.
+- Etapa 10 (revisão final, 1.22.0): navegação automática agora confere as 5 abas em 360px com "reduzir movimento" (nada vaza para os lados); botões de ícone com 48dp (Android); rótulos da barra de baixo ajustados em telas estreitas. 301 testes; build Android do GitHub OK.
+- APK do salto (1.22.0) enviado ao dono: tudo desde o 1.19.0.
 
 Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
 - Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).

@@ -324,6 +324,26 @@ try {
   ok(!tried.evalRan, 'eval é bloqueado pela CSP');
   // overflow horizontal
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'sem rolagem horizontal em 412px');
+  // celular pequeno (360px) e "reduzir movimento": nada vaza para os lados em nenhuma aba
+  await page.setViewportSize({ width: 360, height: 760 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const name of ['Início', 'Movimentações', 'Investimentos', 'Grefinacia AI', 'Planejamento']) {
+    await tab(name);
+    await page.waitForTimeout(250);
+    const wide = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      return [...document.querySelectorAll('.screen *')].filter((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0) return false;
+        // faixas que rolam de propósito (abas, atalhos, mercado) ficam de fora
+        if (el.closest('.seg, .shortcuts, .mstrip, .chips, .qchips')) return false;
+        return r.right > vw + 1;
+      }).map((el) => el.className || el.tagName).slice(0, 3);
+    });
+    ok(wide.length === 0, `360px sem vazamento em ${name}${wide.length ? ': ' + wide.join(', ') : ''}`);
+  }
+  await tab('Início');
+  await shot('99-inicio-360');
 } catch (e) { errors.push('EXCEPTION ' + e.message); await shot('erro'); }
 console.log('\nERROS:', errors.length ? errors : 'nenhum');
 await browser.close(); srv.kill();

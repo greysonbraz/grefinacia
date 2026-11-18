@@ -44,7 +44,7 @@ h1, h2, h3, p { margin: 0; }
 .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; min-height: 40px; }
 .head h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
 .head .sub { color: var(--muted); font-size: 13px; }
-.iconbtn { width: 44px; height: 44px; border-radius: var(--r); display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); flex: none; }
+.iconbtn { width: 48px; height: 48px; border-radius: var(--r); display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); flex: none; }
 .iconbtn:active { background: var(--surface2); transform: scale(0.96); }
 .iconbtn { transition: transform var(--t-fast) var(--ease), background var(--t-fast); }
 
@@ -356,3 +356,5 @@ input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color:
 .cal .marks i { width: 6px; height: 6px; border-radius: 50%; }
 .cal .marks i.in { background: var(--good); } .cal .marks i.out { background: var(--bad); }
 .cal.agenda .sel .marks i { box-shadow: 0 0 0 1px var(--accent-ink); }
+/* celulares estreitos: os 5 rótulos da barra de baixo cabem sem encostar */
+@media (max-width: 380px) { .nav button { font-size: 9.5px; letter-spacing: -0.03em; } .nav button .pill { width: 50px; } }
