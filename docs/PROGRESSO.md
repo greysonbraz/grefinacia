@@ -56,7 +56,13 @@ Detalhes do redesign Purple Edition (pedido do dono, 18/11/2026; plano em 10 eta
 - Etapas 8 e 9: controles nativos no roxo, transição curta ao trocar de aba (sem `fill-mode` para não prender janelas fixas), esqueleto nas notícias.
 - Ideias de apps profissionais e fontes grátis: faixa "Mercado hoje" no Início (Ibovespa pelo Yahoo, dólar PTAX, Selic meta SGS 432, CDI SGS 4389, IPCA 12 meses SGS 13522; 1 busca/dia, só no Android) e **calendário financeiro** em Movimentações (entradas, contas, uma fatura por vencimento, proventos).
 - APK: o dono pediu para gerar só depois de um salto grande. Versão 1.20.0 no código, sem APK desde 1.19.0.
-- Próxima: 10 testes finais e refinamento; ideias na fila (com aprovação): escanear cupom/nota (ML Kit), lembrete de fatura, widget Android.
+- Ideias aprovadas pelo dono (1.21.0):
+  - **Escanear cupom/nota:** "Nova movimentação → Escanear cupom ou nota" (Android). Foto pela câmera ou galeria (`@capacitor/camera`), texto lido no aparelho pelo ML Kit Text Recognition (modelo embutido, sem internet), interpretado em `src/domain/receipt.ts` (loja, total, data, CNPJ) e categoria sugerida. Só preenche: você confere e salva. Permissão de câmera no manifesto.
+  - **Lembretes da fatura:** "Fatura X vence em N dias" (com valor) e "Fatura X fecha amanhã" (total até agora e a partir de quando as compras vão para a próxima). Chave em Ajustes → Notificações.
+  - **Widget Android** (`GrefinaciaWidget`): livre para gastar, saldo disponível, próxima conta; o app envia os valores (`GrefinaciaPlugin.setWidget`); respeita "ocultar valores"; tocar abre o app.
+  - Plugin nativo novo `GrefinaciaPlugin` (registrado em `MainActivity`); dependência `com.google.mlkit:text-recognition:16.0.1`.
+- Teste instável observado: `tests/vault.test.ts` falhou uma vez na bateria completa e passou isolado e na repetição (tempo de criptografia).
+- Próxima: 10 testes finais e refinamento; depois o APK do salto.
 
 Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
 - Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).

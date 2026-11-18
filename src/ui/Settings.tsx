@@ -24,6 +24,7 @@ import { BankConnect } from './Bank';
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
   ['salary', 'Salário', 'No dia do pagamento e ao confirmar o recebimento'],
   ['billsDue', 'Contas perto do vencimento', 'Dias antes e no dia'],
+  ['cardInvoice', 'Fatura do cartão', 'Vencimento (com o valor) e o dia antes de fechar'],
   ['overdue', 'Contas atrasadas', 'Lembrete diário por 3 dias'],
   ['dividendAnnounced', 'Proventos anunciados', 'Quando a fonte de dados trouxer um anúncio novo'],
   ['dividendSoon', 'Proventos perto do pagamento', 'Dias antes da data'],
@@ -114,7 +115,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <Field label="Avisar contas com"><select value={n.billsDaysBefore} onChange={(e) => setN({ billsDaysBefore: Number(e.target.value) })}>{[0, 1, 2, 3, 5, 7].map((d) => (<option key={d} value={d}>{d === 0 ? 'só no dia' : `${d} ${d === 1 ? 'dia' : 'dias'} antes`}</option>))}</select></Field>
         </div>
         <Field label="Avisar proventos com"><select value={n.dividendDaysBefore} onChange={(e) => setN({ dividendDaysBefore: Number(e.target.value) })}>{[1, 2, 3, 5].map((d) => (<option key={d} value={d}>{d} {d === 1 ? 'dia' : 'dias'} antes</option>))}</select></Field>
-        {NOTIF.map(([k, t, s]) => (<SwitchRow key={k} title={t} sub={s} on={n.types[k]} onChange={(on) => setN({ types: { ...n.types, [k]: on } })} />))}
+        {NOTIF.map(([k, t, s]) => (<SwitchRow key={k} title={t} sub={s} on={n.types[k] !== false} onChange={(on) => setN({ types: { ...n.types, [k]: on } })} />))}
         <Note>Lembretes com data (contas, salário, proventos) são agendados no Android e chegam com o app fechado. Alertas de orçamento e saldo são calculados quando você usa o app. Na Samsung, deixe o Grefinacia como "Não restrito" em Bateria para não atrasar avisos.</Note>
       </div>
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronRight, SlidersHorizontal, X, ScanText } from 'lucide-react';
 import { ImportStatement } from './Import';
 import { CardBills } from './CardBills';
 import { Agenda } from './Agenda';
@@ -12,6 +12,8 @@ import { formatDateBR, formatDayMonth, lastMonths, monthOf, monthShort, weekdayS
 import { buildInstallments, costMonth, effectiveDue, monthSummary, openInvoices } from '../domain/ledger';
 import { uid } from '../lib/ids';
 import { suggestCategory } from '../domain/importer';
+import { scanReceipt } from '../services/native';
+import { isNative } from '../services/platform';
 import { ChartBox, cssVar, Empty, Field, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
 type Filter = 'todas' | 'receitas' | 'despesas' | 'transferencias' | 'pendentes';
@@ -241,6 +243,30 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
     if (sug.source !== 'padrao') setCategoryId(sug.categoryId);
   };
   const batch = tx?.importId ? data.imports.find((b) => b.id === tx.importId) : undefined;
+  const [scanning, setScanning] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  /** Lê o cupom pela câmera e preenche o formulário (você confere antes de salvar). */
+  const scan = async () => {
+    setScanning(true);
+    setErr(null);
+    try {
+      const r = await scanReceipt(today);
+      if (!r) return;
+      if (r.totalCents) setAmount(centsToInput(r.totalCents));
+      if (r.date) setDate(r.date);
+      if (r.merchant) {
+        setDesc(r.merchant);
+        const sug = suggestCategory(r.merchant, 'expense', data, rules ?? []);
+        if (!catTouched && sug.source !== 'padrao') setCategoryId(sug.categoryId);
+      }
+      const got = [r.merchant && 'loja', r.totalCents && 'valor', r.date && 'data'].filter(Boolean);
+      setScanNote(got.length ? `Li ${got.join(', ')} do cupom. Confira antes de salvar.` : 'Não consegui ler o cupom. Tente outra foto, com o cupom reto e bem iluminado.');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Não foi possível ler o cupom.');
+    } finally {
+      setScanning(false);
+    }
+  };
   const kinds = type === 'income' ? INCOME_KINDS : EXPENSE_KINDS;
   const cats = data.categories.filter((c) => c.type === type);
   const credit = type === 'expense' && method === 'credito';
@@ -291,6 +317,8 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
   return (
     <Sheet title={tx ? 'Editar movimentação' : 'Nova movimentação'} onClose={onClose}>
       {!tx && <Seg value={type} onChange={changeType} options={[['expense', 'Despesa'], ['income', 'Receita']]} />}
+      {!tx && type === 'expense' && isNative() && <button className="btn ghost" style={{ marginBottom: 12 }} disabled={scanning} onClick={scan}><ScanText size={18} /> {scanning ? 'Lendo o cupom…' : 'Escanear cupom ou nota'}</button>}
+      {scanNote && <div className="note" style={{ marginTop: -4, marginBottom: 10 }}>{scanNote}</div>}
       {batch && <div className="note" style={{ marginTop: 0, marginBottom: 10 }}>Veio de: {batch.fileName}{tx?.cardId && tx.dueDate ? ` · fatura que vence em ${formatDateBR(tx.dueDate)}` : ''}</div>}
       <Field label={kind === 'parcelada' && !tx ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}><span className="bigamount"><MoneyInput name="valor" value={amount} onChange={setAmount} autoFocus={!tx} /></span></Field>
       <Field label="Descrição" hint={!catTouched && !tx ? 'A categoria é sugerida pela descrição; troque se quiser.' : undefined}><input name="descricao" value={desc} onChange={(e) => changeDesc(e.target.value)} placeholder={type === 'income' ? 'Ex.: Salário de novembro' : 'Ex.: Mercado da semana'} /></Field>

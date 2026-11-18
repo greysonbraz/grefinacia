@@ -1,7 +1,7 @@
 {
   "name": "grefinacia",
   "private": true,
-  "version": "1.20.0",
+  "version": "1.21.0",
   "type": "module",
   "description": "Controle financeiro pessoal e investimentos (B3) para Android",
   "scripts": {
@@ -36,6 +36,7 @@
     "@capacitor/android": "^8.6.0",
     "@capacitor/app": "^8.1.2",
     "@capacitor/background-runner": "^3.0.0",
+    "@capacitor/camera": "^8.2.6",
     "@capacitor/core": "^8.6.0",
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/haptics": "^8.0.2",

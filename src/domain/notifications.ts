@@ -1,7 +1,7 @@
 import type { AppData, Cents, ISODate, Settings } from '../lib/types';
-import { addDays, addMonthsYM, diffDays, formatDayMonth, makeDate, monthOf, parseISO } from '../lib/dates';
+import { addDays, addMonthsYM, daysInMonth, diffDays, formatDayMonth, makeDate, monthOf, parseISO } from '../lib/dates';
 import { formatBRL, formatPct } from '../lib/money';
-import { effectiveDue, isCredit, overdueBills } from './ledger';
+import { cardInvoiceDue, effectiveDue, isCredit, overdueBills } from './ledger';
 import { dividendRows } from './dividends';
 import { computeOverview } from './overview';
 import { goalProgress } from './goals';
@@ -87,7 +87,14 @@ export function planNotifications(data: AppData, settings: Settings, now: Date, 
         groups.set(due, g);
       }
     }
+    // fatura do cartão: lembrete próprio (com o nome do cartão) quando ligado; senão entra junto das contas
     for (const inv of invoice.values()) {
+      if (prefs.types.cardInvoice !== false) {
+        const days = Math.max(prefs.billsDaysBefore, 3);
+        add(`invoice-before:${inv.label}|${inv.due}`, addDays(inv.due, -days), `${inv.label} vence em ${days} dias`, `${formatBRL(inv.cents)} no app, vencimento ${formatDayMonth(inv.due)}. Confira o valor no app do banco.`, 'contas');
+        add(`invoice-due:${inv.label}|${inv.due}`, inv.due, `${inv.label} vence hoje`, `${formatBRL(inv.cents)}.`, 'contas');
+        continue;
+      }
       const g = groups.get(inv.due) ?? [];
       g.push({ label: inv.label, cents: inv.cents });
       groups.set(inv.due, g);
@@ -98,6 +105,21 @@ export function planNotifications(data: AppData, settings: Settings, now: Date, 
       const before = addDays(due, -prefs.billsDaysBefore);
       if (prefs.billsDaysBefore > 0) add(`bill-before:${due}`, before, 'Conta perto do vencimento', `${names} — ${formatBRL(total)} vence em ${formatDayMonth(due)}.`, 'contas');
       add(`bill-due:${due}`, due, 'Conta vence hoje', `${names} — ${formatBRL(total)}.`, 'contas');
+    }
+  }
+
+  // 2b) Fechamento da fatura: um dia antes, o total até agora e a partir de quando as compras vão para a próxima
+  if (prefs.types.cardInvoice !== false) {
+    for (const card of data.cards) {
+      for (const k of [0, 1]) {
+        const ym = addMonthsYM(monthOf(today), k);
+        const closing = makeDate(ym, Math.min(card.closingDay, daysInMonth(ym)));
+        if (closing <= today || closing > horizon) continue;
+        const nextDue = cardInvoiceDue(card, closing).dueDate;
+        const total = data.transactions.filter((t) => t.cardId === card.id && t.type === 'expense' && t.status === 'pending' && t.dueDate === nextDue).reduce((s, t) => s + t.amountCents, 0);
+        add(`invoice-close:${card.id}|${closing}`, addDays(closing, -1), `Fatura ${card.name} fecha amanhã`, `Até agora: ${formatBRL(total)} (vence ${formatDayMonth(nextDue)}). Compras a partir de ${formatDayMonth(addDays(closing, 1))} vão para a fatura seguinte.`, 'contas');
+        break;
+      }
     }
   }
 

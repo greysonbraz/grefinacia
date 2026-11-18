@@ -1,0 +1,42 @@
+import { registerPlugin } from '@capacitor/core';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { isNative } from './platform';
+import { parseReceipt, type ReceiptGuess } from '../domain/receipt';
+
+/** Plugin nativo do app (android/app/src/main/java/.../GrefinaciaPlugin.java). */
+interface GrefinaciaPlugin {
+  recognizeText(o: { base64: string }): Promise<{ text: string }>;
+  setWidget(o: { free: string; freeLabel: string; balance: string; next: string; updated: string }): Promise<void>;
+}
+const Native = registerPlugin<GrefinaciaPlugin>('Grefinacia');
+
+export class ScanError extends Error {}
+
+/**
+ * Fotografa (ou escolhe da galeria) um cupom/nota e lê no próprio aparelho: loja, total e data.
+ * Nada sai do celular. Devolve null se você cancelar.
+ */
+export async function scanReceipt(today: string): Promise<(ReceiptGuess & { text: string }) | null> {
+  if (!isNative()) throw new ScanError('A leitura de cupom funciona no app Android.');
+  let photo;
+  try {
+    photo = await Camera.getPhoto({ resultType: CameraResultType.Base64, source: CameraSource.Prompt, quality: 70, width: 1600, correctOrientation: true, promptLabelHeader: 'Cupom ou nota', promptLabelPhoto: 'Escolher da galeria', promptLabelPicture: 'Tirar foto', promptLabelCancel: 'Cancelar' });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/cancel/i.test(msg)) return null;
+    throw new ScanError(/permission|denied/i.test(msg) ? 'Sem permissão para a câmera. Libere em Configurações do Android → Apps → Grefinacia → Permissões.' : 'Não foi possível abrir a câmera.');
+  }
+  if (!photo.base64String) return null;
+  const { text } = await Native.recognizeText({ base64: photo.base64String });
+  return { ...parseReceipt(text ?? '', today), text: text ?? '' };
+}
+
+let lastWidget = '';
+/** Atualiza o widget da tela inicial (só no Android; só quando algo mudou). */
+export function pushWidget(v: { free: string; freeLabel: string; balance: string; next: string; updated: string }): void {
+  if (!isNative()) return;
+  const key = JSON.stringify({ ...v, updated: '' });
+  if (key === lastWidget) return;
+  lastWidget = key;
+  void Native.setWidget(v).catch(() => undefined);
+}

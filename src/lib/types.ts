@@ -365,6 +365,8 @@ export interface NotificationPrefs {
   types: {
     salary: boolean;
     billsDue: boolean;
+    /** Fatura do cartão: vencimento e fechamento (lembretes próprios). */
+    cardInvoice?: boolean;
     overdue: boolean;
     dividendAnnounced: boolean;
     dividendSoon: boolean;

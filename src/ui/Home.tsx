@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { pushWidget } from '../services/native';
+import { upcomingItems } from '../domain/home';
 import { goInsight } from './Assistant';
 import { Settings as Gear, Newspaper, TriangleAlert, CircleCheck, Info, Banknote, Coins, ChevronRight, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { confirmDividend, markPaid, toast, updateSettings, useStore } from '../state/store';
@@ -30,6 +32,18 @@ export function Home({ nav }: { nav: Nav }) {
   const insights = useMemo(() => generateInsights(o, data, settings), [o, data, settings]);
   const hide = settings.hideValues;
   const date = parseISO(today).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  // widget da tela inicial do Android: livre para gastar, saldo e a próxima conta (respeita "ocultar valores")
+  useEffect(() => {
+    const next = upcomingItems(data, today, 15).find((i) => i.kind !== 'provento');
+    const m = (c: number) => (hide ? '•••' : formatBRL(c));
+    pushWidget({
+      freeLabel: 'Livre para gastar no mês',
+      free: m(o.spend.remainingCents),
+      balance: `Saldo disponível ${m(o.balanceCents)}`,
+      next: next ? `${next.title} · ${formatDayMonth(next.date)} · ${m(next.cents)}` : '',
+      updated: `Atualizado ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+    });
+  }, [o, data, today, hide]);
 
   return (
     <div className="screen">
