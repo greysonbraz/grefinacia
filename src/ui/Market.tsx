@@ -5,7 +5,8 @@ import { defaultAccountId, deleteCryptoAsset, deleteCryptoOperation, refreshCryp
 import type { CryptoAsset, HistoryPoint, ISODate } from '../lib/types';
 import { computePositions, portfolioTotals, type InvestOp, type Position } from '../domain/portfolio';
 import { benchmarkCurve, cdiAccumulated, historyId, ipcaAccumulated, PERIOD_LABEL, periodStart, pointsBetween, portfolioPerformance, sample, type Period } from '../domain/market';
-import { POPULAR_COINS, searchCoins, type CoinHit } from '../services/market';
+import { fetchCryptoQuotes, POPULAR_COINS, searchCoins, type CoinHit, type CryptoQuote } from '../services/market';
+import type { LivePrice, LiveStatus } from '../services/liveCrypto';
 import { centsToInput, formatBRL, formatPct, formatQty, parseDecimal, parseMoney } from '../lib/money';
 import { addMonths, formatDateBR, formatDayMonth, monthShortYear } from '../lib/dates';
 import { uid } from '../lib/ids';
@@ -131,7 +132,14 @@ export function Cripto() {
   const [errors, setErrors] = useState<string[]>([]);
   // preço ao vivo (Binance) enquanto a aba está aberta; sem ele, vale a última cotação salva
   const heldSymbols = useMemo(() => computePositions(data.cryptoAssets, data.cryptoOps).filter((p) => p.quantity > 0).map((p) => p.asset.symbol), [data.cryptoAssets, data.cryptoOps]);
-  const live = useLiveCrypto(heldSymbols);
+  // um canal só: as moedas que você tem + as principais do mercado (painel "Mercado agora")
+  const live = useLiveCrypto([...heldSymbols, ...MARKET.map((c) => c.symbol)]);
+  const [addCoin, setAddCoin] = useState<string | undefined>(undefined);
+  // ao abrir a aba: atualiza as suas cotações se a última tiver mais de 10 minutos (sem avisos)
+  useEffect(() => {
+    const old = data.cryptoAssets.some((a) => !a.quote || Date.now() - new Date(a.quote.fetchedAt ?? a.quote.time).getTime() > 10 * 60_000);
+    if (old && data.cryptoAssets.length) void refreshCryptoQuotes();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const assets = useMemo(() => data.cryptoAssets.map((a) => {
     const lp = live.prices.get(a.symbol.toUpperCase());
     return lp ? { ...a, quote: { priceCents: lp.priceCents, time: new Date(lp.at).toISOString(), fetchedAt: new Date().toISOString(), source: lp.via === 'BRL' ? 'Binance (ao vivo)' : 'Binance (ao vivo, via USDT)', changePct: lp.changePct } } : a;
@@ -164,13 +172,13 @@ export function Cripto() {
     <>
       <div className="card hero">
         <div className="cardhead">
-          <div><div className="lbl">Valor em cripto {live.status === 'live' ? <span className="live" title="Preço ao vivo da Binance">ao vivo</span> : null}</div><div className="big num" style={{ fontSize: 30 }}>{formatBRL(totals.equityValueCents)}</div></div>
+          <div><div className="lbl">Valor em cripto {live.status === 'live' && heldSymbols.some((x) => live.prices.has(x.toUpperCase())) ? <span className="live" title="Preço ao vivo da Binance">ao vivo</span> : null}</div><div className="big num" style={{ fontSize: 30 }}>{formatBRL(totals.equityValueCents)}</div></div>
           <button className="iconbtn" onClick={refresh} disabled={busy || data.cryptoAssets.length === 0} aria-label="Atualizar cotações de cripto"><RefreshCw size={18} style={spin(busy)} /></button>
         </div>
         <div className="kv"><span>Total investido</span><b className="num">{formatBRL(totals.investedCents)}</b></div>
         <div className="kv"><span>Lucro ou prejuízo</span><b className={'num ' + (totals.pnlCents > 0 ? 'pos' : totals.pnlCents < 0 ? 'neg' : '')}>{totals.pnlPct === null ? '—' : `${formatBRL(totals.pnlCents)} (${formatPct(totals.pnlPct, true)})`}</b></div>
         {totals.realizedCents !== 0 && <div className="kv"><span>Resultado já realizado em vendas</span><b className="num">{formatBRL(totals.realizedCents)}</b></div>}
-        <Note>{live.status === 'live' ? 'Preço ao vivo pelos dados públicos da Binance (em reais; moedas sem par em reais são convertidas pelo USDT). ' : live.status === 'connecting' ? 'Conectando ao preço ao vivo… ' : 'Preço ao vivo indisponível agora: valem as últimas cotações da CoinGecko (alguns minutos de atraso). '}Cripto oscila muito: trate como parte pequena da carteira.</Note>
+        <Note>{live.status === 'live' && live.prices.size > 0 ? 'Preço ao vivo pelos dados públicos da Binance (em reais; moedas sem par em reais são convertidas pelo USDT). ' : live.status === 'connecting' ? 'Conectando ao preço ao vivo… ' : 'Sem o preço ao vivo agora: valem as cotações da CoinGecko (alguns minutos de atraso), atualizadas ao abrir a aba. '}Cripto oscila muito: trate como parte pequena da carteira.</Note>
         {errors.map((e) => (<div className="note neg" key={e}>{e}</div>))}
       </div>
       {held.length === 0 ? <div className="card"><Empty title="Nenhuma cripto" text="Cadastre suas moedas com a quantidade, o preço ou o total pago e a data da compra." action="Adicionar cripto" onAction={() => setAdd(true)} /></div> : (
@@ -196,9 +204,10 @@ export function Cripto() {
           )}
         </>
       )}
+      <CryptoMarket live={live} onAdd={(id) => { setAddCoin(id); setAdd(true); }} />
       <PerformanceCard scope="cripto" />
-      <button className="fab" onClick={() => setAdd(true)} aria-label="Adicionar cripto ou operação"><Plus size={26} /></button>
-      {add && <CryptoForm onClose={() => setAdd(false)} />}
+      <button className="fab" onClick={() => { setAddCoin(undefined); setAdd(true); }} aria-label="Adicionar cripto ou operação"><Plus size={26} /></button>
+      {add && <CryptoForm coinId={addCoin} onClose={() => setAdd(false)} />}
       {dp && <CryptoDetail p={dp} today={today} onClose={() => setDetail(null)} />}
       <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
     </>
@@ -208,11 +217,11 @@ export function Cripto() {
 /** Número de casas decimais digitadas (para limitar a 8 na quantidade de cripto). */
 const decimals = (s: string) => (s.includes(',') ? s.split(',')[1].length : s.includes('.') && !/^\d{1,3}(\.\d{3})+$/.test(s) ? s.split('.')[1].length : 0);
 
-function CryptoForm({ onClose, asset }: { onClose: () => void; asset?: CryptoAsset }) {
+function CryptoForm({ onClose, asset, coinId: startCoin }: { onClose: () => void; asset?: CryptoAsset; coinId?: string }) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const known = [...data.cryptoAssets.map(({ coinId, symbol, name }) => ({ coinId, symbol, name })), ...POPULAR_COINS.filter((c) => !data.cryptoAssets.some((a) => a.coinId === c.coinId))];
-  const [coinId, setCoinId] = useState(asset?.coinId ?? 'bitcoin');
+  const [coinId, setCoinId] = useState(asset?.coinId ?? startCoin ?? 'bitcoin');
   const [found, setFound] = useState<CoinHit[]>([]);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -332,5 +341,54 @@ function CryptoDetail({ p, today, onClose }: { p: Position<CryptoAsset>; today: 
       <button className="btn danger" onClick={async () => { await deleteCryptoAsset(p.asset.id); toast('Moeda removida'); onClose(); }}>Remover moeda e todo o histórico</button>
       {op && <CryptoForm asset={p.asset} onClose={() => setOp(false)} />}
     </Full>
+  );
+}
+
+/** Principais moedas, sempre visíveis (mesmo sem você ter nenhuma). */
+const MARKET = ['bitcoin', 'ethereum', 'solana', 'ripple', 'binancecoin', 'cardano', 'dogecoin', 'tether'].map((id) => POPULAR_COINS.find((c) => c.coinId === id)!);
+// última consulta à CoinGecko na sessão (evita repetir a cada vez que a aba abre)
+let cgCache: { at: number; quotes: CryptoQuote[] } | null = null;
+
+/**
+ * "Mercado agora": preço em reais e variação em 24 h das principais moedas. Ao vivo pela Binance quando a conexão
+ * abre; senão, a CoinGecko (atraso de alguns minutos), buscada ao abrir a aba. Tocar numa moeda abre o cadastro.
+ */
+function CryptoMarket({ live, onAdd }: { live: { prices: Map<string, LivePrice>; status: LiveStatus }; onAdd: (coinId: string) => void }) {
+  const [cg, setCg] = useState<CryptoQuote[]>(cgCache?.quotes ?? []);
+  const [cgAt, setCgAt] = useState<number | null>(cgCache?.at ?? null);
+  useEffect(() => {
+    if (cgCache && Date.now() - cgCache.at < 3 * 60_000) return;
+    let alive = true;
+    void fetchCryptoQuotes(MARKET.map((c) => c.coinId)).then(({ quotes }) => {
+      if (!quotes.length) return;
+      cgCache = { at: Date.now(), quotes };
+      if (alive) { setCg(quotes); setCgAt(cgCache.at); }
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  const rows = MARKET.map((c) => {
+    const lp = live.prices.get(c.symbol);
+    const q = cg.find((x) => x.coinId === c.coinId);
+    return { c, price: lp?.priceCents ?? q?.priceCents, change: lp ? lp.changePct : q?.changePct, isLive: !!lp };
+  });
+  const any = rows.some((r) => r.price !== undefined);
+  const mins = cgAt ? Math.max(Math.round((Date.now() - cgAt) / 60_000), 0) : null;
+  return (
+    <section aria-labelledby="h-mercado-cripto">
+      <div className="ghead"><h2 id="h-mercado-cripto">Mercado agora {live.status === 'live' && rows.some((r) => r.isLive) ? <span className="live">ao vivo</span> : null}</h2></div>
+      <div className="group">
+        {rows.map(({ c, price, change, isLive }) => (
+          <button className="row" key={c.coinId} onClick={() => onAdd(c.coinId)} aria-label={`${c.name}: ${price !== undefined ? formatBRL(price) : 'sem preço'}. Tocar para cadastrar`}>
+            <div className="ic" style={{ fontSize: 11, fontWeight: 650, color: 'var(--text)' }}>{c.symbol}</div>
+            <div className="mid"><div className="t">{c.name}</div><div className="s">{isLive ? 'Binance, ao vivo' : price !== undefined ? `CoinGecko${mins !== null ? (mins === 0 ? ', agora' : `, há ${mins} min`) : ''}` : 'buscando preço…'}</div></div>
+            <div className="end">
+              <div className="num">{price !== undefined ? formatBRL(price) : '—'}</div>
+              {change !== undefined && <div className={'s num ' + (change >= 0 ? 'pos' : 'neg')}>{formatPct(change, true)} em 24 h</div>}
+            </div>
+          </button>
+        ))}
+      </div>
+      {!any && <div className="hint" style={{ margin: '0 4px 12px' }}>Sem internet ou serviço fora do ar: os preços aparecem quando a conexão voltar.</div>}
+    </section>
   );
 }

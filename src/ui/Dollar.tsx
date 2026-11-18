@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Newspaper, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { News } from './News';
 import { applyCambio, dismissCambio, refreshDollar, refreshUsQuotes, remove, toast, upsert, useStore } from '../state/store';
@@ -8,7 +8,8 @@ import { formatBRL, parseDecimal } from '../lib/money';
 import { addDays, formatDateBR, formatDayMonth } from '../lib/dates';
 import { uid } from '../lib/ids';
 import type { UsdHolding } from '../lib/types';
-import { ChartBox, Field, Legend, Note, Seg, seriesColors, Sheet } from './kit';
+import { ChartBox, Field, Legend, Note, Progress, Seg, seriesColors, Sheet } from './kit';
+import { depositOutlook } from '../domain/docread';
 
 /** Painel em dólar (Etapa 15): contas em dólar, ações e ETFs dos EUA e investimentos em dólar do banco. */
 export function DollarHome() {
@@ -71,11 +72,15 @@ export function DollarHome() {
         {holdings.map((h) => {
           const v = holdingUsd(h);
           const g = isAsset(h) && h.priceUsdCents !== undefined ? v - holdingCostUsd(h) : null;
+          const dep = depositOutlook(h, today);
           return (
-            <button key={h.id} className="row" style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, color: 'inherit' }} onClick={() => setEdit(h)}>
+            <Fragment key={h.id}>
+            <button className="row" style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, color: 'inherit' }} onClick={() => setEdit(h)}>
               <div className="mid"><div className="t">{h.name}{h.ticker ? ` (${h.ticker})` : ''}</div><div className="s">{KIND_LABEL[h.kind]}{isAsset(h) && h.quantity ? ` · ${h.quantity.toLocaleString('pt-BR')} × ${h.priceUsdCents !== undefined ? formatUSD(h.priceUsdCents) : 'sem cotação'}` : ''}{h.changePct !== undefined ? ` · ${h.changePct >= 0 ? '+' : ''}${h.changePct.toFixed(2).replace('.', ',')}% hoje` : ''}</div></div>
               <div className="end num">{formatUSD(v)}{g !== null && <div className={'s ' + (g >= 0 ? 'pos' : 'neg')}>{g >= 0 ? '+' : ''}{formatUSD(g)}</div>}</div>
             </button>
+            {dep && <DepositLine o={dep} h={h} />}
+            </Fragment>
           );
         })}
         {bankUsd.map((i) => (
@@ -151,6 +156,10 @@ function HoldingSheet({ h, onClose }: { h: UsdHolding | null; onClose: () => voi
   const [qty, setQty] = useState(h?.quantity !== undefined ? String(h.quantity).replace('.', ',') : '');
   const [cost, setCost] = useState(h?.avgCostUsdCents !== undefined ? (h.avgCostUsdCents / 100).toFixed(2).replace('.', ',') : '');
   const [bal, setBal] = useState(h?.balanceUsdCents !== undefined ? (h.balanceUsdCents / 100).toFixed(2).replace('.', ',') : '');
+  const [applied, setApplied] = useState(h?.appliedUsdCents !== undefined ? (h.appliedUsdCents / 100).toFixed(2).replace('.', ',') : '');
+  const [rate, setRate] = useState(h?.ratePct !== undefined ? String(h.ratePct).replace('.', ',') : '');
+  const [startDate, setStartDate] = useState(h?.startDate ?? '');
+  const [maturity, setMaturity] = useState(h?.maturityDate ?? '');
   const asset = kind === 'acao' || kind === 'etf' || kind === 'reit';
   const save = async () => {
     const now = new Date().toISOString();
@@ -167,7 +176,11 @@ function HoldingSheet({ h, onClose }: { h: UsdHolding | null; onClose: () => voi
       const b = parseDecimal(bal);
       if (!name.trim()) return toast('Dê um nome, ex.: Conta Global Inter', 'err');
       if (b === null) return toast('Informe o saldo em dólar', 'err');
-      await upsert('usdHoldings', { id: h?.id ?? uid('us_'), kind, name: name.trim(), balanceUsdCents: Math.round(b * 100), updatedAt: now });
+      const dep = kind === 'deposito';
+      const a = dep ? parseDecimal(applied) : null;
+      const r = dep ? parseDecimal(rate) : null;
+      await upsert('usdHoldings', { ...(h ?? {}), id: h?.id ?? uid('us_'), kind, name: name.trim(), ticker: undefined, quantity: undefined, avgCostUsdCents: undefined, balanceUsdCents: Math.round(b * 100),
+        appliedUsdCents: a !== null && a > 0 ? Math.round(a * 100) : undefined, ratePct: r !== null && r > 0 ? r : undefined, startDate: dep && startDate ? startDate : undefined, maturityDate: dep && maturity ? maturity : undefined, updatedAt: now });
     }
     toast('Salvo');
     onClose();
@@ -193,13 +206,39 @@ function HoldingSheet({ h, onClose }: { h: UsdHolding | null; onClose: () => voi
       ) : (
         <div className="two">
           <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'deposito' ? 'Inter Dólar+' : 'Conta Global Inter'} /></Field>
-          <Field label="Saldo (US$)"><input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} placeholder="250,00" /></Field>
+          <Field label={kind === 'deposito' ? 'Valor de hoje (US$)' : 'Saldo (US$)'}><input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} placeholder="250,00" /></Field>
         </div>
+      )}
+      {kind === 'deposito' && (
+        <>
+          <div className="two">
+            <Field label="Valor aplicado (US$)"><input inputMode="decimal" value={applied} onChange={(e) => setApplied(e.target.value)} placeholder="10,90" /></Field>
+            <Field label="Rentabilidade (% ao ano)"><input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="3,8" /></Field>
+          </div>
+          <div className="two">
+            <Field label="Aplicação"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></Field>
+            <Field label="Vencimento"><input type="date" value={maturity} onChange={(e) => setMaturity(e.target.value)} /></Field>
+          </div>
+        </>
       )}
       <div className="btnrow">
         <button className="btn" onClick={save}>Salvar</button>
         {h && <button className="btn danger" onClick={async () => { if (typeof window.confirm !== 'function' || window.confirm('Apagar este item?')) { await remove('usdHoldings', h.id); onClose(); } }}><Trash2 size={16} /> Apagar</button>}
       </div>
     </Sheet>
+  );
+}
+
+/** Renda fixa em dólar: vencimento, dias que faltam, quanto já rendeu e estimativa no vencimento. */
+function DepositLine({ o, h }: { o: NonNullable<ReturnType<typeof depositOutlook>>; h: UsdHolding }) {
+  return (
+    <div className="deposit">
+      {o.pct !== undefined && <Progress pct={o.pct} />}
+      <div className="deposit-grid">
+        <div><span>Vence</span><b>{formatDateBR(h.maturityDate!)}</b><small>{o.daysLeft === 0 ? 'hoje ou já venceu' : `faltam ${o.daysLeft} ${o.daysLeft === 1 ? 'dia' : 'dias'}`}</small></div>
+        {o.gainSoFarUsdCents !== undefined && <div><span>Rendeu até agora</span><b className={'num ' + (o.gainSoFarUsdCents >= 0 ? 'pos' : 'neg')}>{o.gainSoFarUsdCents >= 0 ? '+' : ''}{formatUSD(o.gainSoFarUsdCents)}</b><small>aplicado {formatUSD(h.appliedUsdCents!)}</small></div>}
+        {o.atMaturityUsdCents !== undefined && <div><span>No vencimento</span><b className="num">≈ {formatUSD(o.atMaturityUsdCents)}</b><small>{String(h.ratePct).replace('.', ',')}% a.a., estimativa</small></div>}
+      </div>
+    </div>
   );
 }

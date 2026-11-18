@@ -157,7 +157,8 @@ try {
   t = await text();
   ok(t.includes('Bitcoin') && t.includes('0,01 BTC') && t.includes('R$ 3.000,00') && t.includes('sem cotação'), 'cripto: 0,01 BTC por R$ 3.000, marcado "sem cotação"');
   await shot('04b-cripto');
-  await page.locator('.row', { hasText: 'Bitcoin' }).click();
+  ok(t.includes('Mercado agora') && t.includes('Ethereum') && t.includes('Dogecoin'), 'cripto: mercado agora com as principais moedas');
+  await page.locator('.row', { hasText: 'Bitcoin' }).first().click();
   t = await text();
   ok(t.includes('Preço médio') && t.includes('R$ 300.000,00'), 'cripto: detalhe com preço médio');
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
@@ -292,6 +293,21 @@ try {
   t = await text();
   ok(t.includes('Total em dólar') && t.includes('$250.00'), 'aba Dólar soma a conta em dólar');
   await shot('01b-dolar');
+  // renda fixa em dólar (Porquinho): vencimento e estimativa
+  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await page.locator('.sheet select').first().selectOption('deposito');
+  await page.getByLabel('Nome').fill('TD Meu Porquinho 90 dias');
+  await page.getByLabel('Valor de hoje (US$)').fill('10,95');
+  await page.getByLabel('Valor aplicado (US$)').fill('10,90');
+  await page.getByLabel('Rentabilidade (% ao ano)').fill('3,8');
+  await page.getByLabel('Aplicação').fill('2026-10-05');
+  await page.getByLabel('Vencimento').fill('2027-01-03');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await page.waitForTimeout(300);
+  t = await text();
+  ok(t.includes('03/01/2027') && t.includes('Rendeu até agora') && t.includes('No vencimento'), 'Porquinho: vencimento, rendimento e estimativa');
+  await page.locator('.deposit').scrollIntoViewIfNeeded();
+  await shot('01c-porquinho');
   await seg('R$ Reais');
   // tema claro + persistência
   await page.getByRole('button', { name: 'Ajustes' }).click();

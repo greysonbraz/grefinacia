@@ -175,7 +175,7 @@ h1, h2, h3, p { margin: 0; }
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .chips button { flex: none; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }
 .composer { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 68px); padding: 8px 12px; display: flex; gap: 8px; background: var(--bg); border-top: 1px solid var(--line); z-index: 4; }
-.composer input { flex: 1; min-height: 46px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); padding: 0 14px; outline: none; }
+.composer input { flex: 1; min-width: 0; min-height: 46px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); padding: 0 14px; outline: none; }
 .lock { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 14px; text-align: center; }
 .logo { display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 30px; font-weight: 680; letter-spacing: -0.04em; } .logo i { font-style: normal; color: var(--accent); } .logomark { border-radius: 24%; box-shadow: 0 10px 30px color-mix(in srgb, var(--accent-strong) 40%, transparent); }
 .pins { display: flex; gap: 12px; margin: 8px 0; } .pins i { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--muted); } .pins i.on { background: var(--accent); border-color: var(--accent); }
@@ -331,7 +331,7 @@ select option { background: var(--surface); color: var(--text); }
 .msg.typing i:nth-child(2) { animation-delay: 0.15s; } .msg.typing i:nth-child(3) { animation-delay: 0.3s; }
 .msg.typing span { margin-left: 6px; font-size: 13px; }
 @keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
-.composer .send { width: 48px; height: 48px; background: var(--accent); color: var(--accent-ink); border: 0; }
+.composer .send { flex: none; width: 48px; height: 48px; background: var(--accent); color: var(--accent-ink); border: 0; }
 .composer .send:disabled { opacity: 0.45; }
 /* controles nativos no roxo */
 input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-strong); }
@@ -401,3 +401,20 @@ div.bigamount { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line
 .future-row > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-sm); background: var(--surface2); min-width: 0; }
 .future-row span { font-size: 12px; color: var(--muted); } .future-row b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .challenge .cardhead h2 { font-size: 15.5px; }
+/* renda fixa em dólar: vencimento e rendimento */
+.deposit { padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+.deposit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 8px; }
+.deposit-grid > div { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface2); min-width: 0; }
+.deposit-grid span, .deposit-grid small { font-size: 11.5px; color: var(--muted); } .deposit-grid b { font-size: 14px; }
+/* anexar na AI e cartões de confirmação */
+.composer .attach { flex: none; }
+.attach-menu { display: flex; flex-direction: column; gap: 4px; padding: 6px; margin: 0 0 8px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
+.attach-menu button { display: grid; grid-template-columns: 24px 1fr; align-items: center; column-gap: 10px; text-align: left; padding: 10px 12px; min-height: 52px; border-radius: var(--r-sm); color: var(--text); }
+.attach-menu button small { grid-column: 2; color: var(--muted); font-size: 12px; }
+.attach-menu button:active { background: var(--surface2); }
+.doccard { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.docitem { padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface2); }
+.docitem .t { font-weight: 600; margin-bottom: 4px; }
+.docitem .kv { padding: 5px 0; font-size: 13.5px; }
+.docitem .btn { margin-top: 8px; width: 100%; }
+.docdone { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--good); font-weight: 600; font-size: 14px; }

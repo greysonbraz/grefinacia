@@ -298,6 +298,11 @@ export interface UsdHolding {
   priceUsdCents?: number; // última cotação
   priceTime?: string;
   changePct?: number;
+  /** Renda fixa em dólar (Time Deposit / Porquinho): valor aplicado, taxa ao ano, aplicação e vencimento. */
+  appliedUsdCents?: number;
+  ratePct?: number;
+  startDate?: ISODate;
+  maturityDate?: ISODate;
   updatedAt: string;
 }
 

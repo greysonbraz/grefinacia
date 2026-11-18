@@ -52,3 +52,22 @@ export async function listen(): Promise<string> {
     throw new ScanError(e instanceof Error && e.message ? e.message : 'Não foi possível ouvir agora.');
   }
 }
+
+/**
+ * Foto ou print (câmera ou galeria) → texto lido no aparelho pelo ML Kit. Nada sai do celular.
+ * Devolve null se você cancelar.
+ */
+export async function photoText(header = 'Foto ou print'): Promise<string | null> {
+  if (!isNative()) throw new ScanError('Ler fotos funciona no app Android.');
+  let photo;
+  try {
+    photo = await Camera.getPhoto({ resultType: CameraResultType.Base64, source: CameraSource.Prompt, quality: 80, width: 2000, correctOrientation: true, promptLabelHeader: header, promptLabelPhoto: 'Escolher da galeria (prints)', promptLabelPicture: 'Tirar foto', promptLabelCancel: 'Cancelar' });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/cancel/i.test(msg)) return null;
+    throw new ScanError(/permission|denied/i.test(msg) ? 'Sem permissão para a câmera ou fotos. Libere em Configurações do Android → Apps → Grefinacia → Permissões.' : 'Não foi possível abrir a foto.');
+  }
+  if (!photo.base64String) return null;
+  const { text } = await Native.recognizeText({ base64: photo.base64String });
+  return text ?? '';
+}
