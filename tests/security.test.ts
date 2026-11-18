@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { emptyData, DEFAULT_SETTINGS } from '../src/lib/defaults';
 import type { AppData, Settings } from '../src/lib/types';
 import { PAID_AI_ENABLED } from '../src/lib/flags';
-import { ALLOWED_HOSTS, buildCsp } from '../src/lib/csp';
+import { ALLOWED_HOSTS, LIVE_HOSTS, buildCsp } from '../src/lib/csp';
 import { nativeBridgeMissing } from '../src/services/platform';
 import { brapiDividendsAvailable, fetchDividends } from '../src/services/quotes';
 import { buildRunnerConfig, RUNNER_CONFIG_VERSION } from '../src/services/background';
@@ -238,6 +238,8 @@ describe('política de conteúdo (CSP)', () => {
     expect(ALLOWED_HOSTS.slice(0, 6)).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://api.coingecko.com', 'https://api.bcb.gov.br', 'https://api.pluggy.ai', 'https://slgiagmfbbjifjkapusr.supabase.co']);
     expect(csp).not.toContain('anthropic');
     expect(ALLOWED_HOSTS.every((h) => h.startsWith('https://'))).toBe(true);
+    expect(LIVE_HOSTS).toEqual(['wss://data-stream.binance.vision']);
+    expect(csp).toContain('wss://data-stream.binance.vision');
   });
 });
 

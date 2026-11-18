@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLiveCrypto } from '../services/liveCrypto';
 import { Plus, RefreshCw, Search } from 'lucide-react';
 import { defaultAccountId, deleteCryptoAsset, deleteCryptoOperation, refreshCryptoQuotes, refreshHistory, saveCryptoOperation, toast, upsert, useStore } from '../state/store';
 import type { CryptoAsset, HistoryPoint, ISODate } from '../lib/types';
@@ -128,7 +129,21 @@ export function Cripto() {
   const [add, setAdd] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
-  const positions = useMemo(() => computePositions(data.cryptoAssets, data.cryptoOps), [data.cryptoAssets, data.cryptoOps]);
+  // preço ao vivo (Binance) enquanto a aba está aberta; sem ele, vale a última cotação salva
+  const heldSymbols = useMemo(() => computePositions(data.cryptoAssets, data.cryptoOps).filter((p) => p.quantity > 0).map((p) => p.asset.symbol), [data.cryptoAssets, data.cryptoOps]);
+  const live = useLiveCrypto(heldSymbols);
+  const assets = useMemo(() => data.cryptoAssets.map((a) => {
+    const lp = live.prices.get(a.symbol.toUpperCase());
+    return lp ? { ...a, quote: { priceCents: lp.priceCents, time: new Date(lp.at).toISOString(), fetchedAt: new Date().toISOString(), source: lp.via === 'BRL' ? 'Binance (ao vivo)' : 'Binance (ao vivo, via USDT)', changePct: lp.changePct } } : a;
+  }), [data.cryptoAssets, live.prices]);
+  const latest = useRef(assets);
+  latest.current = assets;
+  // ao sair da aba, guarda a última cotação ao vivo (vira a "última cotação salva")
+  useEffect(() => () => {
+    const changed = latest.current.filter((a) => a.quote?.source.startsWith('Binance'));
+    if (changed.length) void upsert('cryptoAssets', changed);
+  }, []);
+  const positions = useMemo(() => computePositions(assets, data.cryptoOps), [assets, data.cryptoOps]);
   const totals = portfolioTotals(positions, []);
   const held = positions.filter((p) => p.quantity > 0).sort((a, b) => b.valueCents - a.valueCents);
   const pal = seriesColors();
@@ -149,13 +164,13 @@ export function Cripto() {
     <>
       <div className="card hero">
         <div className="cardhead">
-          <div><div className="lbl">Valor em cripto</div><div className="big num" style={{ fontSize: 30 }}>{formatBRL(totals.equityValueCents)}</div></div>
+          <div><div className="lbl">Valor em cripto {live.status === 'live' ? <span className="live" title="Preço ao vivo da Binance">ao vivo</span> : null}</div><div className="big num" style={{ fontSize: 30 }}>{formatBRL(totals.equityValueCents)}</div></div>
           <button className="iconbtn" onClick={refresh} disabled={busy || data.cryptoAssets.length === 0} aria-label="Atualizar cotações de cripto"><RefreshCw size={18} style={spin(busy)} /></button>
         </div>
         <div className="kv"><span>Total investido</span><b className="num">{formatBRL(totals.investedCents)}</b></div>
         <div className="kv"><span>Lucro ou prejuízo</span><b className={'num ' + (totals.pnlCents > 0 ? 'pos' : totals.pnlCents < 0 ? 'neg' : '')}>{totals.pnlPct === null ? '—' : `${formatBRL(totals.pnlCents)} (${formatPct(totals.pnlPct, true)})`}</b></div>
         {totals.realizedCents !== 0 && <div className="kv"><span>Resultado já realizado em vendas</span><b className="num">{formatBRL(totals.realizedCents)}</b></div>}
-        <Note>Preços da CoinGecko em reais (API pública e gratuita), com alguns minutos de atraso. Cripto oscila muito: trate como parte pequena da carteira.</Note>
+        <Note>{live.status === 'live' ? 'Preço ao vivo pelos dados públicos da Binance (em reais; moedas sem par em reais são convertidas pelo USDT). ' : live.status === 'connecting' ? 'Conectando ao preço ao vivo… ' : 'Preço ao vivo indisponível agora: valem as últimas cotações da CoinGecko (alguns minutos de atraso). '}Cripto oscila muito: trate como parte pequena da carteira.</Note>
         {errors.map((e) => (<div className="note neg" key={e}>{e}</div>))}
       </div>
       {held.length === 0 ? <div className="card"><Empty title="Nenhuma cripto" text="Cadastre suas moedas com a quantidade, o preço ou o total pago e a data da compra." action="Adicionar cripto" onAction={() => setAdd(true)} /></div> : (

@@ -30,6 +30,9 @@ export const ALLOWED_HOSTS: string[] = [
   ...(PAID_AI_ENABLED ? ['https://api.anthropic.com'] : []),
 ];
 
+/** Conexões ao vivo (WebSocket). Só dados públicos de mercado; abertas apenas enquanto a tela que usa está aberta. */
+export const LIVE_HOSTS: string[] = ['wss://data-stream.binance.vision'];
+
 /**
  * Content-Security-Policy do app compilado.
  *
@@ -48,7 +51,7 @@ export function buildCsp(): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${ALLOWED_HOSTS.join(' ')}`,
+    `connect-src 'self' ${[...ALLOWED_HOSTS, ...LIVE_HOSTS].join(' ')}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "frame-src 'none'",
