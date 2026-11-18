@@ -132,6 +132,7 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
             <div ref={end} />
           </div>
           {msgs.length > 0 && !busy && <div className="qchips small">{SUGGESTED_QUESTIONS.filter((q) => !msgs.some((m) => m.content === q)).slice(0, 4).map((q) => (<button key={q} onClick={() => ask(q)}>{q}</button>))}</div>}
+          {attach && <button className="attach-scrim" aria-label="Fechar menu" onClick={() => setAttach(false)} />}
           {attach && (
             <div className="attach-menu" role="menu">
               <button role="menuitem" onClick={() => void sendPhoto()}><ImageIco size={18} /> Foto ou print<small>investimento, boleto, cupom</small></button>
