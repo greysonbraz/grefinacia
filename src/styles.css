@@ -274,3 +274,25 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; } .tbl th {
 .seg.compact { background: none; border: 0; padding: 0; margin: 0; }
 .seg.compact .seg { width: auto; margin: 8px 0 0; display: inline-flex; padding: 2px; border-radius: 999px; }
 .seg.compact .seg button { flex: none; min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: 12.5px; }
+
+/* Movimentações */
+.searchbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.filterbtn { position: relative; width: 48px; height: 48px; }
+.filterbtn .count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 650; display: grid; place-items: center; padding: 0 4px; }
+.dayhead { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--muted); font-weight: 520; margin: 16px 4px 6px; }
+.dayhead .num { font-size: 12.5px; color: var(--muted); } .dayhead .num.pos { color: var(--good); }
+.chips button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+.bigamount input { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; min-height: 58px; font-variant-numeric: tabular-nums; }
+.row.link { color: inherit; font-weight: inherit; font-size: inherit; }
+.row.link svg:last-child { color: var(--muted); }
+.improw select, .field select { background-color: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); }
+select option { background: var(--surface); color: var(--text); }
+
+/* Investimentos */
+.alloc { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: center; margin: 14px 0 6px; }
+.alloc-chart .chartbox { height: 132px; }
+.alloc-list { display: flex; flex-direction: column; gap: 2px; }
+.alloc-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; min-height: 44px; line-height: 1.25; text-align: left; font-size: 13.5px; border-radius: 8px; }
+.alloc-row i { width: 10px; height: 10px; border-radius: 3px; }
+.alloc-row:active { background: var(--surface2); }
+.hero-card .legend { margin-top: 6px; }

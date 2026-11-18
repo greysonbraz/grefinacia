@@ -15,17 +15,19 @@ import { resolveDividendProvider } from '../services/quotes';
 import { historyId } from '../domain/market';
 import { BankInvestments } from './BankInvest';
 import { DollarHome } from './Dollar';
+import { InvestOverview } from './InvestOverview';
 
 const TYPE_LABEL: Record<AssetType, string> = { acao: 'Ação', fii: 'FII', etf: 'ETF' };
-type Sub = 'bancos' | 'bolsa' | 'fixa' | 'dolar' | 'cripto' | 'dividendos';
+type Sub = 'geral' | 'bancos' | 'bolsa' | 'fixa' | 'dolar' | 'cripto' | 'dividendos';
 
 export function Invest({ initial }: { initial?: string }) {
   const hasBank = useStore((s) => (s.data.bankInvestments ?? []).length > 0 || !!s.settings.bank.items.length);
-  const [sub, setSub] = useState<Sub>((initial as Sub) ?? (hasBank ? 'bancos' : 'bolsa'));
+  const [sub, setSub] = useState<Sub>((initial as Sub) ?? 'geral');
   return (
     <div className="screen">
       <div className="head"><h1>Investimentos</h1></div>
-      <Seg value={sub} onChange={setSub} options={[...(hasBank ? [['bancos', 'Nos bancos'] as [Sub, string]] : []), ['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['dolar', 'Exterior (US$)'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
+      <Seg value={sub} onChange={setSub} options={[['geral', 'Visão geral'], ...(hasBank ? [['bancos', 'Nos bancos'] as [Sub, string]] : []), ['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['dolar', 'Exterior (US$)'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
+      {sub === 'geral' && <InvestOverview go={(s) => setSub(s as Sub)} />}
       {sub === 'bancos' && <BankInvestments />}
       {sub === 'dolar' && <DollarHome />}
       {sub === 'bolsa' && <Bolsa />}

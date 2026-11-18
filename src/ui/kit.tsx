@@ -59,8 +59,8 @@ export function Field({ label, children, error, hint }: { label: string; childre
     </label>
   );
 }
-export function MoneyInput({ value, onChange, placeholder = '0,00', name }: { value: string; onChange: (v: string) => void; placeholder?: string; name?: string }) {
-  return <input name={name} inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value.replace(/[^0-9.,-]/g, ''))} />;
+export function MoneyInput({ value, onChange, placeholder = '0,00', name, autoFocus }: { value: string; onChange: (v: string) => void; placeholder?: string; name?: string; autoFocus?: boolean }) {
+  return <input name={name} inputMode="decimal" value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value.replace(/[^0-9.,-]/g, ''))} />;
 }
 export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="tog" onClick={() => onChange(!on)} />;

@@ -102,6 +102,7 @@ try {
 
   // investimentos
   await tab('Investimentos');
+  await seg('Bolsa (B3)');
   const addOp = async (tk, type, q, p) => {
     await page.locator('.fab').click();
     await page.fill('input[name=ticker]', tk);
@@ -118,6 +119,12 @@ try {
   ok(t.includes('R$ 3.000,00') && t.includes('sem cotação'), 'carteira: investido 3.000 e ativos marcados "sem cotação" (sem dados inventados)');
   ok(t.includes('Desempenho') && t.includes('CDI') && t.includes('IPCA'), 'bolsa: quadro de desempenho comparando com CDI e IPCA');
   await shot('04-investimentos');
+  await seg('Visão geral');
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Seus investimentos hoje') && t.includes('Maiores posições') && t.includes('Fundos imobiliários'), 'visão geral dos investimentos');
+  await shot('04a-visao-geral');
+  await seg('Bolsa (B3)');
   // cripto: compra fracionada informando o total pago
   await seg('Cripto');
   await page.locator('.fab').click();

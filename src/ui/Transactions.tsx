@@ -1,29 +1,36 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, Repeat, CreditCard, FileUp } from 'lucide-react';
+import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import { ImportStatement } from './Import';
 import { CardBills } from './CardBills';
-import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
-import type { PaymentMethod, Transaction, TxKind, TxType } from '../lib/types';
+import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, remove, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
+import type { PaymentMethod, Transaction, Transfer, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
 import { formatBoletoLine, parseBoleto } from '../domain/boleto';
 import { centsToInput, formatBRL, parseMoney } from '../lib/money';
 import { formatDateBR, formatDayMonth, lastMonths, monthOf, monthShort, weekdayShort } from '../lib/dates';
 import { buildInstallments, costMonth, effectiveDue, monthSummary, openInvoices } from '../domain/ledger';
 import { uid } from '../lib/ids';
+import { suggestCategory } from '../domain/importer';
 import { ChartBox, cssVar, Empty, Field, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
-type Filter = 'todas' | 'receitas' | 'despesas' | 'pendentes';
+type Filter = 'todas' | 'receitas' | 'despesas' | 'transferencias' | 'pendentes';
 const INCOME_KINDS: TxKind[] = ['salario', 'hora_extra', 'adicional', 'outro_rendimento'];
 const EXPENSE_KINDS: TxKind[] = ['variavel', 'fixa', 'cartao', 'parcelada', 'assinatura'];
+interface Extra { categoryId: string; accountId: string; cardId: string; origin: '' | 'manual' | 'import' }
+const NO_EXTRA: Extra = { categoryId: '', accountId: '', cardId: '', origin: '' };
+type Item = { kind: 'tx'; t: Transaction } | { kind: 'tr'; t: Transfer };
 
 export function Transactions({ initial }: { initial?: string } = {}) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const [ym, setYm] = useState(monthOf(today));
   const [filter, setFilter] = useState<Filter>('todas');
+  const [extra, setExtra] = useState<Extra>(NO_EXTRA);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [q, setQ] = useState('');
   const [view, setView] = useState<'lista' | 'graficos' | 'recorrentes'>('lista');
   const [edit, setEdit] = useState<Transaction | 'new' | null>(initial === 'nova' ? 'new' : null);
+  const [move, setMove] = useState<Transfer | null>(null);
   const [importing, setImporting] = useState(initial === 'importar');
   const [bills, setBills] = useState(initial === 'faturas');
   const mode = useStore((s) => s.settings.cardMonth);
@@ -32,21 +39,33 @@ export function Transactions({ initial }: { initial?: string } = {}) {
   const cardIn = useMemo(() => (mode === 'fatura' ? data.transactions.filter((t) => t.type === 'expense' && t.cardId && costMonth(t) === ym && monthOf(t.date) !== ym).reduce((s, t) => s + t.amountCents, 0) : 0), [data, ym, mode]);
   const cardOut = useMemo(() => (mode === 'fatura' ? data.transactions.filter((t) => t.type === 'expense' && t.cardId && monthOf(t.date) === ym && costMonth(t) !== ym).reduce((s, t) => s + t.amountCents, 0) : 0), [data, ym, mode]);
   const cat = (id: string) => data.categories.find((c) => c.id === id);
-  const list = useMemo(() => data.transactions
-    .filter((t) => (q ? t.description.toLowerCase().includes(q.toLowerCase()) : monthOf(t.date) === ym))
-    .filter((t) => filter === 'todas' || (filter === 'receitas' && t.type === 'income') || (filter === 'despesas' && t.type === 'expense') || (filter === 'pendentes' && t.status === 'pending'))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt), [data.transactions, ym, filter, q]);
+  const accName = (id: string) => (!id ? 'fora do app' : data.accounts.find((a) => a.id === id)?.name ?? 'conta removida');
+  const extraCount = Object.values(extra).filter(Boolean).length;
+  const items = useMemo<Item[]>(() => {
+    const needle = q.trim().toLowerCase();
+    const inScope = (date: string, text: string) => (needle ? text.toLowerCase().includes(needle) : monthOf(date) === ym);
+    const txOk = (t: Transaction) =>
+      (filter === 'todas' || (filter === 'receitas' && t.type === 'income') || (filter === 'despesas' && t.type === 'expense') || (filter === 'pendentes' && t.status === 'pending')) &&
+      (!extra.categoryId || t.categoryId === extra.categoryId) && (!extra.accountId || t.accountId === extra.accountId) && (!extra.cardId || t.cardId === extra.cardId) &&
+      (!extra.origin || (extra.origin === 'import' ? t.source === 'import' : t.source !== 'import'));
+    const trOk = (t: Transfer) => (filter === 'todas' || filter === 'transferencias') && !extra.categoryId && !extra.cardId && (!extra.accountId || t.fromAccountId === extra.accountId || t.toAccountId === extra.accountId) && (!extra.origin || (extra.origin === 'import' ? !!t.importId : !t.importId));
+    const tx: Item[] = filter === 'transferencias' ? [] : data.transactions.filter((t) => inScope(t.date, t.description) && txOk(t)).map((t) => ({ kind: 'tx', t }));
+    const tr: Item[] = (data.transfers ?? []).filter((t) => inScope(t.date, t.note ?? '') && trOk(t)).map((t) => ({ kind: 'tr', t }));
+    return [...tx, ...tr].sort((a, b) => b.t.date.localeCompare(a.t.date) || b.t.createdAt - a.t.createdAt);
+  }, [data.transactions, data.transfers, ym, filter, q, extra]);
   const invoices = useMemo(() => openInvoices(data), [data]);
-  const groups = useMemo(() => { const m = new Map<string, Transaction[]>(); for (const t of list) m.set(t.date, [...(m.get(t.date) ?? []), t]); return [...m.entries()]; }, [list]);
+  const groups = useMemo(() => { const m = new Map<string, Item[]>(); for (const it of items) m.set(it.t.date, [...(m.get(it.t.date) ?? []), it]); return [...m.entries()]; }, [items]);
+  const dayNet = (list: Item[]) => list.reduce((s, it) => (it.kind === 'tx' ? s + (it.t.type === 'income' ? it.t.amountCents : -it.t.amountCents) : s), 0);
 
   return (
     <div className="screen">
       <div className="head"><h1>Movimentações</h1><button className="iconbtn" onClick={() => setImporting(true)} aria-label="Importar extrato"><FileUp size={18} /></button></div>
       {importing && <ImportStatement onClose={() => setImporting(false)} />}
       <MonthNav ym={ym} onChange={setYm} />
-      <div className="grid2">
-        <div className="tile"><div className="lbl">Receitas</div><div className="val num">{formatBRL(sum.incomeCents)}</div></div>
-        <div className="tile"><div className="lbl">Despesas</div><div className="val num">{formatBRL(sum.expenseCents)}</div>{sum.expensePendingCents > 0 && <div className="foot">{formatBRL(sum.expensePendingCents)} a pagar</div>}</div>
+      <div className="group flow">
+        <div className="flow-row"><span className="flow-ic in" aria-hidden><ArrowDownLeft size={16} /></span><span className="flow-l">Receitas</span><span className="num">{formatBRL(sum.incomeCents)}</span></div>
+        <div className="flow-row"><span className="flow-ic out" aria-hidden><ArrowUpRight size={16} /></span><span className="flow-l">Despesas</span><span className="num">{formatBRL(sum.expenseCents)}</span>{sum.expensePendingCents > 0 && <span className="delta flat">{formatBRL(sum.expensePendingCents)} ainda a pagar</span>}</div>
+        <div className="flow-row total"><span className="flow-ic" aria-hidden /><span className="flow-l">Resultado</span><span className={'num ' + (sum.netCents < 0 ? 'neg' : 'pos')}>{formatBRL(sum.netCents)}</span></div>
       </div>
       {(cardIn > 0 || cardOut > 0) && (
         <div className="hint" style={{ margin: '-4px 4px 10px' }}>
@@ -58,45 +77,82 @@ export function Transactions({ initial }: { initial?: string } = {}) {
 
       {view === 'lista' && (
         <>
-          {data.cards.length > 0 && <button className="btn ghost" onClick={() => setBills(true)}><CreditCard size={18} /> Faturas do cartão</button>}
+          {(invoices.length > 0 || data.cards.length > 0) && (
+            <div className="group">
+              {invoices.map((inv) => {
+                const card = data.cards.find((c) => c.id === inv.cardId);
+                const late = inv.dueDate < today;
+                return (
+                  <div className="row" key={inv.cardId + inv.dueDate}>
+                    <div className="ic"><CreditCard size={18} /></div>
+                    <div className="mid"><div className="t">Fatura {card?.name ?? ''}</div><div className={'s ' + (late ? 'neg' : '')}>{late ? 'Venceu' : 'Vence'} em {formatDateBR(inv.dueDate)} · <span className="num">{formatBRL(inv.totalCents)}</span></div></div>
+                    <button className="btn sm" onClick={async () => { const acc = card?.accountId ?? defaultAccountId(); if (!acc) return toast('Cadastre uma conta em Ajustes', 'err'); await payInvoice(inv.txIds, acc); toast('Fatura paga'); }}>Pagar</button>
+                  </div>
+                );
+              })}
+              {data.cards.length > 0 && <button className="row link" onClick={() => setBills(true)}><div className="ic"><CreditCard size={18} /></div><div className="mid"><div className="t">Faturas do cartão</div><div className="s">mês a mês, como no banco</div></div><ChevronRight size={18} /></button>}
+            </div>
+          )}
           {bills && <CardBills onClose={() => setBills(false)} />}
-          {invoices.map((inv) => {
-            const card = data.cards.find((c) => c.id === inv.cardId);
+          <div className="searchbar">
+            <label className="field" style={{ position: 'relative', margin: 0, flex: 1 }}>
+              <Search size={16} style={{ position: 'absolute', left: 14, top: 16, color: 'var(--muted)' }} aria-hidden />
+              <input style={{ paddingLeft: 38 }} placeholder="Buscar em todos os meses" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar movimentação" />
+            </label>
+            <button className="iconbtn filterbtn" onClick={() => setFiltersOpen(true)} aria-label={extraCount ? `Filtros (${extraCount} ativos)` : 'Filtros'}><SlidersHorizontal size={18} />{extraCount > 0 && <span className="count">{extraCount}</span>}</button>
+          </div>
+          <Seg value={filter} onChange={setFilter} options={[['todas', 'Todas'], ['receitas', 'Receitas'], ['despesas', 'Despesas'], ['transferencias', 'Transferências'], ['pendentes', 'Pendentes']]} />
+          {extraCount > 0 && (
+            <div className="chips" style={{ marginBottom: 10 }}>
+              {extra.categoryId && <button onClick={() => setExtra({ ...extra, categoryId: '' })}>{cat(extra.categoryId)?.name} <X size={14} /></button>}
+              {extra.accountId && <button onClick={() => setExtra({ ...extra, accountId: '' })}>{accName(extra.accountId)} <X size={14} /></button>}
+              {extra.cardId && <button onClick={() => setExtra({ ...extra, cardId: '' })}>{data.cards.find((c) => c.id === extra.cardId)?.name} <X size={14} /></button>}
+              {extra.origin && <button onClick={() => setExtra({ ...extra, origin: '' })}>{extra.origin === 'import' ? 'Importados' : 'Lançados à mão'} <X size={14} /></button>}
+              <button onClick={() => setExtra(NO_EXTRA)}>Limpar filtros</button>
+            </div>
+          )}
+          {items.length === 0 ? (
+            extraCount || filter !== 'todas' || q
+              ? <Empty title="Nada com esses filtros" text="Troque o mês ou limpe os filtros para ver mais." action="Limpar filtros" onAction={() => { setExtra(NO_EXTRA); setFilter('todas'); setQ(''); }} />
+              : <Empty title="Nada por aqui" text="Lance uma receita ou despesa para começar." action="Nova movimentação" onAction={() => setEdit('new')} />
+          ) : groups.map(([date, list]) => {
+            const net = dayNet(list);
             return (
-              <div className="card" key={inv.cardId + inv.dueDate} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <CreditCard size={20} />
-                <div style={{ flex: 1 }}><div style={{ fontWeight: 560 }}>Fatura {card?.name ?? ''}</div><div className="hint">Vence em {formatDateBR(inv.dueDate)} · <span className="num">{formatBRL(inv.totalCents)}</span></div></div>
-                <button className="btn sm" onClick={async () => { const acc = card?.accountId ?? defaultAccountId(); if (!acc) return toast('Cadastre uma conta em Ajustes', 'err'); await payInvoice(inv.txIds, acc); toast('Fatura paga'); }}>Pagar</button>
+              <div key={date}>
+                <div className="dayhead"><span>{weekdayShort(date)}, {formatDateBR(date)}</span>{net !== 0 && <span className={'num ' + (net > 0 ? 'pos' : '')}>{net > 0 ? '+' : '−'}{formatBRL(Math.abs(net))}</span>}</div>
+                <div className="group">
+                  {list.map((it) => {
+                    if (it.kind === 'tr') {
+                      const t = it.t;
+                      return (
+                        <button className="row" key={t.id} onClick={() => setMove(t)}>
+                          <div className="ic"><ArrowLeftRight size={18} /></div>
+                          <div className="mid"><div className="t">{t.note || 'Transferência'}</div><div className="s">{TR_LABEL[t.kind ?? ''] ?? 'Transferência'} · {accName(t.fromAccountId)} → {accName(t.toAccountId)}</div></div>
+                          <div className="end"><div className="num mut">{formatBRL(t.amountCents)}</div></div>
+                        </button>
+                      );
+                    }
+                    const t = it.t;
+                    const late = t.type === 'expense' && t.status === 'pending' && effectiveDue(t) < today;
+                    return (
+                      <button className="row" key={t.id} onClick={() => setEdit(t)}>
+                        <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>
+                        <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
+                        <div className="end">
+                          <div className={'num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
+                          {t.status === 'pending' && <span className={'badge ' + (late ? 'bad' : 'warn')}>{late ? 'atrasada' : t.type === 'income' ? 'a receber' : `vence ${formatDayMonth(effectiveDue(t))}`}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
-          <label className="field" style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: 14, top: 16, color: 'var(--muted)' }} />
-            <input style={{ paddingLeft: 38 }} placeholder="Buscar em todos os meses" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar movimentação" />
-          </label>
-          <Seg value={filter} onChange={setFilter} options={[['todas', 'Todas'], ['receitas', 'Receitas'], ['despesas', 'Despesas'], ['pendentes', 'Pendentes']]} />
-          {list.length === 0 ? <Empty title="Nada por aqui" text="Lance uma receita ou despesa para começar." action="Nova movimentação" onAction={() => setEdit('new')} /> : groups.map(([date, items]) => (
-            <div key={date}>
-              <div className="section">{weekdayShort(date)}, {formatDateBR(date)}</div>
-              <div className="card" style={{ padding: '4px 14px' }}>
-                {items.map((t) => {
-                  const late = t.type === 'expense' && t.status === 'pending' && effectiveDue(t) < today;
-                  return (
-                    <button className="row" key={t.id} onClick={() => setEdit(t)}>
-                      <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>
-                      <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
-                      <div className="end">
-                        <div className={'num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
-                        {t.status === 'pending' && <span className={'badge ' + (late ? 'bad' : 'warn')}>{late ? 'atrasada' : t.type === 'income' ? 'a receber' : `vence ${formatDayMonth(effectiveDue(t))}`}</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
         </>
       )}
+      {filtersOpen && <FiltersSheet value={extra} onChange={setExtra} onClose={() => setFiltersOpen(false)} />}
+      {move && <MoveSheet t={move} onClose={() => setMove(null)} />}
       {view === 'graficos' && <TxCharts ym={ym} />}
       {view === 'recorrentes' && (
         <div className="card">
@@ -173,6 +229,16 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
   const [repeat, setRepeat] = useState(false);
   const [parcels, setParcels] = useState('2');
   const [err, setErr] = useState<string | null>(null);
+  const rules = useStore((s) => s.settings.importRules);
+  // categoria escolhida por você não é trocada pela sugestão
+  const [catTouched, setCatTouched] = useState(!!tx);
+  const changeDesc = (v: string) => {
+    setDesc(v);
+    if (catTouched || v.trim().length < 3) return;
+    const sug = suggestCategory(v, type, data, rules ?? []);
+    if (sug.source !== 'padrao') setCategoryId(sug.categoryId);
+  };
+  const batch = tx?.importId ? data.imports.find((b) => b.id === tx.importId) : undefined;
   const kinds = type === 'income' ? INCOME_KINDS : EXPENSE_KINDS;
   const cats = data.categories.filter((c) => c.type === type);
   const credit = type === 'expense' && method === 'credito';
@@ -223,17 +289,18 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
   return (
     <Sheet title={tx ? 'Editar movimentação' : 'Nova movimentação'} onClose={onClose}>
       {!tx && <Seg value={type} onChange={changeType} options={[['expense', 'Despesa'], ['income', 'Receita']]} />}
-      <Field label="Tipo"><select value={kind} onChange={(e) => changeKind(e.target.value as TxKind)} disabled={!!tx?.installment}>{kinds.map((k) => (<option key={k} value={k}>{KIND_LABEL[k]}</option>))}</select></Field>
-      <Field label="Descrição"><input name="descricao" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={type === 'income' ? 'Ex.: Salário de novembro' : 'Ex.: Mercado da semana'} /></Field>
+      {batch && <div className="note" style={{ marginTop: 0, marginBottom: 10 }}>Veio de: {batch.fileName}{tx?.cardId && tx.dueDate ? ` · fatura que vence em ${formatDateBR(tx.dueDate)}` : ''}</div>}
+      <Field label={kind === 'parcelada' && !tx ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}><span className="bigamount"><MoneyInput name="valor" value={amount} onChange={setAmount} autoFocus={!tx} /></span></Field>
+      <Field label="Descrição" hint={!catTouched && !tx ? 'A categoria é sugerida pela descrição; troque se quiser.' : undefined}><input name="descricao" value={desc} onChange={(e) => changeDesc(e.target.value)} placeholder={type === 'income' ? 'Ex.: Salário de novembro' : 'Ex.: Mercado da semana'} /></Field>
       <div className="two">
-        <Field label={kind === 'parcelada' && !tx ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}><MoneyInput name="valor" value={amount} onChange={setAmount} /></Field>
+        <Field label="Tipo"><select value={kind} onChange={(e) => changeKind(e.target.value as TxKind)} disabled={!!tx?.installment}>{kinds.map((k) => (<option key={k} value={k}>{KIND_LABEL[k]}</option>))}</select></Field>
         <Field label={kind === 'parcelada' && !tx ? '1ª parcela em' : 'Data'}><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
       </div>
       {type === 'expense' && !credit && kind !== 'parcelada' && (
         <Field label="Linha digitável do boleto (opcional)" hint={boletoMsg ?? 'Cole os números do boleto: o app preenche valor e vencimento.'}><input name="boleto" inputMode="numeric" value={boleto} onChange={(e) => readBoleto(e.target.value)} placeholder="47 ou 48 números" /></Field>
       )}
       {kind === 'parcelada' && !tx && <Field label="Número de parcelas"><input inputMode="numeric" value={parcels} onChange={(e) => setParcels(e.target.value.replace(/\D/g, ''))} /></Field>}
-      <Field label="Categoria"><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>{cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>
+      <Field label="Categoria"><select value={categoryId} onChange={(e) => { setCatTouched(true); setCategoryId(e.target.value); }}>{cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>
       <div className="two">
         <Field label="Forma de pagamento"><select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>{Object.entries(PAYMENT_LABEL).filter(([k]) => type === 'expense' || k !== 'credito').map(([k, l]) => (<option key={k} value={k}>{l}</option>))}</select></Field>
         {credit ? (
@@ -254,6 +321,45 @@ function TxForm({ tx, onClose }: { tx: Transaction | null; onClose: () => void }
           {tx.installment && tx.installment.number < tx.installment.total && <button className="btn danger" onClick={async () => { await deleteTransaction(tx, 'group'); toast('Parcelas excluídas'); onClose(); }}>Excluir esta e as próximas</button>}
         </div>
       )}
+    </Sheet>
+  );
+}
+
+const TR_LABEL: Record<string, string> = { '': 'Transferência', propria: 'Entre contas suas', investimento: 'Investimento', cambio: 'Câmbio (dólar)' };
+
+/** Filtros além do tipo: categoria, conta, cartão e origem do lançamento. */
+function FiltersSheet({ value, onChange, onClose }: { value: Extra; onChange: (v: Extra) => void; onClose: () => void }) {
+  const data = useStore((s) => s.data);
+  const [v, setV] = useState(value);
+  return (
+    <Sheet title="Filtros" onClose={onClose}>
+      <Field label="Categoria"><select value={v.categoryId} onChange={(e) => setV({ ...v, categoryId: e.target.value })}><option value="">Todas</option>{data.categories.map((c) => (<option key={c.id} value={c.id}>{c.name}{c.type === 'income' ? ' (receita)' : ''}</option>))}</select></Field>
+      <Field label="Conta"><select value={v.accountId} onChange={(e) => setV({ ...v, accountId: e.target.value })}><option value="">Todas</option>{data.accounts.filter((a) => !a.archived).map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}</select></Field>
+      {data.cards.length > 0 && <Field label="Cartão"><select value={v.cardId} onChange={(e) => setV({ ...v, cardId: e.target.value })}><option value="">Todos</option>{data.cards.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>}
+      <Field label="Origem"><select value={v.origin} onChange={(e) => setV({ ...v, origin: e.target.value as Extra['origin'] })}><option value="">Todas</option><option value="import">Importados (extrato ou banco)</option><option value="manual">Lançados à mão</option></select></Field>
+      <div className="btnrow">
+        <button className="btn ghost" onClick={() => { onChange(NO_EXTRA); onClose(); }}>Limpar</button>
+        <button className="btn" onClick={() => { onChange(v); onClose(); }}>Aplicar</button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Detalhe de uma transferência (entre contas, investimento ou câmbio), com opção de desfazer. */
+function MoveSheet({ t, onClose }: { t: Transfer; onClose: () => void }) {
+  const data = useStore((s) => s.data);
+  const accName = (id: string) => (!id ? 'fora do app' : data.accounts.find((a) => a.id === id)?.name ?? 'conta removida');
+  const batch = t.importId ? data.imports.find((b) => b.id === t.importId) : undefined;
+  return (
+    <Sheet title={TR_LABEL[t.kind ?? ''] ?? 'Transferência'} onClose={onClose}>
+      <div className="kv"><span>Valor</span><b className="num">{formatBRL(t.amountCents)}</b></div>
+      <div className="kv"><span>Data</span><b>{formatDateBR(t.date)}</b></div>
+      <div className="kv"><span>De</span><b>{accName(t.fromAccountId)}</b></div>
+      <div className="kv"><span>Para</span><b>{accName(t.toAccountId)}</b></div>
+      {t.note && <div className="kv"><span>Descrição</span><b>{t.note}</b></div>}
+      {batch && <div className="kv"><span>Origem</span><b>{batch.fileName}</b></div>}
+      <div className="note">Não conta como receita nem despesa: o dinheiro só mudou de lugar.</div>
+      <div className="btnrow"><button className="btn danger" onClick={async () => { if (typeof window.confirm === 'function' && !window.confirm('Desfazer esta transferência? O saldo da conta volta ao que era.')) return; await remove('transfers', t.id); toast('Transferência desfeita'); onClose(); }}>Desfazer</button></div>
     </Sheet>
   );
 }

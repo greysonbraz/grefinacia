@@ -48,7 +48,10 @@ Detalhes do redesign Purple Edition (pedido do dono, 18/11/2026; plano em 10 eta
 - Etapa 1 (auditoria, com as skills Impeccable, frontend-design e design-skills): nota técnica 14/20; P1: sem botão voltar do Android; branco sobre #8B5CF6 reprova contraste (4,05:1).
 - Etapa 3: `src/styles.css` com tokens Purple (ver `DESIGN.md`), estados, foco, seleção; `@capacitor/haptics` (vibração leve); `src/ui/back.ts` (voltar do Android); `CountMoney`, `Skeleton`, `ChartBox minimal`; olho (`settings.hideValues`, sem mudar o banco).
 - Etapa 4: Início em `src/ui/home/*`: patrimônio com evolução 6/12 meses → seu mês → gastos → próximos 15 dias (faturas agrupadas, proventos) → previsão → investimentos → saúde financeira → atalhos → análises → AI. Cálculos novos só de leitura em `src/domain/home.ts`.
-- Próximas: 5 Movimentações, 6 Investimentos, 7 AI, 8 Planejamento, 9 navegação/animações, 10 testes finais.
+- Etapa 5 (Movimentações): resumo receitas/despesas/resultado; busca + filtros (categoria, conta, cartão, origem) com contador e chips; aba Transferências; transferências (entre contas, investimento, câmbio) na lista com detalhe e "Desfazer"; total do dia; faturas em grupo com atalho "Faturas do cartão"; cadastro com valor em destaque e categoria sugerida pela descrição (`suggestCategory`, a mesma da importação); "Veio de" nos importados.
+- Etapa 6 (Investimentos): aba "Visão geral" (padrão): total, distribuição por classe (ações, FIIs, ETFs, renda fixa, bancos, exterior, cripto), rentabilidade, proventos recebidos e previstos, maiores posições, evolução. Cálculo em `src/domain/investOverview.ts` (só leitura).
+- Skill UI UX Pro Max instalada no claude-brain (checklist de app: toque 48dp, retorno ≤150 ms, cor nunca é o único sinal).
+- Próximas: 7 AI, 8 Planejamento, 9 navegação/animações, 10 testes finais.
 
 Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
 - Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).
