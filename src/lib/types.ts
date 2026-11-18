@@ -383,6 +383,8 @@ export interface Settings {
   theme: 'dark' | 'light' | 'system';
   /** Em que mês a compra no cartão conta como gasto: no da fatura (quando o dinheiro sai) ou no da compra. */
   cardMonth: 'fatura' | 'compra';
+  /** Olho: esconde valores em todas as telas até tocar de novo. */
+  hideValues: boolean;
   userName?: string;
   security: {
     enabled: boolean;

@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Home as HomeIco, ArrowLeftRight, LineChart, Sparkles, Target } from 'lucide-react';
+import { App as CapApp } from '@capacitor/app';
 import { lock, rollDay, useStore, getState } from '../state/store';
+import { isNative } from '../services/platform';
+import { tap } from '../services/haptics';
+import { closeTop } from './back';
 import { watchAutoLock } from '../services/security';
 import { nativeBridgeMissing } from '../services/platform';
 import { startAutoSync } from '../state/cloud';
@@ -25,6 +29,8 @@ export function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [sub, setSub] = useState<string | undefined>();
   const [settings, setSettings] = useState(false);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   useEffect(() => {
     const stop = watchAutoLock(() => getState().settings.security.lockAfterSec, lock);
@@ -34,6 +40,20 @@ export function App() {
   }, []);
 
   useEffect(() => (ready ? startAutoSync() : undefined), [ready]);
+
+  // botão "voltar" do Android: fecha a janela/tela aberta; sem nenhuma, volta ao Início; no Início, minimiza
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  useEffect(() => {
+    if (!isNative()) return;
+    const h = CapApp.addListener('backButton', () => {
+      if (closeTop()) return;
+      if (settingsRef.current) return setSettings(false);
+      if (tabRef.current !== 'home') return setTab('home');
+      void CapApp.minimizeApp();
+    });
+    return () => { void h.then((x) => x.remove()); };
+  }, []);
 
   if (nativeBridgeMissing()) return (
     <div className="lock" role="alert">
@@ -49,13 +69,13 @@ export function App() {
   return (
     <div className="app">
       {tab === 'home' && <Home nav={nav} />}
-      {tab === 'transactions' && <Transactions />}
+      {tab === 'transactions' && <Transactions key={sub ?? 'tx'} initial={sub} />}
       {tab === 'invest' && <Invest initial={sub} />}
       {tab === 'ai' && <Assistant nav={nav} initial={sub} />}
       {tab === 'planning' && <Planning initial={sub} />}
       <nav className="nav" aria-label="Principal">
         {TABS.map(([id, label, I]) => (
-          <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => nav.go(id)}><I size={21} strokeWidth={tab === id ? 2.2 : 1.8} />{label}</button>
+          <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => { if (tab !== id) tap(); nav.go(id); }}><span className="pill"><I size={21} strokeWidth={tab === id ? 2.2 : 1.8} /></span>{label}</button>
         ))}
       </nav>
       {settings && <Settings onClose={() => setSettings(false)} />}

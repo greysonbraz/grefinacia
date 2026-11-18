@@ -16,16 +16,16 @@ type Filter = 'todas' | 'receitas' | 'despesas' | 'pendentes';
 const INCOME_KINDS: TxKind[] = ['salario', 'hora_extra', 'adicional', 'outro_rendimento'];
 const EXPENSE_KINDS: TxKind[] = ['variavel', 'fixa', 'cartao', 'parcelada', 'assinatura'];
 
-export function Transactions() {
+export function Transactions({ initial }: { initial?: string } = {}) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const [ym, setYm] = useState(monthOf(today));
   const [filter, setFilter] = useState<Filter>('todas');
   const [q, setQ] = useState('');
   const [view, setView] = useState<'lista' | 'graficos' | 'recorrentes'>('lista');
-  const [edit, setEdit] = useState<Transaction | 'new' | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [bills, setBills] = useState(false);
+  const [edit, setEdit] = useState<Transaction | 'new' | null>(initial === 'nova' ? 'new' : null);
+  const [importing, setImporting] = useState(initial === 'importar');
+  const [bills, setBills] = useState(initial === 'faturas');
   const mode = useStore((s) => s.settings.cardMonth);
   const sum = useMemo(() => monthSummary(data, ym), [data, ym, mode]);
   // modo "mês da fatura": o total do mês inclui a fatura que vence nele e deixa de fora as compras que vão para a próxima

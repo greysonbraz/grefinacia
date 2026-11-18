@@ -5,6 +5,7 @@ import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
 import * as db from '../db/db';
 import { materializeRecurrences, cardInvoiceDue, setCardMonthMode } from '../domain/ledger';
+import { notify } from '../services/haptics';
 import { makeSnapshot } from '../domain/networth';
 import { evaluateAlerts, planNotifications, salaryReceivedAlert, type ImmediateAlert } from '../domain/notifications';
 import { cancelEvent, dividendRows, mergeEvents, reactivateEvent } from '../domain/dividends';
@@ -72,7 +73,10 @@ let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch };
-  if (patch.settings) setCardMonthMode(patch.settings.cardMonth);
+  if (patch.settings) {
+    setCardMonthMode(patch.settings.cardMonth);
+    if (typeof document !== 'undefined') document.documentElement.dataset.hide = patch.settings.hideValues ? '1' : '0';
+  }
   listeners.forEach((l) => l());
 };
 export const getState = () => state;
@@ -81,6 +85,7 @@ export function useStore<T>(sel: (s: State) => T): T {
 }
 
 export function toast(text: string, tone: 'ok' | 'err' = 'ok') {
+  notify(tone);
   const id = Date.now();
   set({ toast: { id, text, tone } });
   setTimeout(() => state.toast?.id === id && set({ toast: null }), 3200);

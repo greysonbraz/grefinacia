@@ -97,7 +97,7 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
           </div>
           <form className="composer" onSubmit={(e) => { e.preventDefault(); void ask(text); }}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Escreva sua pergunta" aria-label="Pergunta" />
-            <button className="iconbtn" style={{ background: 'var(--gold)', color: 'var(--gold-ink)', width: 46, height: 46 }} aria-label="Enviar"><Send size={18} /></button>
+            <button className="iconbtn" style={{ background: 'var(--accent)', color: 'var(--accent-ink)', width: 46, height: 46 }} aria-label="Enviar"><Send size={18} /></button>
           </form>
         </>
       )}

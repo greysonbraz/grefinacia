@@ -345,7 +345,7 @@ function Dividendos() {
             return its ? <button key={i} className={cls} onClick={() => setDay(iso === day ? null : iso)} aria-label={`${d}: ${its.length} pagamento(s)`}>{d}</button> : <span key={i} className={cls}>{d}</span>;
           })}
         </div>
-        <Legend items={[{ label: 'Anunciado', color: cssVar('--gold') }, { label: 'Estimativa', color: cssVar('--gold'), dashed: true }]} />
+        <Legend items={[{ label: 'Anunciado', color: cssVar('--accent') }, { label: 'Estimativa', color: cssVar('--accent'), dashed: true }]} />
         {dayItems.map((i, k) => (<div className="kv" key={k}><span>{formatDayMonth(i.date)} · {i.ticker} {i.official ? '' : '(estimativa)'}</span><b className="num">{formatBRL(i.cents)}</b></div>))}
       </div>
 

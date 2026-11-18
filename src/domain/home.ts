@@ -1,7 +1,8 @@
 import type { AppData, Cents, ISODate, YearMonth } from '../lib/types';
-import { addMonthsYM, daysInMonth, monthOf } from '../lib/dates';
+import { addDays as addDaysISO, addMonthsYM, daysInMonth, monthOf } from '../lib/dates';
 import { cashForecast } from './analysis';
-import { costDate, costMonth } from './ledger';
+import { costDate, costMonth, effectiveDue, monthSummary, totalBalance } from './ledger';
+import { dividendRows } from './dividends';
 
 /**
  * Tela inicial (Etapa 13): o gasto do mês dia a dia, comparado ao mês passado, e a previsão do mês que vem.
@@ -90,4 +91,73 @@ export function nextMonthForecast(data: AppData, today: ISODate): NextMonth {
   const f = cashForecast(data, today, 2);
   const m = f.months[1];
   return { ym: m.ym, incomeCents: m.incomeCents, billsCents: m.fixedCents, debtCents: m.debtCents, dailyCents: m.variableCents, netCents: m.netCents, endBalanceCents: m.endBalanceCents, basisMonths: f.variableBasisMonths };
+}
+
+// ---------- Purple Edition: blocos do Início (só leitura; nenhuma regra financeira nova) ----------
+
+export interface UpcomingItem { id: string; kind: 'conta' | 'fatura' | 'provento'; title: string; date: ISODate; cents: Cents; cardId?: string }
+
+/**
+ * Próximos dias: contas a pagar (lançadas ou do cartão, juntas por fatura) e proventos com pagamento previsto.
+ * Compras no cartão aparecem como uma linha por fatura, não uma por compra.
+ */
+export function upcomingItems(data: AppData, today: ISODate, days = 15): UpcomingItem[] {
+  const until = addDaysISO(today, days);
+  const out: UpcomingItem[] = [];
+  const invoices = new Map<string, UpcomingItem>();
+  for (const t of data.transactions) {
+    if (t.type !== 'expense' || t.status !== 'pending') continue;
+    const due = effectiveDue(t);
+    if (due < today || due > until) continue;
+    if (t.cardId) {
+      const k = `${t.cardId}|${due}`;
+      const card = data.cards.find((c) => c.id === t.cardId);
+      const inv = invoices.get(k) ?? { id: 'inv:' + k, kind: 'fatura' as const, title: `Fatura ${card?.name ?? 'do cartão'}`, date: due, cents: 0, cardId: t.cardId };
+      inv.cents += t.amountCents;
+      invoices.set(k, inv);
+    } else out.push({ id: t.id, kind: 'conta', title: t.description, date: due, cents: t.amountCents });
+  }
+  out.push(...invoices.values());
+  for (const r of dividendRows(data, today)) {
+    const pay = r.event.paymentDate;
+    if (!pay || pay < today || pay > until) continue;
+    if (!['anunciado', 'direito_adquirido', 'pagamento_previsto'].includes(r.status)) continue;
+    out.push({ id: 'div:' + r.event.id, kind: 'provento', title: `${r.asset.ticker} · ${r.event.kind === 'jcp' ? 'JCP' : r.event.kind === 'rendimento' ? 'rendimento' : 'dividendo'}`, date: pay, cents: r.netCents });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || b.cents - a.cents);
+}
+
+export type Tone = 'good' | 'warn' | 'bad' | 'none';
+export interface HealthIndicator { id: 'poupanca' | 'reserva' | 'dividas'; label: string; value: string; tone: Tone; hint: string }
+
+/**
+ * Indicadores de saúde financeira com base nos 3 últimos meses fechados (referências usuais de educação financeira):
+ * - quanto da renda sobra (meta comum: 20% ou mais);
+ * - quantos meses de gastos o dinheiro em contas e reservas cobre (meta comum: 6 meses);
+ * - quanto da renda vai para parcelas de dívidas (alerta acima de 30%).
+ */
+export function healthIndicators(data: AppData, today: ISODate): HealthIndicator[] {
+  const ym = monthOf(today);
+  const months = [1, 2, 3].map((i) => addMonthsYM(ym, -i));
+  const sums = months.map((m) => monthSummary(data, m)).filter((s) => s.incomeCents > 0 || s.expenseCents > 0);
+  const n = sums.length;
+  const income = n ? sums.reduce((s, x) => s + x.incomeCents, 0) / n : 0;
+  const expense = n ? sums.reduce((s, x) => s + x.expenseCents, 0) / n : 0;
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const out: HealthIndicator[] = [];
+  if (income > 0) {
+    const rate = (income - expense) / income;
+    out.push({ id: 'poupanca', label: 'Quanto da renda sobra', value: pct(rate), tone: rate >= 0.2 ? 'good' : rate >= 0.05 ? 'warn' : 'bad', hint: `média de ${n} ${n === 1 ? 'mês' : 'meses'}; referência: 20% ou mais` });
+  } else out.push({ id: 'poupanca', label: 'Quanto da renda sobra', value: '—', tone: 'none', hint: 'aparece depois de um mês fechado com receitas' });
+  const reserve = totalBalance(data) + data.goalMoves.reduce((s, m) => s + m.amountCents, 0);
+  if (expense > 0) {
+    const m = reserve / expense;
+    out.push({ id: 'reserva', label: 'Reserva cobre', value: m >= 0 ? `${m.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${m >= 1 && m < 2 ? 'mês' : 'meses'}` : '0 meses', tone: m >= 6 ? 'good' : m >= 3 ? 'warn' : 'bad', hint: 'de gastos, com o dinheiro em contas e reservas; referência: 6 meses' });
+  } else out.push({ id: 'reserva', label: 'Reserva cobre', value: '—', tone: 'none', hint: 'aparece depois de um mês fechado com gastos' });
+  const installments = data.debts.filter((d) => d.remainingInstallments > 0).reduce((s, d) => s + d.installmentCents, 0);
+  if (income > 0) {
+    const load = installments / income;
+    out.push({ id: 'dividas', label: 'Parcelas de dívidas', value: pct(load), tone: load <= 0.15 ? 'good' : load <= 0.3 ? 'warn' : 'bad', hint: 'da renda do mês; alerta acima de 30%' });
+  }
+  return out;
 }

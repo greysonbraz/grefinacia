@@ -257,7 +257,7 @@ function CategoryForm({ c, onClose }: { c: Category | null; onClose: () => void 
       <Field label="Nome"><input name="categoria" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Pets" /></Field>
       <Field label="Ícone">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {CATEGORY_ICONS.map((i) => (<button key={i} type="button" className="iconbtn" aria-label={i} aria-pressed={icon === i} style={icon === i ? { borderColor: 'var(--gold)', color: 'var(--gold)' } : undefined} onClick={() => setIcon(i)}><Ico name={i} /></button>))}
+          {CATEGORY_ICONS.map((i) => (<button key={i} type="button" className="iconbtn" aria-label={i} aria-pressed={icon === i} style={icon === i ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : undefined} onClick={() => setIcon(i)}><Ico name={i} /></button>))}
         </div>
       </Field>
       <div className="btnrow">

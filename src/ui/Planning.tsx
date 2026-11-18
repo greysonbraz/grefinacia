@@ -65,8 +65,8 @@ function Salario() {
           <Field label="Valor líquido (R$)"><MoneyInput name="salario" value={amount} onChange={setAmount} /></Field>
           <Field label="Dia do pagamento"><input name="dia" inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value.replace(/\D/g, '').slice(0, 2))} /></Field>
         </div>
-        <Field label={`Guardar: ${save}% do que sobra após as fixas`}><input type="range" min={0} max={100} step={5} value={save} onChange={(e) => { const n = Number(e.target.value); setSave(n); if (n + invest > 100) setInvest(100 - n); }} style={{ padding: 0, minHeight: 32, accentColor: 'var(--gold)' }} /></Field>
-        <Field label={`Investir: ${invest}%`}><input type="range" min={0} max={100 - save} step={5} value={invest} onChange={(e) => setInvest(Number(e.target.value))} style={{ padding: 0, minHeight: 32, accentColor: 'var(--gold)' }} /></Field>
+        <Field label={`Guardar: ${save}% do que sobra após as fixas`}><input type="range" min={0} max={100} step={5} value={save} onChange={(e) => { const n = Number(e.target.value); setSave(n); if (n + invest > 100) setInvest(100 - n); }} style={{ padding: 0, minHeight: 32, accentColor: 'var(--accent)' }} /></Field>
+        <Field label={`Investir: ${invest}%`}><input type="range" min={0} max={100 - save} step={5} value={invest} onChange={(e) => setInvest(Number(e.target.value))} style={{ padding: 0, minHeight: 32, accentColor: 'var(--accent)' }} /></Field>
         <div className="hint">Livre para gastar: {100 - save - invest}%</div>
         {dirty && <div className="btnrow"><button className="btn" onClick={async () => { const d = Math.min(Math.max(Number(day) || 1, 1), 31); await saveSalary(parseMoney(amount) ?? 0, d, save, invest, sal.accountId ?? defaultAccountId()); toast('Plano salarial salvo'); }}>Salvar plano</button></div>}
       </div>
@@ -416,7 +416,7 @@ function Liberdade() {
       </div>
       <div className="card">
         <h2>Meta de independência financeira</h2>
-        <Field label={`Rendimento anual que você assume: ${settings.freedom.yieldPct}%`} hint="É uma premissa sua, não uma previsão do app."><input type="range" min={2} max={12} step={0.5} value={settings.freedom.yieldPct} onChange={(e) => updateSettings({ freedom: { yieldPct: Number(e.target.value) } })} style={{ padding: 0, minHeight: 32, accentColor: 'var(--gold)' }} /></Field>
+        <Field label={`Rendimento anual que você assume: ${settings.freedom.yieldPct}%`} hint="É uma premissa sua, não uma previsão do app."><input type="range" min={2} max={12} step={0.5} value={settings.freedom.yieldPct} onChange={(e) => updateSettings({ freedom: { yieldPct: Number(e.target.value) } })} style={{ padding: 0, minHeight: 32, accentColor: 'var(--accent)' }} /></Field>
         {f.requiredCents ? (<>
           <div className="kv"><span>Patrimônio necessário</span><b className="num">{formatBRL(f.requiredCents)}</b></div>
           <Progress pct={f.progressPct ?? 0} />

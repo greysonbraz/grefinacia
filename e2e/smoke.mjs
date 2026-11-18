@@ -234,8 +234,19 @@ try {
   await tab('Início');
   await page.waitForTimeout(900);
   await shot('01-inicio');
+  // resto do Início (a tela rola dentro de .screen)
+  for (const [i, y] of [[2, 900], [3, 1800], [4, 2700], [5, 3600]]) {
+    await page.evaluate((top) => document.querySelector('.screen')?.scrollTo(0, top), y);
+    await page.waitForTimeout(250);
+    await shot(`01-inicio-${i}`);
+  }
+  await page.evaluate(() => document.querySelector('.screen')?.scrollTo(0, 0));
   t = await text();
-  ok(t.includes('Patrimônio total') && t.includes('Total de dívidas') && t.includes('R$ 10.000,00'), 'painel mostra patrimônio e dívidas');
+  ok(t.includes('Patrimônio total') && t.includes('Dívidas') && t.includes('R$ 10.000,00') && t.includes('Saúde financeira'), 'painel mostra patrimônio, dívidas e saúde financeira');
+  // ocultar valores (olho) e mostrar de novo
+  await page.getByRole('button', { name: 'Ocultar valores' }).click();
+  ok((await page.evaluate(() => document.documentElement.dataset.hide)) === '1', 'olho oculta os valores');
+  await page.getByRole('button', { name: 'Mostrar valores' }).click();
   ok(t.includes('Gastos de') && t.includes('Previsão de'), 'início mostra gastos do mês e previsão do mês que vem');
   // aba Dólar: conta em dólar e ETF
   await seg('US$ Dólar');
@@ -277,7 +288,7 @@ try {
   await page.waitForSelector('nav.nav');
   await page.waitForTimeout(500);
   t = await text();
-  ok(t.includes('Total de dívidas') && (await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'dados e tema persistem após recarregar');
+  ok(t.includes('Patrimônio total') && t.includes('R$ 10.000,00') && (await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'dados e tema persistem após recarregar');
   // segurança: a política de conteúdo está no app compilado e bloqueia script embutido e eval
   const csp = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') ?? '');
   ok(csp.includes("script-src 'self'") && !csp.includes('unsafe-eval') && csp.includes("object-src 'none'"), 'CSP presente, sem eval e sem plugins');

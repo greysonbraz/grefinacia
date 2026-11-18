@@ -5,6 +5,7 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   theme: 'dark',
   cardMonth: 'fatura',
+  hideValues: false,
   security: { enabled: false, kind: 'pin', biometric: false, lockAfterSec: 30, hideInRecents: true },
   salary: { amountCents: 0, payDay: 5, savePct: 20, investPct: 20 },
   budgets: {},

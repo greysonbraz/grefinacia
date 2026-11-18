@@ -24,6 +24,7 @@ Checkpoint de **17/11/2026**. `main` em `87e85f2` (versão 1.8.0, todas as etapa
 
 | Etapa | Entrega | Branch |
 |---|---|---|
+| P1 | Purple Edition, etapas 3 e 4 do redesign: sistema visual roxo (tokens, contraste conferido, temas escuro e claro), voltar do Android, vibração, ocultar valores, Início reorganizado | `claude/purple-design` |
 | 19 | Investimentos → Exterior (US$) com bonds e fundos; dias do cartão pela fatura do banco; regras do extrato do Inter (Global Account, Porquinho, Débito B3, Pix no crédito) | `claude/etapa-19-ajustes` |
 | 18 | Faturas do cartão como no banco: fatura de cada compra pelo Open Finance (billId), tela Faturas (paga/aberta/futura, total do banco para conferir); câmbio para dólar fora dos gastos e somado na aba Dólar | `claude/etapa-18-faturas` |
 | 17 | Compra no cartão conta no mês da fatura (padrão; chave em Ajustes → Cartões); previsão sem contar o cartão em dobro; "Renda fixa em dólar" na aba Dólar | `claude/etapa-17-cartao-fatura` |
@@ -42,6 +43,12 @@ Detalhes da Etapa 12:
 - **Saldo:** conta criada pela conexão começa com o saldo do banco no dia seguinte à última atualização da Pluggy; a tela mostra saldo do banco × do app.
 - **Autorização:** a do Meu Pluggy para a aplicação vale 1 ano; o app avisa 30 dias antes.
 - **Proventos:** créditos de dividendos/JCP/rendimentos que chegam pela conexão confirmam os proventos sozinhos (Etapa 11a).
+
+Detalhes do redesign Purple Edition (pedido do dono, 18/11/2026; plano em 10 etapas aprovado):
+- Etapa 1 (auditoria, com as skills Impeccable, frontend-design e design-skills): nota técnica 14/20; P1: sem botão voltar do Android; branco sobre #8B5CF6 reprova contraste (4,05:1).
+- Etapa 3: `src/styles.css` com tokens Purple (ver `DESIGN.md`), estados, foco, seleção; `@capacitor/haptics` (vibração leve); `src/ui/back.ts` (voltar do Android); `CountMoney`, `Skeleton`, `ChartBox minimal`; olho (`settings.hideValues`, sem mudar o banco).
+- Etapa 4: Início em `src/ui/home/*`: patrimônio com evolução 6/12 meses → seu mês → gastos → próximos 15 dias (faturas agrupadas, proventos) → previsão → investimentos → saúde financeira → atalhos → análises → AI. Cálculos novos só de leitura em `src/domain/home.ts`.
+- Próximas: 5 Movimentações, 6 Investimentos, 7 AI, 8 Planejamento, 9 navegação/animações, 10 testes finais.
 
 Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
 - Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).
