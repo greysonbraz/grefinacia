@@ -63,6 +63,18 @@ try {
   await shot('03-movimentacoes-graficos');
   await seg('Lançamentos');
   await shot('02-movimentacoes');
+  // detalhe em tela própria
+  await page.locator('.screen .group button.row').filter({ hasText: /−|\+/ }).first().click();
+  ok(await page.getByRole('dialog', { name: 'Movimentação' }).isVisible(), 'detalhe da movimentação em tela própria');
+  await page.waitForTimeout(600);
+  await shot('02b-detalhe');
+  await page.getByRole('dialog', { name: 'Movimentação' }).getByRole('button', { name: 'Voltar', exact: true }).click();
+  // filtro por período
+  await page.getByRole('button', { name: 'Filtros' }).click();
+  await page.getByLabel('Período').selectOption('90');
+  await page.getByRole('button', { name: 'Aplicar' }).click();
+  ok(await page.getByRole('button', { name: /Últimos 90 dias/ }).isVisible(), 'filtro: últimos 90 dias');
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
 
   // plano: 3500 - 1500 = 2000 → 20% 400, 20% 400, livre 1200, restante 1000
   await tab('Planejamento');

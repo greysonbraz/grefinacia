@@ -13,15 +13,16 @@ import { formatDateBR, formatDayMonth, lastMonths, monthOf, monthShort, weekdayS
 import { buildInstallments, costMonth, effectiveDue, monthSummary, openInvoices } from '../domain/ledger';
 import { uid } from '../lib/ids';
 import { suggestCategory } from '../domain/importer';
+import { PERIOD_LABEL, periodRange, txContext, type Period } from '../domain/period';
 import { scanReceipt } from '../services/native';
 import { isNative } from '../services/platform';
-import { ChartBox, cssVar, Empty, Field, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
+import { ChartBox, cssVar, Empty, Field, Full, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
 type Filter = 'todas' | 'receitas' | 'despesas' | 'transferencias' | 'pendentes';
 const INCOME_KINDS: TxKind[] = ['salario', 'hora_extra', 'adicional', 'outro_rendimento'];
 const EXPENSE_KINDS: TxKind[] = ['variavel', 'fixa', 'cartao', 'parcelada', 'assinatura'];
-interface Extra { categoryId: string; accountId: string; cardId: string; origin: '' | 'manual' | 'import' }
-const NO_EXTRA: Extra = { categoryId: '', accountId: '', cardId: '', origin: '' };
+interface Extra { categoryId: string; accountId: string; cardId: string; origin: '' | 'manual' | 'import'; period: Period; from: string; to: string }
+const NO_EXTRA: Extra = { categoryId: '', accountId: '', cardId: '', origin: '', period: '', from: '', to: '' };
 type Item = { kind: 'tx'; t: Transaction } | { kind: 'tr'; t: Transfer };
 
 export function Transactions({ initial }: { initial?: string } = {}) {
@@ -45,10 +46,12 @@ export function Transactions({ initial }: { initial?: string } = {}) {
   const cardOut = useMemo(() => (mode === 'fatura' ? data.transactions.filter((t) => t.type === 'expense' && t.cardId && monthOf(t.date) === ym && costMonth(t) !== ym).reduce((s, t) => s + t.amountCents, 0) : 0), [data, ym, mode]);
   const cat = (id: string) => data.categories.find((c) => c.id === id);
   const accName = (id: string) => (!id ? 'fora do app' : data.accounts.find((a) => a.id === id)?.name ?? 'conta removida');
-  const extraCount = Object.values(extra).filter(Boolean).length;
+  const range = periodRange(extra.period, today, extra.from, extra.to);
+  const extraCount = [extra.categoryId, extra.accountId, extra.cardId, extra.origin, range].filter(Boolean).length;
+  const [detail, setDetail] = useState<Transaction | null>(null);
   const items = useMemo<Item[]>(() => {
     const needle = q.trim().toLowerCase();
-    const inScope = (date: string, text: string) => (needle ? text.toLowerCase().includes(needle) : monthOf(date) === ym);
+    const inScope = (date: string, text: string) => (needle ? text.toLowerCase().includes(needle) : true) && (range ? date >= range.from && date <= range.to : needle ? true : monthOf(date) === ym);
     const txOk = (t: Transaction) =>
       (filter === 'todas' || (filter === 'receitas' && t.type === 'income') || (filter === 'despesas' && t.type === 'expense') || (filter === 'pendentes' && t.status === 'pending')) &&
       (!extra.categoryId || t.categoryId === extra.categoryId) && (!extra.accountId || t.accountId === extra.accountId) && (!extra.cardId || t.cardId === extra.cardId) &&
@@ -57,7 +60,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
     const tx: Item[] = filter === 'transferencias' ? [] : data.transactions.filter((t) => inScope(t.date, t.description) && txOk(t)).map((t) => ({ kind: 'tx', t }));
     const tr: Item[] = (data.transfers ?? []).filter((t) => inScope(t.date, t.note ?? '') && trOk(t)).map((t) => ({ kind: 'tr', t }));
     return [...tx, ...tr].sort((a, b) => b.t.date.localeCompare(a.t.date) || b.t.createdAt - a.t.createdAt);
-  }, [data.transactions, data.transfers, ym, filter, q, extra]);
+  }, [data.transactions, data.transfers, ym, filter, q, extra, range?.from, range?.to]);
   const invoices = useMemo(() => openInvoices(data), [data]);
   const groups = useMemo(() => { const m = new Map<string, Item[]>(); for (const it of items) m.set(it.t.date, [...(m.get(it.t.date) ?? []), it]); return [...m.entries()]; }, [items]);
   const dayNet = (list: Item[]) => list.reduce((s, it) => (it.kind === 'tx' ? s + (it.t.type === 'income' ? it.t.amountCents : -it.t.amountCents) : s), 0);
@@ -112,6 +115,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
               {extra.categoryId && <button onClick={() => setExtra({ ...extra, categoryId: '' })}>{cat(extra.categoryId)?.name} <X size={14} /></button>}
               {extra.accountId && <button onClick={() => setExtra({ ...extra, accountId: '' })}>{accName(extra.accountId)} <X size={14} /></button>}
               {extra.cardId && <button onClick={() => setExtra({ ...extra, cardId: '' })}>{data.cards.find((c) => c.id === extra.cardId)?.name} <X size={14} /></button>}
+              {range && <button onClick={() => setExtra({ ...extra, period: '', from: '', to: '' })}>{extra.period === 'custom' ? `${formatDateBR(range.from)} a ${formatDateBR(range.to)}` : PERIOD_LABEL[extra.period as Exclude<Period, ''>]} <X size={14} /></button>}
               {extra.origin && <button onClick={() => setExtra({ ...extra, origin: '' })}>{extra.origin === 'import' ? 'Importados' : 'Lançados à mão'} <X size={14} /></button>}
               <button onClick={() => setExtra(NO_EXTRA)}>Limpar filtros</button>
             </div>
@@ -140,7 +144,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
                     const t = it.t;
                     const late = t.type === 'expense' && t.status === 'pending' && effectiveDue(t) < today;
                     return (
-                      <button className="row" key={t.id} onClick={() => setEdit(t)}>
+                      <button className="row" key={t.id} onClick={() => setDetail(t)}>
                         <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>
                         <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
                         <div className="end">
@@ -158,6 +162,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
       )}
       {filtersOpen && <FiltersSheet value={extra} onChange={setExtra} onClose={() => setFiltersOpen(false)} />}
       {move && <MoveSheet t={move} onClose={() => setMove(null)} />}
+      {detail && <TxDetail id={detail.id} onClose={() => setDetail(null)} onEdit={(t) => { setDetail(null); setEdit(t); }} onOpen={setDetail} />}
       {transferOpen && <TransferForm onClose={() => setTransferOpen(false)} />}
       {view === 'calendario' && <Agenda ym={ym} />}
       {view === 'graficos' && <TxCharts ym={ym} />}
@@ -181,10 +186,10 @@ export function Transactions({ initial }: { initial?: string } = {}) {
 
 function TxCharts({ ym }: { ym: string }) {
   const data = useStore((s) => s.data);
-  const [mode, setMode] = useState<'mensal' | 'anual'>('mensal');
+  const [mode, setMode] = useState<'mensal' | 'trimestre' | 'anual'>('mensal');
   const pal = seriesColors();
   const name = (id: string) => data.categories.find((c) => c.id === id)?.name ?? id;
-  const months = mode === 'mensal' ? [ym] : lastMonths(ym, 12);
+  const months = mode === 'mensal' ? [ym] : lastMonths(ym, mode === 'trimestre' ? 3 : 12);
   const sums = months.map((m) => monthSummary(data, m));
   const totals: Record<string, number> = {};
   for (const s of sums) for (const [k, v] of Object.entries(s.byCategory)) totals[k] = (totals[k] ?? 0) + v;
@@ -195,7 +200,7 @@ function TxCharts({ ym }: { ym: string }) {
   const items = [...top.map(([id, v], i) => ({ label: name(id), v, color: pal[i] })), ...(rest > 0 ? [{ label: 'Outras', v: rest, color: cssVar('--sother') }] : [])];
   return (
     <>
-      <Seg value={mode} onChange={setMode} options={[['mensal', 'Este mês'], ['anual', 'Últimos 12 meses']]} />
+      <Seg value={mode} onChange={setMode} options={[['mensal', 'Este mês'], ['trimestre', 'Trimestre'], ['anual', '12 meses']]} />
       <div className="card">
         <h2>Onde você gasta mais</h2>
         {items.length === 0 ? <Empty title="Sem despesas" text="Não há despesas no período." /> : (
@@ -207,7 +212,7 @@ function TxCharts({ ym }: { ym: string }) {
           </>
         )}
       </div>
-      {mode === 'anual' && (
+      {mode !== 'mensal' && (
         <div className="card">
           <h2>Receitas e despesas por mês</h2>
           <ChartBox kind="bar" labels={months.map(monthShort)} series={[{ label: 'Receitas', data: sums.map((s) => s.incomeCents), color: pal[2] }, { label: 'Despesas', data: sums.map((s) => s.expenseCents), color: pal[1] }]} />
@@ -369,6 +374,17 @@ function FiltersSheet({ value, onChange, onClose }: { value: Extra; onChange: (v
       <Field label="Categoria"><select value={v.categoryId} onChange={(e) => setV({ ...v, categoryId: e.target.value })}><option value="">Todas</option>{data.categories.map((c) => (<option key={c.id} value={c.id}>{c.name}{c.type === 'income' ? ' (receita)' : ''}</option>))}</select></Field>
       <Field label="Conta"><select value={v.accountId} onChange={(e) => setV({ ...v, accountId: e.target.value })}><option value="">Todas</option>{data.accounts.filter((a) => !a.archived).map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}</select></Field>
       {data.cards.length > 0 && <Field label="Cartão"><select value={v.cardId} onChange={(e) => setV({ ...v, cardId: e.target.value })}><option value="">Todos</option>{data.cards.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></Field>}
+      <Field label="Período">
+        <select value={v.period} onChange={(e) => setV({ ...v, period: e.target.value as Period })}>
+          <option value="">O mês escolhido</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="custom">Escolher datas</option>
+        </select>
+      </Field>
+      {v.period === 'custom' && (
+        <div className="grid2">
+          <Field label="De"><input type="date" value={v.from} onChange={(e) => setV({ ...v, from: e.target.value })} /></Field>
+          <Field label="Até"><input type="date" value={v.to} onChange={(e) => setV({ ...v, to: e.target.value })} /></Field>
+        </div>
+      )}
       <Field label="Origem"><select value={v.origin} onChange={(e) => setV({ ...v, origin: e.target.value as Extra['origin'] })}><option value="">Todas</option><option value="import">Importados (extrato ou banco)</option><option value="manual">Lançados à mão</option></select></Field>
       <div className="btnrow">
         <button className="btn ghost" onClick={() => { onChange(NO_EXTRA); onClose(); }}>Limpar</button>
@@ -394,5 +410,63 @@ function MoveSheet({ t, onClose }: { t: Transfer; onClose: () => void }) {
       <div className="note">Não conta como receita nem despesa: o dinheiro só mudou de lugar.</div>
       <div className="btnrow"><button className="btn danger" onClick={async () => { if (typeof window.confirm === 'function' && !window.confirm('Desfazer esta transferência? O saldo da conta volta ao que era.')) return; await remove('transfers', t.id); toast('Transferência desfeita'); onClose(); }}>Desfazer</button></div>
     </Sheet>
+  );
+}
+
+/** Detalhe de uma movimentação em tela própria: valor grande, todos os dados, histórico parecido e ações. */
+function TxDetail({ id, onClose, onEdit, onOpen }: { id: string; onClose: () => void; onEdit: (t: Transaction) => void; onOpen: (t: Transaction) => void }) {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const t = data.transactions.find((x) => x.id === id);
+  if (!t) return null;
+  const c = data.categories.find((x) => x.id === t.categoryId);
+  const ctx = txContext(data, t);
+  const acc = t.accountId ? data.accounts.find((a) => a.id === t.accountId)?.name : undefined;
+  const card = t.cardId ? data.cards.find((x) => x.id === t.cardId)?.name : undefined;
+  const batch = t.importId ? data.imports.find((b) => b.id === t.importId) : undefined;
+  const late = t.type === 'expense' && t.status === 'pending' && effectiveDue(t) < today;
+  const status = t.status === 'paid' ? (t.type === 'income' ? 'Recebido' : 'Pago') : late ? 'Atrasado' : t.type === 'income' ? 'A receber' : 'A pagar';
+  return (
+    <Full title="Movimentação" onBack={onClose} action={<button className="link" onClick={() => onEdit(t)}>Editar</button>}>
+      <div className="txhead">
+        <span className={'txic ' + (t.type === 'income' ? 'in' : 'out')} aria-hidden><Ico name={c?.icon ?? 'Circle'} size={26} /></span>
+        <div className="txdesc">{t.description}</div>
+        <div className={'bigamount num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
+        <span className={'badge ' + (t.status === 'paid' ? 'good' : late ? 'bad' : 'warn')}>{status}</span>
+      </div>
+      <div className="group">
+        <div className="kv"><span>Categoria</span><b>{c?.name ?? '—'}</b></div>
+        <div className="kv"><span>Data</span><b>{weekdayShort(t.date)}, {formatDateBR(t.date)}</b></div>
+        {t.dueDate && t.dueDate !== t.date && <div className="kv"><span>Vencimento</span><b>{formatDateBR(t.dueDate)}</b></div>}
+        {t.paidDate && t.status === 'paid' && t.paidDate !== t.date && <div className="kv"><span>{t.type === 'income' ? 'Recebido em' : 'Pago em'}</span><b>{formatDateBR(t.paidDate)}</b></div>}
+        <div className="kv"><span>Forma</span><b>{PAYMENT_LABEL[t.paymentMethod]}</b></div>
+        {card ? <div className="kv"><span>Cartão</span><b>{card}{t.dueDate ? ` · fatura ${monthShort(costMonth(t))}` : ''}</b></div> : acc && <div className="kv"><span>Conta</span><b>{acc}</b></div>}
+        <div className="kv"><span>Tipo</span><b>{KIND_LABEL[t.kind]}</b></div>
+        {t.installment && <div className="kv"><span>Parcela</span><b>{t.installment.number} de {t.installment.total}</b></div>}
+        {t.recurrenceId && <div className="kv"><span>Repete</span><b>todo mês</b></div>}
+        <div className="kv"><span>Origem</span><b>{batch ? batch.fileName : t.source === 'import' ? 'Banco' : t.source === 'salary' ? 'Salário' : t.source === 'dividend' ? 'Provento' : 'Lançado à mão'}</b></div>
+        {t.boletoLine && <div className="kv"><span>Boleto</span><b className="num" style={{ fontSize: 12 }}>{formatBoletoLine(t.boletoLine)}</b></div>}
+        {t.notes && <div className="kv"><span>Observação</span><b>{t.notes}</b></div>}
+      </div>
+      <div className="hint" style={{ margin: '0 4px 12px' }}>{c?.name ?? 'Esta categoria'} em {monthShort(monthOf(t.date))}: <span className="num">{formatBRL(ctx.categoryMonthCents)}</span> em {ctx.categoryMonthCount} {ctx.categoryMonthCount === 1 ? 'lançamento' : 'lançamentos'}.</div>
+      {ctx.similar.length > 0 && (
+        <>
+          <div className="ghead"><h2>Outras vezes</h2></div>
+          <div className="group">
+            {ctx.similar.map((s) => (
+              <button className="row" key={s.id} onClick={() => onOpen(s)}>
+                <div className="mid"><div className="t">{formatDateBR(s.date)}</div><div className="s">{PAYMENT_LABEL[s.paymentMethod]}</div></div>
+                <div className="end"><div className={'num ' + (s.type === 'income' ? 'pos' : '')}>{formatBRL(s.amountCents)}</div></div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="btnrow">
+        {t.status === 'pending' && !t.cardId && <button className="btn" onClick={async () => { await markPaid(t); toast(t.type === 'income' ? 'Marcado como recebido' : 'Marcado como pago'); }}>{t.type === 'income' ? 'Recebi' : 'Paguei'}</button>}
+        <button className="btn ghost" onClick={() => onEdit(t)}>Editar</button>
+        <button className="btn danger" onClick={async () => { if (typeof window.confirm === 'function' && !window.confirm('Excluir esta movimentação?')) return; await deleteTransaction(t); toast('Movimentação excluída'); onClose(); }}>Excluir</button>
+      </div>
+    </Full>
   );
 }
