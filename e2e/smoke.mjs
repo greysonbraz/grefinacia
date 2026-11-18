@@ -171,6 +171,8 @@ try {
 
   // chat
   await tab('Grefinacia AI');
+  await page.waitForTimeout(300);
+  await shot('09a-ai-inicio');
   await page.getByText('Quanto posso gastar até o próximo salário?').click();
   await page.waitForTimeout(500);
   t = await text();

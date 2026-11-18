@@ -71,7 +71,7 @@ export function MonthPulse({ o, nav }: { o: Overview; nav: Nav }) {
         <button className="pulse-cell" onClick={() => nav.go('planning', 'salario')}>
           <span className="pl">Livre para gastar</span>
           <span className={'num pv ' + (free < 0 ? 'neg' : '')}>{formatBRL(free)}</span>
-          <span className="ps">{o.spend.plan.risk === 'sem_receita' ? 'cadastre seu salário' : o.spend.perDayCents > 0 ? `${formatBRL(o.spend.perDayCents)} por dia` : 'neste mês'}</span>
+          <span className="ps">{o.spend.plan.risk === 'sem_receita' ? 'cadastre seu salário' : o.spend.perDayCents > 0 ? `${formatBRL(o.spend.perDayCents)} por dia até o fim do mês` : 'neste mês'}</span>
         </button>
       </div>
       {open && accounts.length > 1 && (
