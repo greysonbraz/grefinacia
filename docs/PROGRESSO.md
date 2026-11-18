@@ -64,6 +64,12 @@ Detalhes do redesign Purple Edition (pedido do dono, 18/11/2026; plano em 10 eta
 - Teste instável observado: `tests/vault.test.ts` falhou uma vez na bateria completa e passou isolado e na repetição (tempo de criptografia).
 - Etapa 10 (revisão final, 1.22.0): navegação automática agora confere as 5 abas em 360px com "reduzir movimento" (nada vaza para os lados); botões de ícone com 48dp (Android); rótulos da barra de baixo ajustados em telas estreitas. 301 testes; build Android do GitHub OK.
 - APK do salto (1.22.0) enviado ao dono: tudo desde o 1.19.0.
+- **App único (1.23.0)**, ideias do mockup do dono, só o que é gratuito (planos pagos e multiusuário ficam para conversar depois; logos de bancos não, são marcas registradas):
+  - Início: nota de saúde financeira de 0 a 100 (anel; 40 pontos sobra da renda, 35 reserva, 25 parcelas), tocar no gráfico do patrimônio mostra o valor do mês, atalhos + Despesa / + Receita / Transferir, saldo previsto em 1, 2 e 3 meses (previsão de caixa).
+  - AI no centro da barra de baixo (botão roxo elevado), orbe com halo girando (parado com "reduzir movimento"), microfone: reconhecimento de voz do próprio Android em pt-BR (`GrefinaciaPlugin.listen`, sem permissão de microfone no app; `<queries>` no manifesto).
+  - Movimentações: detalhe em tela própria (valor grande, todos os dados, total da categoria no mês, outras vezes com a mesma descrição, Paguei/Editar/Excluir), filtro por período (7, 30, 90 dias ou datas escolhidas), gráficos por trimestre.
+  - Planejamento: "Meu futuro" (1, 5 e 10 anos e aporte para R$ 1 milhão em 10/20/30 anos, em Liberdade), metas que dizem quanto guardar por mês até o prazo ("Usar esse valor"), aba **Desafios** (sem gastar, limite, guardar; progresso pelos lançamentos reais; guardados em `settings.challenges`), notificação "Relatório do mês" no dia 1 (números só do mês já fechado).
+  - Marca nova: "G" branco no quadrado roxo com ponto lilás; ícone adaptativo com camada monocromática (ícones temáticos do Android 13+), abertura no fundo do app (#0b0914), logotipo nas telas de boas-vindas e bloqueio. Arte em `docs/marca/icone-512.png`.
 
 Detalhes da Etapa 19 (dono: dólar não aparecia em Investimentos; dezembro ainda R$ 756,72; extrato de 90 dias conferido sem ir para o repositório):
 - Investimentos ganhou a aba "Exterior (US$)" (o mesmo painel da aba Dólar); tipos novos: Bonds e Fundos no exterior (pelo saldo).

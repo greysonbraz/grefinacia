@@ -8,7 +8,7 @@ import { closeTop } from './back';
 import { watchAutoLock } from '../services/security';
 import { nativeBridgeMissing } from '../services/platform';
 import { startAutoSync } from '../state/cloud';
-import { Toast } from './kit';
+import { Logo, Toast } from './kit';
 import { Home } from './Home';
 import { Transactions } from './Transactions';
 import { Invest } from './Invest';
@@ -57,12 +57,12 @@ export function App() {
 
   if (nativeBridgeMissing()) return (
     <div className="lock" role="alert">
-      <div className="logo">Gre<i>finacia</i></div>
+      <Logo />
       <p>Este aparelho precisa atualizar o componente <b>Android System WebView</b> para o app funcionar por completo.</p>
       <p className="mut">Abra a Play Store, procure por "Android System WebView" (e "Google Chrome"), toque em Atualizar e abra o Grefinacia de novo. Seus dados continuam guardados.</p>
     </div>
   );
-  if (!ready) return <div className="lock"><div className="logo">Gre<i>finacia</i></div></div>;
+  if (!ready) return <div className="lock"><Logo /></div>;
   if (!onboarded) return <><Onboarding /><Toast /></>;
   if (locked) return <><LockScreen /><Toast /></>;
   const nav: Nav = { go: (t, s) => { setTab(t); setSub(s); }, openSettings: () => setSettings(true) };

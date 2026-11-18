@@ -177,7 +177,7 @@ h1, h2, h3, p { margin: 0; }
 .composer { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 68px); padding: 8px 12px; display: flex; gap: 8px; background: var(--bg); border-top: 1px solid var(--line); z-index: 4; }
 .composer input { flex: 1; min-height: 46px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); padding: 0 14px; outline: none; }
 .lock { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 14px; text-align: center; }
-.logo { font-size: 30px; font-weight: 680; letter-spacing: -0.04em; } .logo i { font-style: normal; color: var(--accent); }
+.logo { display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 30px; font-weight: 680; letter-spacing: -0.04em; } .logo i { font-style: normal; color: var(--accent); } .logomark { border-radius: 24%; box-shadow: 0 10px 30px color-mix(in srgb, var(--accent-strong) 40%, transparent); }
 .pins { display: flex; gap: 12px; margin: 8px 0; } .pins i { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--muted); } .pins i.on { background: var(--accent); border-color: var(--accent); }
 .pad { display: grid; grid-template-columns: repeat(3, 72px); gap: 12px; } .pad button { height: 64px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); font-size: 24px; font-weight: 520; } .pad button:active { background: var(--surface2); }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; } .tbl th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 4px; } .tbl td { padding: 7px 4px; border-top: 1px solid var(--line); } .tbl td:last-child, .tbl th:last-child { text-align: right; }

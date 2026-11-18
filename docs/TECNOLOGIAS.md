@@ -1,6 +1,6 @@
 # Tecnologias do Grefinacia
 
-Versão 1.22.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
+Versão 1.23.0 (novembro de 2026). Regras e fontes de proventos: [INVESTIMENTOS.md](INVESTIMENTOS.md). Tudo gratuito; nenhum serviço pede cartão.
 
 ## Aplicativo
 
@@ -45,6 +45,7 @@ Mínimo: **Android 8** (API 26). Alvo: API 36.
 | Meu Pluggy (Pluggy, regulada pelo Banco Central) | Saldos, extratos e cartões dos seus bancos pelo Open Finance | Grátis para uso pessoal, sem prazo; até 5 bancos do mesmo titular; atualiza a cada 24 h; autorização vale 1 ano | meu.pluggy.ai, dashboard.pluggy.ai; chaves em Ajustes → Conexão bancária |
 | Binance (dados públicos de mercado) | Preço de cripto ao vivo na aba Cripto | Grátis, sem chave, só leitura; WebSocket aberto só com a aba aberta | nada a configurar |
 | ML Kit Text Recognition (Google, no aparelho) | Ler cupom/nota pela câmera | Grátis; modelo embutido no app, sem internet | nada a configurar |
+| Reconhecimento de voz do Android (`RecognizerIntent`, pt-BR) | Falar a pergunta para a Grefinacia AI | Grátis; serviço do próprio celular (Google), o app não pede permissão de microfone | nada a configurar |
 | GitHub Actions | Gerar o APK assinado | Gratuito para o repositório | Secrets `ANDROID_KEYSTORE_BASE64` e `ANDROID_KEYSTORE_PASSWORD` |
 
 Hosts liberados na CSP: `src/lib/csp.ts` (um teste falha se entrar host novo sem querer).

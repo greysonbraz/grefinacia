@@ -225,3 +225,24 @@ export function CountMoney({ cents, className = '' }: { cents: number; className
 export function Skeleton({ w = '100%', h = 14, style }: { w?: number | string; h?: number; style?: CSSProperties }) {
   return <span className="skel" style={{ width: w, height: h, ...style }} aria-hidden />;
 }
+
+/** Marca do Grefinacia: o "G" branco no quadrado roxo (mesmo desenho do ícone do app). */
+export function LogoMark({ size = 44 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden className="logomark">
+      <defs>
+        <linearGradient id="lm-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.55" stopColor="#7c3aed" /><stop offset="1" stopColor="#4c1d95" /></linearGradient>
+        <radialGradient id="lm-gl" cx="0.28" cy="0.2" r="0.7"><stop offset="0" stopColor="#fff" stopOpacity="0.35" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+      </defs>
+      <rect width="100" height="100" rx="24" fill="url(#lm-bg)" />
+      <rect width="100" height="100" rx="24" fill="url(#lm-gl)" />
+      <path d="M70.6 33.4 A25 25 0 1 0 75 54 H52" fill="none" stroke="#fff" strokeWidth="9.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="80" cy="22" r="4.6" fill="#f5d0fe" />
+    </svg>
+  );
+}
+
+/** Logotipo completo: marca + nome. */
+export function Logo({ size = 44 }: { size?: number }) {
+  return <div className="logo"><LogoMark size={size} /><span>Gre<i>finacia</i></span></div>;
+}

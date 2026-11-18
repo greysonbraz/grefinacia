@@ -25,6 +25,8 @@ const text = async () => (await page.locator('body').innerText()).replace(/ /g,
 try {
   await page.goto('http://localhost:4173/');
   // onboarding
+  await page.waitForSelector('.logomark');
+  await shot('00-boas-vindas');
   await page.fill('input[name=saldo]', '2.500,00');
   await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByText('Agora não, entrar sem PIN').click();
