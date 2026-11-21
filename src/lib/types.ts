@@ -194,7 +194,7 @@ export interface ImportBatch {
   id: string;
   createdAt: string; // ISO
   fileName: string;
-  format: 'ofx' | 'csv';
+  format: 'ofx' | 'csv' | 'pdf';
   bank?: string;
   accountId?: string; // extrato de conta
   cardId?: string; // fatura de cartão

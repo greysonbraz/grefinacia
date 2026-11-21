@@ -261,6 +261,18 @@ try {
   await page.getByRole('button', { name: /Desfazer/ }).click();
   await page.waitForTimeout(500);
   ok((await text()).includes('desfeita'), 'importação: desfeita');
+  // extrato em PDF: gera um PDF de verdade e lê com o pdf.js dentro do app (worker sob a CSP)
+  {
+    const p2 = await page.context().newPage();
+    await p2.setContent('<div style="font:14px sans-serif">Extrato da conta<br>16 de novembro de 2026 Saldo do dia: R$ 3,77<br>Pix enviado: Padaria Central -R$ 18,90 R$ 3,77<br>Pix recebido: Fulano R$ 50,00 R$ 53,77</div>');
+    const pdf = await p2.pdf();
+    await p2.close();
+    await page.locator('input[type=file]').setInputFiles({ name: 'extrato.pdf', mimeType: 'application/pdf', buffer: pdf });
+    await page.waitForTimeout(1500);
+    t = await text();
+    ok(t.includes('Padaria Central') && t.includes('Importar 2 lançamentos'), 'importação: extrato em PDF lido no aparelho');
+    await shot('11b-importar-pdf');
+  }
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
 
   // relatórios

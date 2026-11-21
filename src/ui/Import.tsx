@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { FileUp, Undo2 } from 'lucide-react';
 import { applyImport, toast, undoImport, useStore } from '../state/store';
-import { parseStatement, StatementError, type Statement } from '../domain/statement';
+import { parsePdfStatement, parseStatement, StatementError, type Statement } from '../domain/statement';
 import { buildPreview, buildTransactions, learnedRules, makeBatch, previewTotals, rowsBeforeAccountStart, type PreviewRow, type Target } from '../domain/importer';
 import { formatBRL } from '../lib/money';
 import { formatDateBR } from '../lib/dates';
@@ -11,7 +11,7 @@ import { Field, Full, Note, SwitchRow } from './kit';
 const SOURCE_LABEL: Record<PreviewRow['categorySource'], string> = { regra: 'sua regra', historico: 'como antes', banco: 'pelo banco', palavra: 'sugerida', padrao: 'sem palpite' };
 const MAX_ROWS_SHOWN = 400;
 
-/** Importar extrato da conta ou fatura do cartão (OFX ou CSV), com prévia, e desfazer importações. */
+/** Importar extrato da conta ou fatura do cartão (PDF, OFX ou CSV), com prévia, e desfazer importações. */
 export function ImportStatement({ onClose }: { onClose: () => void }) {
   const data = useStore((s) => s.data);
   const settings = useStore((s) => s.settings);
@@ -38,7 +38,11 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
     setErr(null);
     if (!f) return;
     try {
-      const st = parseStatement(new Uint8Array(await f.arrayBuffer()));
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const isPdf = /\.pdf$/i.test(f.name) || (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46);
+      if (isPdf && bytes.length > 10 * 1024 * 1024) throw new StatementError('PDF grande demais (máximo 10 MB).');
+      // PDF: o leitor (pdf.js) só é carregado quando precisa
+      const st = isPdf ? parsePdfStatement(await (await import('../services/pdftext')).pdfLines(bytes), today) : parseStatement(bytes);
       // destino provável: fatura → primeiro cartão; conta → primeira conta
       const guess = st.kind === 'cartao' && data.cards[0] ? `cartao:${data.cards[0].id}` : accounts[0] ? `conta:${accounts[0].id}` : data.cards[0] ? `cartao:${data.cards[0].id}` : '';
       setFile({ name: f.name, st });
@@ -47,7 +51,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
       rebuild(st, guess.startsWith('conta:') ? { kind: 'conta', accountId: guess.slice(6) } : guess ? { kind: 'cartao', cardId: guess.slice(7) } : null, false);
     } catch (e) {
       setFile(null);
-      setErr(e instanceof StatementError ? e.message : 'Não consegui ler o arquivo. Use o OFX ou o CSV exportado pelo banco.');
+      setErr(e instanceof StatementError ? e.message : 'Não consegui ler o arquivo. Use o PDF, OFX ou CSV exportado pelo banco.');
     }
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -86,8 +90,8 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
       {!file && (
         <div className="card">
           <h2>Escolha o arquivo</h2>
-          <div className="hint" style={{ marginBottom: 12 }}>OFX ou CSV exportado pelo app ou site do banco. O arquivo é lido só neste aparelho.</div>
-          <input ref={fileRef} type="file" accept=".ofx,.qfx,.csv,.txt,text/csv,application/x-ofx" style={{ display: 'none' }} onChange={(e) => void pick(e.target.files?.[0])} aria-label="Arquivo do extrato" />
+          <div className="hint" style={{ marginBottom: 12 }}>PDF, OFX ou CSV do extrato ou da fatura, baixado no app ou site do banco. O arquivo é lido só neste aparelho.</div>
+          <input ref={fileRef} type="file" accept=".pdf,.ofx,.qfx,.csv,.txt,application/pdf,text/csv,application/x-ofx" style={{ display: 'none' }} onChange={(e) => void pick(e.target.files?.[0])} aria-label="Arquivo do extrato" />
           <button className="btn" onClick={() => fileRef.current?.click()}><FileUp size={18} /> Escolher arquivo</button>
           {err && <div className="neg" role="alert" style={{ marginTop: 10 }}>{err}</div>}
           {accounts.length === 0 && data.cards.length === 0 && <Note>Cadastre antes a conta ou o cartão em Ajustes, para o app saber onde colocar os lançamentos.</Note>}

@@ -105,7 +105,7 @@ describe('OFX', () => {
   });
   it('arquivo sem lançamentos e PDF dão mensagem clara', () => {
     expect(() => parseOfx('OFXHEADER:100\n<OFX></OFX>')).toThrow(StatementError);
-    expect(() => parseStatement(enc('%PDF-1.7 ...'))).toThrow(/PDF ainda não é lido/);
+    expect(() => parseStatement(enc('%PDF-1.7 ...'))).toThrow(/opção de PDF/);
     expect(() => parseStatement(enc('nada,a,ver\n1,2,3'))).toThrow(/Não reconheci as colunas/);
   });
   it('UTF-8 com BOM é lido como UTF-8', () => {

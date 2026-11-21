@@ -22,7 +22,7 @@ export interface StatementRow {
   dueDate?: ISODate;
 }
 export interface Statement {
-  format: 'ofx' | 'csv';
+  format: 'ofx' | 'csv' | 'pdf';
   kind: 'conta' | 'cartao' | 'desconhecido';
   bank?: string;
   rows: StatementRow[];
@@ -214,6 +214,71 @@ export function parseCsv(text: string): Statement {
 export function parseStatement(bytes: Uint8Array): Statement {
   if (bytes.length > 5 * 1024 * 1024) throw new StatementError('Arquivo grande demais (máximo 5 MB).');
   const text = decodeStatement(bytes);
-  if (/^%PDF/.test(text)) throw new StatementError('Extrato em PDF ainda não é lido. No app ou site do banco, exporte em OFX ("Money" ou "Quicken") ou CSV.');
+  if (/^%PDF/.test(text)) throw new StatementError('PDF: escolha o arquivo pelo importador (a opção de PDF lê o texto no aparelho).');
   return isOfx(text) ? parseOfx(text) : parseCsv(text);
+}
+
+// ============================ PDF (texto já extraído) ============================
+const MONTHS: Record<string, number> = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+const p2 = (n: number) => String(n).padStart(2, '0');
+const MONEY_RE = /(-\s?)?(R\$\s?)?(-\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})(?!\d)/g;
+
+/** Data no começo da linha: "17/11/2026", "17/11", "17 de novembro de 2026", "07 nov 2026", "07 NOV". */
+function leadingDate(line: string, year: number): { date: ISODate; rest: string } | null {
+  let m = line.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(.*)$/);
+  if (m) {
+    const y = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : year;
+    const d = Number(m[1]), mo = Number(m[2]);
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return { date: `${y}-${p2(mo)}-${p2(d)}`, rest: m[4] };
+  }
+  m = line.match(/^(\d{1,2})\s+(?:de\s+)?([a-zç]{3})[a-zç]*\.?(?:\s+(?:de\s+)?(\d{4}))?\s*(.*)$/i);
+  if (m && MONTHS[m[2].toLowerCase()]) {
+    const d = Number(m[1]);
+    if (d >= 1 && d <= 31) return { date: `${m[3] ? Number(m[3]) : year}-${p2(MONTHS[m[2].toLowerCase()])}-${p2(d)}`, rest: m[4] };
+  }
+  return null;
+}
+
+/**
+ * Extrato de conta ou fatura de cartão em PDF, a partir das linhas de texto. Cada linha com valor em reais vira um
+ * lançamento; a data vem do começo da linha ou do último cabeçalho de dia. Linhas de saldo, total e limite ficam de fora.
+ * Na fatura, compras aparecem positivas e viram saída; "Parcela 2 de 10" vira "(2/10)" para as parcelas irem cada
+ * uma para a sua fatura.
+ */
+export function parsePdfStatement(lines: string[], today: ISODate): Statement {
+  const all = lines.join('\n');
+  const card = /fatura/i.test(all) && /(vencimento|pagamento m[íi]nimo|limite)/i.test(all) && !/saldo do dia/i.test(all);
+  let year = Number(today.slice(0, 4));
+  const yearInText = all.match(/\b(20\d{2})\b/);
+  if (yearInText) year = Number(yearInText[1]);
+  let current: ISODate | null = null;
+  const rows: StatementRow[] = [];
+  let skipped = 0;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const ld = leadingDate(line, year);
+    if (ld) { current = ld.date; year = Number(ld.date.slice(0, 4)); }
+    const text = ld ? ld.rest : line;
+    if (/\b(saldo|total|limite|pagamento m[íi]nimo|encargos|juros do|cet|iof total)\b/i.test(text)) { if (MONEY_RE.test(text)) skipped++; MONEY_RE.lastIndex = 0; continue; }
+    MONEY_RE.lastIndex = 0;
+    const m = MONEY_RE.exec(text);
+    MONEY_RE.lastIndex = 0;
+    if (!m || !current) continue;
+    let desc = text.slice(0, m.index).replace(/["“”]/g, '').replace(/[:\-–]\s*$/, '').replace(/\s+/g, ' ').trim();
+    const after = text.slice(m.index + m[0].length);
+    const parc = (desc + ' ' + after).match(/parcela\s+(\d{1,2})\s+de\s+(\d{1,2})/i);
+    desc = desc.replace(/parcela\s+\d{1,2}\s+de\s+\d{1,2}/i, '').trim();
+    if (parc) desc += ` (${parc[1]}/${parc[2]})`;
+    if (!desc) continue;
+    const negative = !!(m[1] || m[3]);
+    let cents = Math.round(Number(m[4].replace(/\./g, '').replace(',', '.')) * 100);
+    if (!cents) continue;
+    // conta: com sinal de menos é saída; fatura: compra (sem sinal) é saída e crédito/estorno (com menos) é entrada
+    cents = card ? (negative ? cents : -cents) : negative ? -cents : cents;
+    rows.push({ date: current, amount: cents, description: desc.slice(0, 120) });
+  }
+  if (!rows.length) throw new StatementError('Li o PDF, mas não achei lançamentos com data e valor. Se puder, exporte em OFX ou CSV.');
+  const warnings = skipped ? [`${skipped} ${skipped === 1 ? 'linha de saldo ou total foi ignorada' : 'linhas de saldo ou total foram ignoradas'}.`] : [];
+  return { format: 'pdf', kind: card ? 'cartao' : 'conta', rows, warnings };
 }
