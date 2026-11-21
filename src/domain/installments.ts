@@ -22,33 +22,56 @@ const hash = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.char
  * lançamento; senão, o único cartão cadastrado.
  */
 function cardFor(data: AppData, t: Transaction) {
-  const byId = data.cards.find((c) => c.id === t.cardId);
+  const byId = t.cardId ? data.cards.find((c) => c.id === t.cardId) : undefined;
   if (byId) return byId;
   const batch = t.importId ? data.imports.find((b) => b.id === t.importId) : undefined;
   const byBatch = batch?.cardId ? data.cards.find((c) => c.id === batch.cardId) : undefined;
   if (byBatch) return byBatch;
-  return data.cards.length === 1 ? data.cards[0] : undefined;
+  return t.cardId && data.cards.length === 1 ? data.cards[0] : undefined;
 }
 
-/** Lançamentos que precisam de ajuste (só muda vencimento, situação, cartão e a marca de parcela; nada é apagado). */
+/** Importado de uma fatura de cartão, mas sem cartão e sem conta (o cartão não existia na hora da importação). */
+const isOrphan = (data: AppData, t: Transaction) => t.source === 'import' && !t.cardId && !t.accountId && !!t.importId && !!data.imports.find((b) => b.id === t.importId)?.cardId;
+
+const withDue = (t: Transaction, due: ISODate, today: ISODate, payAccountId?: string): Transaction =>
+  t.type === 'income'
+    ? { ...t, dueDate: due }
+    : due < today
+      ? { ...t, dueDate: due, status: 'paid', paidDate: due, accountId: payAccountId }
+      : { ...t, dueDate: due, status: 'pending', paidDate: undefined, accountId: undefined };
+
+/**
+ * Lançamentos que precisam de ajuste (só muda cartão, vencimento, situação e a marca de parcela; nada é apagado):
+ * - compras de fatura importadas sem cartão voltam para o cartão, cada uma na fatura certa;
+ * - parcelas da mesma compra com a mesma data vão cada uma para a sua fatura.
+ */
 export function repairCardInstallments(data: AppData, today: ISODate): Transaction[] {
-  const groups = new Map<string, { t: Transaction; n: number; m: number; base: string }[]>();
+  const changed = new Map<string, Transaction>();
+  const cur = (t: Transaction) => changed.get(t.id) ?? t;
+  // 1) compras de fatura que ficaram sem cartão
   for (const t of data.transactions) {
-    if (t.type !== 'expense' || t.source !== 'import' || (!t.cardId && t.paymentMethod !== 'credito')) continue;
+    if (!isOrphan(data, t)) continue;
+    const card = cardFor(data, t);
+    if (!card) continue;
+    changed.set(t.id, withDue({ ...t, cardId: card.id, paymentMethod: t.type === 'income' ? 'outro' : 'credito' }, cardInvoiceDue(card, t.date).dueDate, today, card.accountId));
+  }
+  // 2) parcelas
+  const groups = new Map<string, { t: Transaction; n: number; m: number }[]>();
+  for (const t0 of data.transactions) {
+    const t = cur(t0);
+    if (t.type !== 'expense' || t.source !== 'import' || !t.cardId) continue;
     const p = parcelOf(t.description);
     if (!p) continue;
-    const key = `${t.cardId ?? ''}|${p.base.toLowerCase()}|${t.date}|${p.m}`;
-    groups.set(key, [...(groups.get(key) ?? []), { t, ...p }]);
+    const key = `${t.cardId}|${p.base.toLowerCase()}|${t.date}|${p.m}`;
+    groups.set(key, [...(groups.get(key) ?? []), { t, n: p.n, m: p.m }]);
   }
-  const out: Transaction[] = [];
   for (const [key, list] of groups) {
     // só quando o banco mandou várias parcelas da mesma compra com a mesma data (senão a data já é a da parcela)
     if (new Set(list.map((x) => x.n)).size < 2) continue;
     const card = cardFor(data, list[0].t);
     if (!card) continue;
     // vencimentos já diferentes entre si vieram da fatura do banco: ficam como estão
-    const dues = list.map((x) => x.t.dueDate ?? '');
-    const allSame = new Set(dues).size === 1;
+    const allSame = new Set(list.map((x) => x.t.dueDate ?? '')).size === 1;
     const first = cardInvoiceDue(card, list[0].t.date).dueDate;
     const groupId = 'imp:' + hash(key);
     for (const { t, n, m } of list) {
@@ -57,14 +80,38 @@ export function repairCardInstallments(data: AppData, today: ISODate): Transacti
       if (t.cardId !== card.id) next = { ...next, cardId: card.id };
       if (allSame) {
         const right = makeDate(addMonthsYM(monthOf(first), n - 1), card.dueDay);
-        if (t.dueDate !== right) {
-          next = right < today
-            ? { ...next, dueDate: right, status: 'paid', paidDate: right, accountId: card.accountId }
-            : { ...next, dueDate: right, status: 'pending', paidDate: undefined, accountId: undefined };
-        }
+        if (next.dueDate !== right) next = withDue(next, right, today, card.accountId);
       }
-      if (next !== t) out.push(next);
+      if (next !== t) changed.set(t.id, next);
     }
   }
-  return out;
+  const orig = new Map(data.transactions.map((t) => [t.id, t]));
+  return [...changed.values()].filter((t) => JSON.stringify(t) !== JSON.stringify(orig.get(t.id)));
+}
+
+export interface InstallmentPlan { groupId: string; name: string; perCents: number; total: number; paid: number; left: number; leftCents: number; nextDue?: ISODate; lastDue?: ISODate }
+/** Parcelamentos em andamento (compras parceladas no cartão ou lançadas como parceladas): quanto falta e até quando. */
+export function installmentPlans(data: AppData, today: ISODate): InstallmentPlan[] {
+  const by = new Map<string, Transaction[]>();
+  for (const t of data.transactions) if (t.type === 'expense' && t.installment && t.installment.total > 1) by.set(t.installment.groupId, [...(by.get(t.installment.groupId) ?? []), t]);
+  const out: InstallmentPlan[] = [];
+  for (const [groupId, list] of by) {
+    const due = (t: Transaction) => t.dueDate ?? t.date;
+    const sorted = [...list].sort((a, b) => a.installment!.number - b.installment!.number);
+    const total = sorted[0].installment!.total;
+    const future = sorted.filter((t) => due(t) >= today);
+    if (!future.length) continue;
+    out.push({
+      groupId,
+      name: parcelOf(sorted[0].description)?.base ?? sorted[0].description.replace(/\s*\(\d+\/\d+\)\s*$/, ''),
+      perCents: future[0].amountCents,
+      total,
+      paid: total - future.length,
+      left: future.length,
+      leftCents: future.reduce((s, t) => s + t.amountCents, 0),
+      nextDue: due(future[0]),
+      lastDue: due(future[future.length - 1]),
+    });
+  }
+  return out.sort((a, b) => b.leftCents - a.leftCents);
 }

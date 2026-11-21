@@ -261,6 +261,7 @@ export async function init(): Promise<void> {
     await db.setMeta('divAutoV1', true);
   }
   await rollDay();
+  await ensureLinkedCards();
   await repairInstallments();
   if (isNative()) void autoRefreshDividends().then(() => autoSyncBank()).then(() => ((state.data.usdHoldings ?? []).length || (state.data.bankInvestments ?? []).some((i) => i.currency === 'USD') ? refreshDollar() : undefined)).catch(() => undefined);
 }
@@ -735,6 +736,7 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
   try {
     const loaded = await loadBankAccounts();
     errors.push(...loaded.errors);
+    await ensureLinkedCards();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await saveBank({ lastAttempt: attempt, error: msg });
@@ -816,7 +818,7 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
       investReport.push({ bank: bankName, count: 0, foreign: 0, error: e instanceof Error ? e.message : String(e) });
     }
   }
-  if (imported) await repairInstallments();
+  await repairInstallments();
   await saveBank({ bills, investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
 }
@@ -1005,4 +1007,21 @@ export async function repairInstallments(): Promise<number> {
   await db.createSafetyCopy('importacao', state.data, state.settings);
   await upsert('transactions', fix);
   return fix.length;
+}
+
+/**
+ * Cartão vinculado na conexão bancária que não existe mais no app (apagado ou nunca chegou deste aparelho):
+ * é recriado com o mesmo código, pelos dados do banco, para as compras voltarem a entrar no cartão.
+ */
+export async function ensureLinkedCards(): Promise<number> {
+  const links = state.settings.bank.links ?? {};
+  const missing = Object.entries(links).filter(([, l]) => l.kind === 'cartao' && l.id && !state.data.cards.some((c) => c.id === l.id));
+  const cards = missing.map(([accId, l]) => {
+    const acc = state.bank.accounts.find((a) => a.id === accId);
+    const sameBank = acc ? state.bank.accounts.find((a) => a.itemId === acc.itemId && a.type !== 'CREDIT' && links[a.id]?.kind === 'conta') : undefined;
+    const pay = (sameBank && links[sameBank.id]?.id) || defaultAccountId();
+    return acc ? newCardFor(acc, acc.bankName, l.id!, pay) : { id: l.id!, name: 'Cartão do banco', closingDay: 1, dueDay: 10, accountId: pay };
+  });
+  if (cards.length) await upsert('cards', cards);
+  return cards.length;
 }

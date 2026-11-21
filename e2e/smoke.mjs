@@ -76,6 +76,10 @@ try {
   await page.getByRole('button', { name: 'Grupos' }).click();
   ok((await text()).includes('Moradia e contas'), 'gráficos por grupos');
   await page.getByRole('button', { name: 'Categorias', exact: true }).click();
+  await seg('Recorrentes');
+  await page.waitForTimeout(300);
+  ok((await text()).includes('Parcelamentos em andamento'), 'recorrentes: assinaturas e parcelamentos');
+  await shot('03d-recorrentes');
   await seg('Lançamentos');
   await shot('02-movimentacoes');
   // detalhe em tela própria

@@ -14,11 +14,11 @@ import { buildInstallments, costMonth, effectiveDue, monthSummary, openInvoices 
 import { uid } from '../lib/ids';
 import { suggestCategory } from '../domain/importer';
 import { PERIOD_LABEL, periodRange, txContext, type Period } from '../domain/period';
-import { categoryTxs, GROUPS, groupOf, recategorize } from '../domain/catview';
-import { parcelOf } from '../domain/installments';
+import { categoryTxs, GROUPS, groupOf, monthSubscriptions, recategorize } from '../domain/catview';
+import { installmentPlans, parcelOf } from '../domain/installments';
 import { scanReceipt } from '../services/native';
 import { isNative } from '../services/platform';
-import { BrandMark, ChartBox, cssVar, Empty, Field, Full, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
+import { BrandMark, ChartBox, cssVar, Empty, Field, Full, Ico, Progress, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
 type Filter = 'todas' | 'receitas' | 'despesas' | 'transferencias' | 'pendentes';
 const INCOME_KINDS: TxKind[] = ['salario', 'hora_extra', 'adicional', 'outro_rendimento'];
@@ -170,6 +170,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
       {transferOpen && <TransferForm onClose={() => setTransferOpen(false)} />}
       {view === 'calendario' && <Agenda ym={ym} />}
       {view === 'graficos' && <TxCharts ym={ym} />}
+      {view === 'recorrentes' && <RecurringExtras />}
       {view === 'recorrentes' && (
         <div className="card">
           <h2>Lançamentos que se repetem todo mês</h2>
@@ -573,5 +574,42 @@ function CategoryView({ title, ids, months, onClose }: { title: string; ids: str
       {detail && <TxDetail id={detail.id} onClose={() => setDetail(null)} onEdit={(t) => { setDetail(null); setEditing(t); }} onOpen={setDetail} />}
       {editing && <TxForm tx={editing} onClose={() => setEditing(null)} />}
     </Full>
+  );
+}
+
+/** Na aba Recorrentes: assinaturas do mês e parcelamentos em andamento (vindos do banco ou lançados). */
+function RecurringExtras() {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const subs = useMemo(() => monthSubscriptions(data, today), [data, today]);
+  const plans = useMemo(() => installmentPlans(data, today), [data, today]);
+  const plansLeft = plans.reduce((s, p) => s + p.leftCents, 0);
+  return (
+    <>
+      <div className="ghead"><h2>Assinaturas do mês</h2>{subs.items.length > 0 && <span className="num ghead-total">{formatBRL(subs.totalCents)}</span>}</div>
+      {subs.items.length === 0 ? <div className="hint" style={{ margin: '0 4px 12px' }}>Nenhuma assinatura neste mês. Lançamentos na categoria Assinaturas e cobranças que se repetem todo mês aparecem aqui.</div> : (
+        <div className="group">
+          {subs.items.map((s) => (
+            <div className="row" key={s.key}>
+              <BrandMark name={s.name} />
+              <div className="mid"><div className="t">{s.name}</div><div className="s">{formatDayMonth(s.date)} · {s.paid ? 'pago' : 'a pagar'}</div></div>
+              <div className="end"><div className="num">{formatBRL(s.cents)}</div></div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="ghead"><h2>Parcelamentos em andamento</h2>{plans.length > 0 && <span className="num ghead-total">{formatBRL(plansLeft)}</span>}</div>
+      {plans.length === 0 ? <div className="hint" style={{ margin: '0 4px 12px' }}>Nenhuma compra parcelada em andamento.</div> : (
+        <div className="group">
+          {plans.map((p) => (
+            <div className="row" key={p.groupId}>
+              <div className="ic"><span className="xbadge" style={{ margin: 0 }}>{p.total}x</span></div>
+              <div className="mid"><div className="t">{p.name}</div><div className="s">{p.paid} de {p.total} pagas · faltam {p.left}{p.lastDue ? ` · até ${monthShort(monthOf(p.lastDue))}/${p.lastDue.slice(2, 4)}` : ''}</div><Progress pct={(p.paid / p.total) * 100} /></div>
+              <div className="end"><div className="num">{formatBRL(p.perCents)}</div><div className="s">por mês</div></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

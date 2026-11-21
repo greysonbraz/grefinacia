@@ -9,6 +9,20 @@ const t = (p: Partial<Transaction>): Transaction => ({ id: 'p' + n++, type: 'exp
 const base = (): AppData => { const d = emptyData(); d.cards = [card]; return d; };
 
 describe('parcelas do cartão vindas do banco', () => {
+  it('importadas sem cartão (cartão não existia): voltam para o cartão, cada parcela na sua fatura', () => {
+    const d = base();
+    d.imports = [{ id: 'imp1', cardId: 'c' } as never];
+    const mk = (i: number) => t({ description: `EBN TIKTOK SH SAO PAULO BRA (${i}/10)`, cardId: undefined, accountId: undefined, importId: 'imp1', dueDate: undefined, status: 'paid', paidDate: '2026-11-07' });
+    d.transactions = [...Array.from({ length: 10 }, (_, i) => mk(i + 1)), t({ description: 'Mercado', cardId: undefined, accountId: undefined, importId: 'imp1', dueDate: undefined, status: 'paid', date: '2026-11-10' })];
+    const fix = repairCardInstallments(d, '2026-11-21');
+    expect(fix).toHaveLength(11);
+    expect(fix.every((x) => x.cardId === 'c' && x.paymentMethod === 'credito')).toBe(true);
+    const parc = fix.filter((x) => x.installment).sort((a, b) => a.installment!.number - b.installment!.number);
+    expect(parc.map((x) => x.dueDate).slice(0, 2)).toEqual(['2026-12-07', '2027-01-07']);
+    expect(fix.find((x) => x.description === 'Mercado')).toMatchObject({ dueDate: '2026-12-07', status: 'pending' });
+    d.transactions = d.transactions.map((x) => fix.find((f) => f.id === x.id) ?? x);
+    expect(repairCardInstallments(d, '2026-11-21')).toEqual([]);
+  });
   it('cartão recriado (id antigo) e vencimento igual à data da compra: acha o cartão e corrige', () => {
     const d = base();
     d.imports = [{ id: 'imp1', cardId: 'c' } as never];
@@ -50,5 +64,15 @@ describe('parcelas do cartão vindas do banco', () => {
     const d = base();
     d.transactions = [t({ description: 'X (1/2)', source: 'manual' }), t({ description: 'X (2/2)', source: 'manual' })];
     expect(repairCardInstallments(d, '2026-11-21')).toEqual([]);
+  });
+});
+
+describe('parcelamentos em andamento', () => {
+  it('quanto falta e até quando', async () => {
+    const { installmentPlans } = await import('../src/domain/installments');
+    const d = base();
+    d.transactions = Array.from({ length: 10 }, (_, i) => t({ description: `TIKTOK (${i + 1}/10)`, amountCents: 12014, installment: { groupId: 'g', number: i + 1, total: 10 }, dueDate: `2026-${String(i + 9).padStart(2, '0')}-07`.replace('2026-13', '2027-01').replace('2026-14', '2027-02').replace('2026-15', '2027-03').replace('2026-16', '2027-04').replace('2026-17', '2027-05').replace('2026-18', '2027-06') }));
+    const [p] = installmentPlans(d, '2026-11-21');
+    expect(p).toMatchObject({ name: 'TIKTOK', total: 10, paid: 3, left: 7, perCents: 12014, nextDue: '2026-12-07', lastDue: '2027-06-07' });
   });
 });
