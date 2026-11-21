@@ -15,7 +15,9 @@ const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, de
 const page = await ctx.newPage();
 const errors = [];
 let expectCspBlock = false; // durante o teste da CSP, o bloqueio aparece no console e é o resultado esperado
-page.on('console', (m) => m.type() === 'error' && !(expectCspBlock && /Content Security Policy/i.test(m.text())) && errors.push(m.text()));
+// queda do canal ao vivo da Binance (rede externa) não é erro do app: a tela cai para a CoinGecko
+const externalNet = (t) => /WebSocket connection to 'wss:\/\/data-stream\.binance\.vision/.test(t);
+page.on('console', (m) => m.type() === 'error' && !(expectCspBlock && /Content Security Policy/i.test(m.text())) && !externalNet(m.text()) && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 const ok = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); console.log('FALHOU:', msg); } else console.log('ok:', msg); };
 const shot = (n) => page.screenshot({ path: `shots/${n}.png` });
