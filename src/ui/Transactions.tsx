@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronDown, ChevronRight, SlidersHorizontal, X, ScanText } from 'lucide-react';
+import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronDown, ChevronRight, SlidersHorizontal, X, ScanText, QrCode } from 'lucide-react';
 import { ImportStatement } from './Import';
 import { CardBills } from './CardBills';
 import { Agenda } from './Agenda';
@@ -16,7 +16,9 @@ import { suggestCategory } from '../domain/importer';
 import { PERIOD_LABEL, periodRange, txContext, type Period } from '../domain/period';
 import { categoryTxs, GROUPS, groupOf, monthSubscriptions, recategorize } from '../domain/catview';
 import { installmentPlans, parcelOf } from '../domain/installments';
-import { scanReceipt } from '../services/native';
+import { scanQrCode, scanReceipt } from '../services/native';
+import { parseNfceQr } from '../domain/nfce';
+import { fetchNfce } from '../services/nfce';
 import { isNative } from '../services/platform';
 import { BrandMark, ChartBox, cssVar, Empty, Field, Full, Ico, Progress, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
@@ -296,6 +298,40 @@ function TxForm({ tx, onClose, startType = 'expense' }: { tx: Transaction | null
   const batch = tx?.importId ? data.imports.find((b) => b.id === tx.importId) : undefined;
   const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
+  const [notes, setNotes] = useState(tx?.notes ?? '');
+  const [nfceUrl, setNfceUrl] = useState<string | null>(null);
+  // QR da NFC-e: loja, total, data e itens pela página pública da Sefaz (ou só o que o QR traz)
+  const scanQr = async () => {
+    setErr(null);
+    setNfceUrl(null);
+    setScanning(true);
+    try {
+      const raw = await scanQrCode();
+      if (!raw) return;
+      const q = parseNfceQr(raw);
+      if (!q) return setScanNote('Esse QR code não é de nota fiscal (NFC-e).');
+      const d = await fetchNfce(q.url);
+      if (d) {
+        if (d.totalCents) setAmount(centsToInput(d.totalCents));
+        if (d.date) setDate(d.date);
+        if (d.merchant) {
+          setDesc(d.merchant.slice(0, 60));
+          const sug = suggestCategory(d.merchant, 'expense', data, rules ?? []);
+          if (!catTouched && sug.source !== 'padrao') setCategoryId(sug.categoryId);
+        }
+        if (d.items.length) setNotes(`Nota fiscal: ${d.items.slice(0, 12).map((i) => `${i.name} ${formatBRL(i.totalCents)}`).join('; ')}${d.items.length > 12 ? ` e mais ${d.items.length - 12}` : ''}`.slice(0, 600));
+        setScanNote(`Li a nota fiscal: ${d.merchant ?? 'loja'}, ${d.totalCents ? formatBRL(d.totalCents) : 'sem total'}, ${d.items.length} ${d.items.length === 1 ? 'item' : 'itens'}. Confira antes de salvar.`);
+      } else {
+        if (q.offline) { setAmount(centsToInput(q.offline.totalCents)); setDate(`${q.ym}-${String(q.offline.day).padStart(2, '0')}`); }
+        setNfceUrl(q.url);
+        setScanNote(q.offline ? 'Li o valor e a data do QR. Os itens e a loja só aparecem no site da Sefaz.' : 'Não consegui abrir a nota pelo app (site da Sefaz de outro estado, fora do ar ou pedindo verificação). Abra no navegador e confira o valor.');
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Não foi possível ler o QR code.');
+    } finally {
+      setScanning(false);
+    }
+  };
   /** Lê o cupom pela câmera e preenche o formulário (você confere antes de salvar). */
   const scan = async () => {
     setScanning(true);
@@ -345,7 +381,7 @@ function TxForm({ tx, onClose, startType = 'expense' }: { tx: Transaction | null
     if (!cents || cents <= 0) return setErr('Informe um valor maior que zero.');
     if (credit && !cardId) return setErr('Cadastre um cartão em Ajustes → Contas e cartões.');
     const card = credit ? data.cards.find((c) => c.id === cardId) : undefined;
-    const base = { type, kind, description: desc.trim(), amountCents: cents, categoryId, paymentMethod: method, accountId: credit ? undefined : accountId || undefined, cardId: credit ? cardId : undefined, boletoLine: type === 'expense' && !credit ? boletoLine() : undefined };
+    const base = { notes: notes.trim() || undefined, type, kind, description: desc.trim(), amountCents: cents, categoryId, paymentMethod: method, accountId: credit ? undefined : accountId || undefined, cardId: credit ? cardId : undefined, boletoLine: type === 'expense' && !credit ? boletoLine() : undefined };
     if (tx) {
       await saveTransaction({ ...tx, ...base, date, status: credit ? tx.status : paid ? 'paid' : 'pending', paidDate: paid ? tx.paidDate ?? date : undefined, dueDate: type === 'expense' && !credit ? (paid ? tx.dueDate : date) : tx.dueDate });
     } else if (kind === 'parcelada') {
@@ -368,7 +404,13 @@ function TxForm({ tx, onClose, startType = 'expense' }: { tx: Transaction | null
   return (
     <Sheet title={tx ? 'Editar movimentação' : 'Nova movimentação'} onClose={onClose}>
       {!tx && <Seg value={type} onChange={changeType} options={[['expense', 'Despesa'], ['income', 'Receita']]} />}
-      {!tx && type === 'expense' && isNative() && <button className="btn ghost" style={{ marginBottom: 12 }} disabled={scanning} onClick={scan}><ScanText size={18} /> {scanning ? 'Lendo o cupom…' : 'Escanear cupom ou nota'}</button>}
+      {!tx && type === 'expense' && isNative() && (
+        <div className="two" style={{ marginBottom: 12 }}>
+          <button className="btn ghost" disabled={scanning} onClick={scan}><ScanText size={18} /> {scanning ? 'Lendo…' : 'Foto do cupom'}</button>
+          <button className="btn ghost" disabled={scanning} onClick={scanQr}><QrCode size={18} /> QR da nota</button>
+        </div>
+      )}
+      {nfceUrl && <a className="btn ghost sm" href={nfceUrl} rel="noreferrer" style={{ marginBottom: 12 }}>Abrir a nota no navegador</a>}
       {scanNote && <div className="note" style={{ marginTop: -4, marginBottom: 10 }}>{scanNote}</div>}
       {batch && <div className="note" style={{ marginTop: 0, marginBottom: 10 }}>Veio de: {batch.fileName}{tx?.cardId && tx.dueDate ? ` · fatura que vence em ${formatDateBR(tx.dueDate)}` : ''}</div>}
       <Field label={kind === 'parcelada' && !tx ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}><span className="bigamount"><MoneyInput name="valor" value={amount} onChange={setAmount} autoFocus={!tx} /></span></Field>

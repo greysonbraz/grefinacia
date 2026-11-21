@@ -238,6 +238,7 @@ describe('política de conteúdo (CSP)', () => {
     expect(ALLOWED_HOSTS.slice(0, 6)).toEqual(['https://brapi.dev', 'https://query1.finance.yahoo.com', 'https://api.coingecko.com', 'https://api.bcb.gov.br', 'https://api.pluggy.ai', 'https://slgiagmfbbjifjkapusr.supabase.co']);
     expect(csp).not.toContain('anthropic');
     expect(ALLOWED_HOSTS.every((h) => h.startsWith('https://'))).toBe(true);
+    expect(ALLOWED_HOSTS).toContain('https://www.fazenda.pr.gov.br');
     expect(LIVE_HOSTS).toEqual(['wss://data-stream.binance.vision']);
     expect(csp).toContain('wss://data-stream.binance.vision');
   });

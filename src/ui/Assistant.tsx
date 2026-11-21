@@ -1,9 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import { FileUp, Image as ImageIco, Mic, Paperclip, Send, TriangleAlert, CircleCheck, Info, Sparkles } from 'lucide-react';
+import { FileUp, Image as ImageIco, Mic, Paperclip, QrCode, Send, TriangleAlert, CircleCheck, Info, Sparkles } from 'lucide-react';
 import { formatBRL } from '../lib/money';
 import { monthPace } from '../domain/home';
 import { toast, useStore } from '../state/store';
-import { listen, photoText } from '../services/native';
+import { listen, photoText, scanQrCode } from '../services/native';
+import { parseNfceQr } from '../domain/nfce';
+import { fetchNfce } from '../services/nfce';
 import { readDocument, type DocGuess } from '../domain/docread';
 import { DocCard } from './DocCard';
 import { isNative } from '../services/platform';
@@ -47,6 +49,26 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
       : guess.kind === 'receipt' ? 'Li um cupom ou nota. Quer lançar a despesa?'
       : read.trim() ? 'Não reconheci este tipo de imagem ainda. Hoje eu entendo: prints do Time Deposit / Meu Porquinho do Inter, da carteira (B3 e EUA), boletos e cupons fiscais. Abaixo, o que consegui ler.' : 'Não consegui ler texto nesta imagem. Tente um print ou uma foto mais nítida.';
     setMsgs((m) => [...m, { role: 'user', content: '📎 Foto enviada' }, { role: 'assistant', content, doc: guess, read: guess.kind === 'unknown' ? read.slice(0, 600) : undefined }]);
+    setTimeout(() => end.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  };
+
+  // QR da nota fiscal (NFC-e): vira um cupom para lançar com um toque
+  const sendQr = async () => {
+    setAttach(false);
+    let raw: string;
+    try { raw = await scanQrCode(); } catch (e) { toast(e instanceof Error ? e.message : 'Não foi possível ler o QR code.', 'err'); return; }
+    if (!raw) return;
+    const q = parseNfceQr(raw);
+    if (!q) { setMsgs((m) => [...m, { role: 'assistant', content: 'Esse QR code não é de nota fiscal (NFC-e).' }]); return; }
+    setBusy(true);
+    const d = await fetchNfce(q.url);
+    setBusy(false);
+    const total = d?.totalCents ?? q.offline?.totalCents ?? null;
+    const date = d?.date ?? (q.offline ? `${q.ym}-${String(q.offline.day).padStart(2, '0')}` : null);
+    const guess: DocGuess | undefined = total ? { kind: 'receipt', receipt: { merchant: d?.merchant ?? null, totalCents: total, date, cnpj: d?.cnpj ?? null } } : undefined;
+    const content = d ? `Li a nota fiscal${d.merchant ? ` de ${d.merchant}` : ''}: ${d.items.length} ${d.items.length === 1 ? 'item' : 'itens'}.${d.items.length ? ' ' + d.items.slice(0, 5).map((i) => `${i.name} ${formatBRL(i.totalCents)}`).join('; ') + (d.items.length > 5 ? '…' : '') : ''}`
+      : `Não consegui abrir a nota pelo app (site da Sefaz de outro estado, fora do ar ou pedindo verificação). Abra no navegador: ${q.url}`;
+    setMsgs((m) => [...m, { role: 'user', content: '📷 QR da nota fiscal' }, { role: 'assistant', content, doc: guess }]);
     setTimeout(() => end.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
@@ -137,7 +159,8 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
           {attach && (
             <div className="attach-menu" role="menu">
               <button role="menuitem" onClick={() => void sendPhoto()}><ImageIco size={18} /> Foto ou print<small>investimento, carteira, boleto, cupom</small></button>
-              <button role="menuitem" onClick={() => { setAttach(false); nav.go('transactions', 'importar'); }}><FileUp size={18} /> Arquivo de extrato<small>OFX ou CSV do banco</small></button>
+              <button role="menuitem" onClick={() => void sendQr()}><QrCode size={18} /> QR da nota fiscal<small>loja, total e itens da NFC-e</small></button>
+              <button role="menuitem" onClick={() => { setAttach(false); nav.go('transactions', 'importar'); }}><FileUp size={18} /> Arquivo de extrato<small>PDF, OFX ou CSV do banco</small></button>
             </div>
           )}
           <form className="composer" onSubmit={(e) => { e.preventDefault(); void ask(text); }}>

@@ -28,6 +28,7 @@ export const ALLOWED_HOSTS: string[] = [
   SUPABASE_URL, // nuvem: login e cópia cifrada dos dados
   ...NEWS_HOSTS, // notícias (feeds públicos)
   ...(PAID_AI_ENABLED ? ['https://api.anthropic.com'] : []),
+  'https://www.fazenda.pr.gov.br', // NFC-e: página pública de consulta do QR do cupom (Sefaz-PR)
 ];
 
 /** Conexões ao vivo (WebSocket). Só dados públicos de mercado; abertas apenas enquanto a tela que usa está aberta. */

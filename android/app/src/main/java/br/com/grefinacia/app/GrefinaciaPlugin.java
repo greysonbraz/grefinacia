@@ -18,6 +18,10 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
@@ -26,6 +30,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 /**
  * Recursos nativos do Grefinacia:
  * - recognizeText: lê o texto de uma foto (cupom/nota) com o ML Kit, no próprio aparelho (modelo do Google Play Services, sem internet na leitura).
+ * - scanQr: lê um QR code (nota fiscal) com o leitor do Google, sem permissão de câmera no app.
  * - listen: abre o reconhecimento de voz do próprio Android (pt-BR) e devolve o texto falado.
  * - setWidget: guarda os valores do widget da tela inicial e pede para redesenhá-lo.
  */
@@ -68,6 +73,25 @@ public class GrefinaciaPlugin extends Plugin {
                 }
                 recognizer.close();
             });
+    }
+
+    /** QR code pelo leitor do Google (Play Services): a câmera abre numa tela do Google; o app não precisa de permissão. */
+    @PluginMethod
+    public void scanQr(PluginCall call) {
+        GmsBarcodeScannerOptions opts = new GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build();
+        GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(getActivity(), opts);
+        scanner.startScan()
+            .addOnSuccessListener(b -> {
+                JSObject o = new JSObject();
+                o.put("text", b.getRawValue() == null ? "" : b.getRawValue());
+                call.resolve(o);
+            })
+            .addOnCanceledListener(() -> {
+                JSObject o = new JSObject();
+                o.put("text", "");
+                call.resolve(o);
+            })
+            .addOnFailureListener(e -> call.reject("Não foi possível abrir o leitor de QR code. Confira se o Google Play Services está atualizado.", "qr", e));
     }
 
     @PluginMethod

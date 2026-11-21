@@ -7,6 +7,7 @@ import { parseReceipt, type ReceiptGuess } from '../domain/receipt';
 interface GrefinaciaPlugin {
   recognizeText(o: { base64: string }): Promise<{ text: string }>;
   listen(): Promise<{ text: string }>;
+  scanQr(): Promise<{ text: string }>;
   setWidget(o: { free: string; freeLabel: string; balance: string; next: string; updated: string }): Promise<void>;
 }
 const Native = registerPlugin<GrefinaciaPlugin>('Grefinacia');
@@ -70,4 +71,15 @@ export async function photoText(header = 'Foto ou print'): Promise<string | null
   if (!photo.base64String) return null;
   const { text } = await Native.recognizeText({ base64: photo.base64String });
   return text ?? '';
+}
+
+/** Lê um QR code com o leitor do Google (Play Services): abre a câmera numa tela do próprio Google, sem pedir permissão ao app. '' se cancelar. */
+export async function scanQrCode(): Promise<string> {
+  if (!isNative()) throw new ScanError('Ler QR code funciona no app Android.');
+  try {
+    const { text } = await Native.scanQr();
+    return (text ?? '').trim();
+  } catch (e) {
+    throw new ScanError(e instanceof Error && e.message ? e.message : 'Não foi possível ler o QR code.');
+  }
 }
