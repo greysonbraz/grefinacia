@@ -25,7 +25,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 /**
  * Recursos nativos do Grefinacia:
- * - recognizeText: lê o texto de uma foto (cupom/nota) com o ML Kit, no próprio aparelho (modelo embutido, sem internet).
+ * - recognizeText: lê o texto de uma foto (cupom/nota) com o ML Kit, no próprio aparelho (modelo do Google Play Services, sem internet na leitura).
  * - listen: abre o reconhecimento de voz do próprio Android (pt-BR) e devolve o texto falado.
  * - setWidget: guarda os valores do widget da tela inicial e pede para redesenhá-lo.
  */
@@ -60,7 +60,12 @@ public class GrefinaciaPlugin extends Plugin {
                 recognizer.close();
             })
             .addOnFailureListener(e -> {
-                call.reject("Não foi possível ler o texto da foto.", "leitura", e);
+                String m = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+                if (m.contains("download") || m.contains("unavailable") || m.contains("module")) {
+                    call.reject("O leitor de texto ainda está sendo baixado pelo Google Play. Deixe o celular na internet e tente de novo em alguns minutos.", "baixando", e);
+                } else {
+                    call.reject("Não foi possível ler o texto da foto.", "leitura", e);
+                }
                 recognizer.close();
             });
     }

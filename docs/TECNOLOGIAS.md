@@ -44,7 +44,7 @@ Mínimo: **Android 8** (API 26). Alvo: API 36.
 | Gemini Nano (no aparelho) | Perguntas livres no chat (opcional) | Sem custo; cota por app do AICore; envia métricas de uso ao Google | Ajustes → Grefinacia AI |
 | Meu Pluggy (Pluggy, regulada pelo Banco Central) | Saldos, extratos e cartões dos seus bancos pelo Open Finance | Grátis para uso pessoal, sem prazo; até 5 bancos do mesmo titular; atualiza a cada 24 h; autorização vale 1 ano | meu.pluggy.ai, dashboard.pluggy.ai; chaves em Ajustes → Conexão bancária |
 | Binance (dados públicos de mercado) | Preço de cripto ao vivo na aba Cripto | Grátis, sem chave, só leitura; WebSocket aberto só com a aba aberta | nada a configurar |
-| ML Kit Text Recognition (Google, no aparelho) | Ler cupom/nota pela câmera | Grátis; modelo embutido no app, sem internet | nada a configurar |
+| ML Kit Text Recognition (Google, no aparelho) | Ler cupom/nota e prints pela câmera ou galeria | Grátis; modelo baixado uma vez pelo Google Play Services (fora do APK), leitura sem internet | nada a configurar |
 | Reconhecimento de voz do Android (`RecognizerIntent`, pt-BR) | Falar a pergunta para a Grefinacia AI | Grátis; serviço do próprio celular (Google), o app não pede permissão de microfone | nada a configurar |
 | GitHub Actions | Gerar o APK assinado | Gratuito para o repositório | Secrets `ANDROID_KEYSTORE_BASE64` e `ANDROID_KEYSTORE_PASSWORD` |
 
