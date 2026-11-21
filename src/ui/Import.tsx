@@ -8,7 +8,7 @@ import { formatDateBR } from '../lib/dates';
 import { uid } from '../lib/ids';
 import { Field, Full, Note, SwitchRow } from './kit';
 
-const SOURCE_LABEL: Record<PreviewRow['categorySource'], string> = { regra: 'sua regra', historico: 'como antes', palavra: 'sugerida', padrao: 'sem palpite' };
+const SOURCE_LABEL: Record<PreviewRow['categorySource'], string> = { regra: 'sua regra', historico: 'como antes', banco: 'pelo banco', palavra: 'sugerida', padrao: 'sem palpite' };
 const MAX_ROWS_SHOWN = 400;
 
 /** Importar extrato da conta ou fatura do cartão (OFX ou CSV), com prévia, e desfazer importações. */

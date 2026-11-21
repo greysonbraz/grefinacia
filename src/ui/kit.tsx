@@ -1,10 +1,13 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Chart, LineController, BarController, DoughnutController, LineElement, PointElement, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Filler, type ChartConfiguration } from 'chart.js';
 import * as L from 'lucide-react';
-import { formatBRL, formatCompact, formatPct } from '../lib/money';
+import { brandMark } from '../domain/catview';
+import { formatBRL, formatCompact, formatPct, maskMoneyInput } from '../lib/money';
 import { addMonthsYM, capFirst, monthLong } from '../lib/dates';
 import { quoteFreshness } from '../domain/market';
 import { useStore } from '../state/store';
+import { useBackHandler } from './back';
+import { tap } from '../services/haptics';
 
 Chart.register(LineController, BarController, DoughnutController, LineElement, PointElement, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Filler);
 
@@ -15,6 +18,7 @@ export function Ico({ name, size = 20 }: { name: string; size?: number }) {
 }
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useBackHandler(onClose);
   return (
     <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sheet" role="dialog" aria-label={title}>
@@ -29,6 +33,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 }
 
 export function Full({ title, onBack, children, action }: { title: string; onBack: () => void; children: ReactNode; action?: ReactNode }) {
+  useBackHandler(onBack);
   return (
     <div className="full" role="dialog" aria-label={title}>
       <div className="screen">
@@ -55,8 +60,8 @@ export function Field({ label, children, error, hint }: { label: string; childre
     </label>
   );
 }
-export function MoneyInput({ value, onChange, placeholder = '0,00', name }: { value: string; onChange: (v: string) => void; placeholder?: string; name?: string }) {
-  return <input name={name} inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value.replace(/[^0-9.,-]/g, ''))} />;
+export function MoneyInput({ value, onChange, placeholder = '0,00', name, autoFocus }: { value: string; onChange: (v: string) => void; placeholder?: string; name?: string; autoFocus?: boolean }) {
+  return <input name={name} inputMode="numeric" value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(maskMoneyInput(value, e.target.value))} />;
 }
 export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="tog" onClick={() => onChange(!on)} />;
@@ -72,7 +77,7 @@ export function SwitchRow({ title, sub, on, onChange }: { title: string; sub?: s
 export function Seg<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: [T, string][] }) {
   return (
     <div className="seg" role="group">
-      {options.map(([v, l]) => (<button key={v} aria-pressed={value === v} onClick={() => onChange(v)}>{l}</button>))}
+      {options.map(([v, l]) => (<button key={v} aria-pressed={value === v} onClick={() => { if (v !== value) tap(); onChange(v); }}>{l}</button>))}
     </div>
   );
 }
@@ -141,7 +146,7 @@ export type ChartKind = 'line' | 'bar' | 'doughnut';
 export interface Series { label: string; data: (number | null)[]; color?: string; fill?: boolean; dashed?: boolean }
 
 /** Gráfico interativo (toque para ver valores). Valores em centavos, ou em % com `format="pct"`. */
-export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl' }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' }) {
+export function ChartBox({ kind, labels, series, small, stacked, colors, format = 'brl', minimal, onPick }: { kind: ChartKind; labels: string[]; series: Series[]; small?: boolean; stacked?: boolean; colors?: string[]; format?: 'brl' | 'pct' | 'rate'; /** sem eixo de valores e sem grade (gráfico de tendência) */ minimal?: boolean; /** toque num ponto/barra: índice escolhido */ onPick?: (index: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const theme = useStore((s) => s.settings.theme);
   useEffect(() => {
@@ -153,33 +158,115 @@ export function ChartBox({ kind, labels, series, small, stacked, colors, format 
     const datasets = series.map((s, i) => {
       const c = s.color ?? pal[i % pal.length];
       if (kind === 'doughnut') return { label: s.label, data: s.data, backgroundColor: colors ?? s.data.map((_, j) => pal[j % pal.length]), borderColor: surface, borderWidth: 2, hoverOffset: 4 };
-      if (kind === 'bar') return { label: s.label, data: s.data, backgroundColor: c, borderRadius: 4, maxBarThickness: 22, borderColor: surface, borderWidth: stacked ? 1 : 0 };
+      if (kind === 'bar') return { label: s.label, data: s.data, backgroundColor: colors && series.length === 1 ? colors : c, borderRadius: 4, maxBarThickness: 22, borderColor: surface, borderWidth: stacked ? 1 : 0 };
       return { label: s.label, data: s.data, borderColor: c, backgroundColor: c + '22', borderWidth: 2, tension: 0.3, pointRadius: s.data.length > 14 ? 0 : 3, pointHoverRadius: 6, pointBackgroundColor: c, pointBorderColor: surface, pointBorderWidth: 2, fill: !!s.fill, borderDash: s.dashed ? [5, 4] : undefined };
     });
     const cfg: ChartConfiguration = {
       type: kind,
       data: { labels, datasets: datasets as never },
       options: {
+        onClick: onPick ? (_e: unknown, els: { index: number }[]) => { if (els[0]) { tap(); onPick(els[0].index); } } : undefined,
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 450 },
+        animation: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? false : { duration: 600, easing: 'easeOutQuart' },
         interaction: { mode: kind === 'doughnut' ? 'nearest' : 'index', intersect: kind === 'doughnut' },
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: cssVar('--surface2'), titleColor: cssVar('--text'), bodyColor: cssVar('--text'), borderColor: line, borderWidth: 1, padding: 10, cornerRadius: 10, boxPadding: 4, callbacks: { label: (ctx: any) => ` ${kind === 'doughnut' ? ctx.label : ctx.dataset.label}: ${format === 'pct' ? formatPct(Number(ctx.raw), true) : formatBRL(Number(ctx.raw))}` } },
+          tooltip: { backgroundColor: cssVar('--surface2'), titleColor: cssVar('--text'), bodyColor: cssVar('--text'), borderColor: line, borderWidth: 1, padding: 10, cornerRadius: 10, boxPadding: 4, callbacks: { label: (ctx: any) => ` ${kind === 'doughnut' ? ctx.label : ctx.dataset.label}: ${format === 'pct' ? formatPct(Number(ctx.raw), true) : format === 'rate' ? 'R$ ' + Number(ctx.raw).toLocaleString('pt-BR', { minimumFractionDigits: 4 }) : formatBRL(Number(ctx.raw))}` } },
         },
-        ...(kind === 'doughnut' ? { cutout: '68%' } : { scales: { x: { stacked, grid: { display: false }, ticks: { color: text, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 8 }, border: { color: line } }, y: { stacked, grid: { color: line + '80' }, border: { display: false }, ticks: { color: text, font: { size: 11 }, maxTicksLimit: 5, callback: (v: string | number) => (format === 'pct' ? formatPct(Number(v)) : formatCompact(Number(v))) } } } }),
+        ...(kind === 'doughnut' ? { cutout: '68%' } : { scales: { x: { stacked, grid: { display: false }, ticks: { color: text, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 8 }, border: { color: line } }, y: { stacked, display: !minimal, grid: { color: line + '80' }, border: { display: false }, ticks: { color: text, font: { size: 11 }, maxTicksLimit: 5, callback: (v: string | number) => (format === 'pct' ? formatPct(Number(v)) : format === 'rate' ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formatCompact(Number(v))) } } } }),
       } as never,
     };
     const chart = new Chart(ref.current, cfg);
     return () => chart.destroy();
-  }, [kind, JSON.stringify(labels), JSON.stringify(series), theme, stacked, JSON.stringify(colors), format]);
-  return <div className={'chartbox' + (small ? ' sm' : '')}><canvas ref={ref} role="img" aria-label={series.map((s) => s.label).join(', ')} /></div>;
+  }, [kind, JSON.stringify(labels), JSON.stringify(series), theme, stacked, JSON.stringify(colors), format, minimal]);
+  return <div className={'chartbox' + (small ? ' sm' : '') + (minimal ? ' xs' : '')}><canvas ref={ref} role="img" aria-label={series.map((s) => s.label).join(', ')} /></div>;
 }
 export function Legend({ items }: { items: { label: string; color: string; value?: string; dashed?: boolean }[] }) {
   return (
     <div className="legend" style={{ marginTop: 10 }}>
       {items.map((i) => (<span key={i.label}><i className="dot" style={{ background: i.dashed ? 'none' : i.color, border: i.dashed ? `1px dashed ${i.color}` : undefined }} />{i.label}{i.value && <> <b className="num">{i.value}</b></>}</span>))}
     </div>
+  );
+}
+
+/**
+ * Valor em reais que anima até o número novo quando ele muda (contagem curta, 450 ms, saída suave).
+ * Com "reduzir movimento" ligado, troca direto. Fica borrado quando "ocultar valores" está ligado (classe .num).
+ */
+export function CountMoney({ cents, className = '' }: { cents: number; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const shown = useRef(cents);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const from = shown.current;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || from === cents || typeof requestAnimationFrame !== 'function') {
+      shown.current = cents;
+      el.textContent = formatBRL(cents);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const k = Math.min((t - t0) / 450, 1);
+      const v = Math.round(from + (cents - from) * (1 - Math.pow(1 - k, 4)));
+      el.textContent = formatBRL(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+      else shown.current = cents;
+    };
+    raf = requestAnimationFrame(step);
+    return () => { cancelAnimationFrame(raf); shown.current = cents; };
+  }, [cents]);
+  return <span ref={ref} className={'num ' + className}>{formatBRL(cents)}</span>;
+}
+
+/** Bloco de carregamento no formato do conteúdo que vai chegar. */
+export function Skeleton({ w = '100%', h = 14, style }: { w?: number | string; h?: number; style?: CSSProperties }) {
+  return <span className="skel" style={{ width: w, height: h, ...style }} aria-hidden />;
+}
+
+/** Marca do Grefinacia: o "G" branco no quadrado roxo (mesmo desenho do ícone do app). */
+export function LogoMark({ size = 44 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden className="logomark">
+      <defs>
+        <linearGradient id="lm-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="0.55" stopColor="#7c3aed" /><stop offset="1" stopColor="#4c1d95" /></linearGradient>
+        <radialGradient id="lm-gl" cx="0.28" cy="0.2" r="0.7"><stop offset="0" stopColor="#fff" stopOpacity="0.35" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+      </defs>
+      <rect width="100" height="100" rx="24" fill="url(#lm-bg)" />
+      <rect width="100" height="100" rx="24" fill="url(#lm-gl)" />
+      <path d="M70.6 33.4 A25 25 0 1 0 75 54 H52" fill="none" stroke="#fff" strokeWidth="9.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="80" cy="22" r="4.6" fill="#f5d0fe" />
+    </svg>
+  );
+}
+
+/** Logotipo completo: marca + nome. */
+export function Logo({ size = 44 }: { size?: number }) {
+  return <div className="logo"><LogoMark size={size} /><span>Gre<i>finacia</i></span></div>;
+}
+
+/**
+ * Marca de um serviço (assinaturas) no desenho do Grefinacia: quadrado arredondado na cor do serviço, com brilho
+ * e a letra em branco, e o pontinho lilás da nossa marca. Não usa logos de terceiros.
+ */
+export function BrandMark({ name, size = 40 }: { name: string; size?: number }) {
+  const b = brandMark(name);
+  const id = 'bm' + b.color.slice(1);
+  const dark = b.color === '#ffe600' || b.color === '#f5b301';
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden className="brandmark">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={b.color} /><stop offset="1" stopColor={b.color} stopOpacity="0.62" /></linearGradient>
+        <radialGradient id={id + 'g'} cx="0.28" cy="0.2" r="0.75"><stop offset="0" stopColor="#fff" stopOpacity="0.35" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+      </defs>
+      <rect width="100" height="100" rx="28" fill="#0b0914" />
+      <rect width="100" height="100" rx="28" fill={`url(#${id})`} />
+      <rect width="100" height="100" rx="28" fill={`url(#${id}g)`} />
+      <text x="50" y="50" dy="0.35em" textAnchor="middle" fontSize={b.letter.length > 1 ? 40 : 52} fontWeight="750" fill={dark ? '#1a1300' : '#fff'} fontFamily="inherit">{b.letter}</text>
+      <circle cx="81" cy="19" r="7" fill="#f5d0fe" stroke="#0b0914" strokeWidth="3" />
+    </svg>
   );
 }

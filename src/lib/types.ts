@@ -37,6 +37,12 @@ export interface Transfer {
   date: ISODate;
   note?: string;
   createdAt: number;
+  /** Conexão bancária: o outro lado fora do app (conta vazia ''): aplicação/resgate de investimento ou conta sua não cadastrada. */
+  kind?: 'propria' | 'investimento' | 'cambio';
+  /** Câmbio: já somado na conta em dólar (aba Dólar). */
+  usdApplied?: boolean;
+  importId?: string;
+  fitId?: string;
 }
 
 export interface Category {
@@ -177,7 +183,7 @@ export interface MarketHistory {
   id: string; // ex.: "b3:PETR4", "cripto:bitcoin", "indice:CDI"
   kind: 'b3' | 'cripto' | 'indice';
   symbol: string;
-  unit: 'cents' | 'pct';
+  unit: 'cents' | 'pct' | 'brl' | 'pts'; // brl: reais por unidade (cotação do dólar); pts: pontos de índice
   points: HistoryPoint[]; // ordenado por data
   source: string;
   updatedAt: string; // última busca na fonte (ISO)
@@ -280,6 +286,56 @@ export interface FiredAlert {
   at: number;
 }
 
+/** Dinheiro e investimentos em dólar (Etapa 15). Valores em centavos de dólar. */
+export interface UsdHolding {
+  id: string;
+  kind: 'conta' | 'deposito' | 'bond' | 'fundo' | 'acao' | 'etf' | 'reit' | 'outro';
+  name: string; // ex.: "Conta Global Inter", "Apple"
+  ticker?: string; // ações/ETFs/REITs americanos (cotação pelo Yahoo Finance)
+  quantity?: number;
+  avgCostUsdCents?: number; // preço médio pago por unidade (centavos de dólar; aceita fração)
+  balanceUsdCents?: number; // conta ou "outro": saldo informado por você
+  priceUsdCents?: number; // última cotação
+  priceTime?: string;
+  changePct?: number;
+  /** Renda fixa em dólar (Time Deposit / Porquinho): valor aplicado, taxa ao ano, aplicação e vencimento. */
+  appliedUsdCents?: number;
+  ratePct?: number;
+  startDate?: ISODate;
+  maturityDate?: ISODate;
+  updatedAt: string;
+}
+
+/** Investimento lido do banco pela conexão (Etapa 14). É uma foto da posição, atualizada a cada sincronização. */
+export interface BankInvestment {
+  id: string; // id da Pluggy
+  itemId: string;
+  bankName: string;
+  name: string;
+  code?: string; // ticker (ações/FII/ETF) ou CNPJ (fundos)
+  isin?: string;
+  type: string; // FIXED_INCOME, EQUITY, MUTUAL_FUND, SECURITY, ETF, COE
+  subtype?: string; // CDB, LCI, TREASURY, STOCK, REAL_ESTATE_FUND...
+  balanceCents: Cents; // valor líquido hoje (depois de IR e IOF)
+  grossCents: Cents; // valor bruto
+  originalCents?: Cents; // valor aplicado, quando o banco informa
+  quantity?: number;
+  unitCents?: Cents;
+  dueDate?: ISODate;
+  issuer?: string;
+  rate?: number;
+  rateType?: string;
+  fixedAnnualRate?: number;
+  date?: ISODate; // data de referência do valor
+  status?: string; // ACTIVE, PENDING, TOTAL_WITHDRAWAL
+  /** Conta no patrimônio? Fica de fora quando o mesmo ativo já está cadastrado à mão (para não contar em dobro). */
+  /** Moeda do investimento; sem valor = reais. Em dólar, os valores estão em centavos de dólar. */
+  currency?: string;
+  counted: boolean;
+  countedReason?: 'auto' | 'manual-duplicado' | 'voce';
+  updatedAt: string;
+}
+
 export interface AppData {
   accounts: Account[];
   cards: Card[];
@@ -300,6 +356,8 @@ export interface AppData {
   cryptoOps: CryptoOperation[];
   marketHistory: MarketHistory[];
   imports: ImportBatch[];
+  bankInvestments: BankInvestment[];
+  usdHoldings: UsdHolding[];
 }
 
 export type CollectionName = keyof AppData;
@@ -312,6 +370,8 @@ export interface NotificationPrefs {
   types: {
     salary: boolean;
     billsDue: boolean;
+    /** Fatura do cartão: vencimento e fechamento (lembretes próprios). */
+    cardInvoice?: boolean;
     overdue: boolean;
     dividendAnnounced: boolean;
     dividendSoon: boolean;
@@ -321,13 +381,34 @@ export interface NotificationPrefs {
     overBudget: boolean;
     lowBalance: boolean;
     goalReached: boolean;
+    /** No dia 1, o resumo do mês que fechou. */
+    monthlyReport?: boolean;
     backup: boolean;
   };
+}
+
+/**
+ * Desafio financeiro. 'sem-gasto': ficar `days` dias sem gastar na categoria ('*' = qualquer gasto variável);
+ * 'limite': gastar no máximo `limitCents` na categoria; 'guardar': guardar `targetCents` nos objetivos no período.
+ */
+export interface Challenge {
+  id: string;
+  kind: 'sem-gasto' | 'limite' | 'guardar';
+  categoryId?: string;
+  limitCents?: Cents;
+  targetCents?: Cents;
+  start: ISODate;
+  days: number;
+  createdAt: number;
 }
 
 export interface Settings {
   onboarded: boolean;
   theme: 'dark' | 'light' | 'system';
+  /** Em que mês a compra no cartão conta como gasto: no da fatura (quando o dinheiro sai) ou no da compra. */
+  cardMonth: 'fatura' | 'compra';
+  /** Olho: esconde valores em todas as telas até tocar de novo. */
+  hideValues: boolean;
   userName?: string;
   security: {
     enabled: boolean;
@@ -366,6 +447,17 @@ export interface Settings {
   };
   freedom: { yieldPct: number }; // rendimento anual que você assume para a meta de liberdade financeira
   news: { disabledSources: string[] }; // fontes de notícias desligadas pelo usuário
+  /** Conexão bancária pelo Meu Pluggy (Open Finance, uso pessoal gratuito). */
+  bank: {
+    clientId: string; // segredo: só no cofre do aparelho
+    clientSecret: string; // segredo: só no cofre do aparelho
+    items: { itemId: string; label: string }[]; // um por banco conectado no Meu Pluggy
+    /** Conta da Pluggy → onde os lançamentos entram no app. */
+    links: Record<string, { kind: 'conta' | 'cartao' | 'ignorar'; id?: string }>;
+    historyDays: number; // quanto histórico buscar na primeira vez
+  };
   analysis: { ignoredDuplicates: string[] };
+  /** Desafios financeiros que você aceitou (progresso calculado dos seus lançamentos reais). */
+  challenges: Challenge[];
   importRules: { pattern: string; categoryId: string }[]; // "descrição contém" → categoria, aprendido nas importações // pares "idA|idB" que o usuário disse não serem cobrança em dobro
 }

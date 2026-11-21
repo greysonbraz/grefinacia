@@ -12,7 +12,7 @@ import { cashForecast, detectSubscriptions, unusualSpending } from './analysis';
 export const NANO_SYSTEM =
   'Você é a Grefinacia AI, assistente de finanças pessoais, em português do Brasil. ' +
   'Responda em no máximo 5 frases curtas, usando SOMENTE os números do JSON de dados. ' +
-  'Valores estão em reais. Não invente valores, datas ou nomes. Se a resposta depender de um dado que não está no JSON, diga qual dado falta. ' +
+  'Valores estão em reais: escreva sempre no formato R$ 1.234,56. Não invente valores, datas ou nomes. Se a resposta depender de um dado que não está no JSON, diga qual dado falta. ' +
   'Não recomende comprar ou vender investimentos específicos nem fazer dívida. ' +
   'Não dê conselho jurídico, médico ou de investimento profissional.';
 
@@ -77,11 +77,19 @@ export function buildNanoRequest(question: string, ctx: Record<string, unknown>,
 
 /** Limpa a resposta do modelo: tira marcações de markdown que a conversa não mostra e limita o tamanho. */
 export function cleanNanoAnswer(text: string): string {
-  return text
+  return formatNanoMoney(text)
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/^#+\s*/gm, '')
     .replace(/^\s*[-*]\s+/gm, '• ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 1500);
+}
+
+/** O modelo às vezes escreve "5448.14" ou "R$ 3.77": vira "R$ 5.448,14" e "R$ 3,77" (só números com 2 casas, não porcentagens). */
+export function formatNanoMoney(text: string): string {
+  return text.replace(/(R\$\s*)?(?<![\d.,/])(\d{1,9})\.(\d{2})(?![\d%]|\.\d)/g, (_m, _rs, i: string, d: string) => {
+    const n = Number(i) + Number(d) / 100;
+    return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
 }

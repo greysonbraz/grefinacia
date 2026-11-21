@@ -4,6 +4,8 @@ import { DEFAULT_CATEGORIES } from './categories';
 export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   theme: 'dark',
+  cardMonth: 'fatura',
+  hideValues: false,
   security: { enabled: false, kind: 'pin', biometric: false, lockAfterSec: 30, hideInRecents: true },
   salary: { amountCents: 0, payDay: 5, savePct: 20, investPct: 20 },
   budgets: {},
@@ -12,14 +14,16 @@ export const DEFAULT_SETTINGS: Settings = {
     time: '09:00',
     billsDaysBefore: 2,
     dividendDaysBefore: 1,
-    types: { salary: true, billsDue: true, overdue: true, dividendAnnounced: true, dividendSoon: true, dividendReceived: true, dividendDataCom: true, dividendChanged: true, overBudget: true, lowBalance: true, goalReached: true, backup: true },
+    types: { salary: true, billsDue: true, cardInvoice: true, overdue: true, dividendAnnounced: true, dividendSoon: true, dividendReceived: true, dividendDataCom: true, dividendChanged: true, overBudget: true, lowBalance: true, goalReached: true, monthlyReport: true, backup: true },
   },
   api: { quoteProvider: 'brapi', dividendProvider: 'auto', brapiToken: '', brapiPlan: 'free' },
   ai: { mode: 'local', apiKey: '', model: 'claude-haiku-5-5', consent: false, nano: false },
   freedom: { yieldPct: 6 },
   news: { disabledSources: [] },
   analysis: { ignoredDuplicates: [] },
+  challenges: [],
   importRules: [],
+  bank: { clientId: '', clientSecret: '', items: [], links: {}, historyDays: 90 },
 };
 
 export function emptyData(): AppData {
@@ -39,6 +43,8 @@ export function emptyData(): AppData {
     snapshots: [],
     firedAlerts: [],
     transfers: [],
+    bankInvestments: [],
+    usdHoldings: [],
     cryptoAssets: [],
     cryptoOps: [],
     marketHistory: [],
@@ -46,4 +52,4 @@ export function emptyData(): AppData {
   };
 }
 
-export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers', 'cryptoAssets', 'cryptoOps', 'marketHistory', 'imports'];
+export const DATA_KEYS: (keyof AppData)[] = ['accounts', 'cards', 'categories', 'transactions', 'recurrences', 'goals', 'goalMoves', 'assets', 'operations', 'fixedIncomes', 'dividends', 'debts', 'snapshots', 'firedAlerts', 'transfers', 'cryptoAssets', 'cryptoOps', 'marketHistory', 'imports', 'bankInvestments', 'usdHoldings'];

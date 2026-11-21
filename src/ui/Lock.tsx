@@ -6,7 +6,7 @@ import { requestNotificationPermission } from '../services/notify';
 import { parseMoney } from '../lib/money';
 import { todayISO } from '../lib/dates';
 import { uid } from '../lib/ids';
-import { Field, MoneyInput } from './kit';
+import { Field, Logo, MoneyInput } from './kit';
 
 export function PinPad({ title, sub, onDone, error }: { title: string; sub?: string; onDone: (pin: string) => void; error?: string | null }) {
   const [pin, setPin] = useState('');
@@ -40,7 +40,7 @@ export function LockScreen() {
   };
   return (
     <div className="lock">
-      <div className="logo">Gre<i>finacia</i></div>
+      <Logo />
       <PinPad title="Digite seu PIN" onDone={check} error={err} />
       {sec.biometric && <button className="btn ghost sm" onClick={tryBio}><Fingerprint size={18} /> Usar biometria</button>}
     </div>
@@ -68,7 +68,7 @@ export function Onboarding() {
   };
   if (step === 0) return (
     <div className="lock" style={{ alignItems: 'stretch', textAlign: 'left', maxWidth: 440, margin: '0 auto' }}>
-      <div className="logo">Gre<i>finacia</i></div>
+      <Logo />
       <p className="mut">Seu centro de controle financeiro. Os dados ficam só neste aparelho.</p>
       <Field label="Como quer ser chamado? (opcional)"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" /></Field>
       <Field label="Nome da sua conta principal"><input value={acc} onChange={(e) => setAcc(e.target.value)} /></Field>
@@ -78,7 +78,7 @@ export function Onboarding() {
   );
   return (
     <div className="lock">
-      <div className="logo">Gre<i>finacia</i></div>
+      <Logo />
       <PinPad title={first ? 'Repita o PIN' : 'Crie um PIN de 6 dígitos'} sub="Protege o app toda vez que ele é aberto" error={err} onDone={(p) => {
         if (!first) { setFirst(p); setErr(null); }
         else if (first === p) void finish(p);

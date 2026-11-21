@@ -67,6 +67,8 @@ dependencies {
     implementation project(':capacitor-android')
     // IA no aparelho (Gemini Nano, via AICore). Opcional: só é usada se a pessoa ligar em Ajustes. Beta do Google.
     implementation "com.google.mlkit:genai-prompt:1.0.0-beta5"
+    // leitura de cupom no aparelho (modelo embutido, sem internet nem custo)
+    implementation "com.google.mlkit:text-recognition:16.0.1"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

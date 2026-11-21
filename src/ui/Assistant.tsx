@@ -1,6 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
-import { Send, TriangleAlert, CircleCheck, Info } from 'lucide-react';
-import { useStore } from '../state/store';
+import { FileUp, Image as ImageIco, Mic, Paperclip, Send, TriangleAlert, CircleCheck, Info, Sparkles } from 'lucide-react';
+import { formatBRL } from '../lib/money';
+import { monthPace } from '../domain/home';
+import { toast, useStore } from '../state/store';
+import { listen, photoText } from '../services/native';
+import { readDocument, type DocGuess } from '../domain/docread';
+import { DocCard } from './DocCard';
+import { isNative } from '../services/platform';
 import { computeOverview } from '../domain/overview';
 import { generateInsights } from '../domain/insights';
 import { answerLocally, buildAiContext, SUGGESTED_QUESTIONS } from '../domain/chat';
@@ -12,7 +18,7 @@ import { Xray } from './Xray';
 import { askNano } from '../services/nano';
 import { nanoContext } from '../domain/nanoPrompt';
 
-interface Msg { role: 'user' | 'assistant'; content: string; calc?: string[]; via?: string }
+interface Msg { role: 'user' | 'assistant'; content: string; calc?: string[]; via?: string; doc?: DocGuess; read?: string }
 
 export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
   const data = useStore((s) => s.data);
@@ -26,6 +32,22 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
   const o = useMemo(() => computeOverview(data, settings, today), [data, settings, today]);
   const insights = useMemo(() => generateInsights(o, data, settings), [o, data, settings]);
   const useApi = PAID_AI_ENABLED && settings.ai.mode === 'api' && settings.ai.consent && settings.ai.apiKey.trim().length > 0;
+
+  const [attach, setAttach] = useState(false);
+  // foto ou print: lê no aparelho, descobre o que é e mostra o que encontrou para você confirmar
+  const sendPhoto = async () => {
+    setAttach(false);
+    let read: string | null;
+    try { read = await photoText('Mandar para a Grefinacia AI'); } catch (e) { toast(e instanceof Error ? e.message : 'Não foi possível ler a foto.', 'err'); return; }
+    if (read === null) return;
+    const guess = readDocument(read, today);
+    const content = guess.kind === 'td' ? `Li o print: ${guess.items.length === 1 ? 'um investimento' : `${guess.items.length} investimentos`} de renda fixa em dólar. Confira e confirme:`
+      : guess.kind === 'boleto' ? 'Li um boleto. Quer que eu crie a conta a pagar?'
+      : guess.kind === 'receipt' ? 'Li um cupom ou nota. Quer lançar a despesa?'
+      : read.trim() ? 'Não reconheci este tipo de imagem ainda. Hoje eu entendo: prints do Time Deposit / Meu Porquinho do Inter, boletos e cupons fiscais. Abaixo, o que consegui ler.' : 'Não consegui ler texto nesta imagem. Tente um print ou uma foto mais nítida.';
+    setMsgs((m) => [...m, { role: 'user', content: '📎 Foto enviada' }, { role: 'assistant', content, doc: guess, read: guess.kind === 'unknown' ? read.slice(0, 600) : undefined }]);
+    setTimeout(() => end.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  };
 
   const ask = async (q: string) => {
     if (!q.trim() || busy) return;
@@ -57,7 +79,12 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
 
   return (
     <div className="screen" style={{ paddingBottom: view === 'chat' ? 150 : 110 }}>
-      <div className="head"><div><h1>Grefinacia AI</h1><div className="sub">{useApi ? 'IA externa ligada, com sua autorização' : settings.ai.nano ? 'Regras locais + Gemini Nano no aparelho' : 'Modo local: nada sai do aparelho'}</div></div></div>
+      <div className="head ai-head">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className={'orb' + (busy ? ' thinking' : '')} aria-hidden><Sparkles size={20} /></span>
+          <div><h1>Grefinacia AI</h1><div className="sub">{useApi ? 'IA externa ligada, com sua autorização' : settings.ai.nano ? 'Regras locais + Gemini Nano no aparelho' : 'Modo local: nada sai do aparelho'}</div></div>
+        </div>
+      </div>
       <Seg value={view} onChange={setView} options={[['chat', 'Conversa'], ['analises', `Alertas (${insights.length})`], ['raiox', 'Raio-X']]} />
       {view === 'raiox' ? (
         <>
@@ -78,30 +105,69 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
       ) : (
         <>
           {msgs.length === 0 && (
-            <div className="card">
-              <h2>Pergunte sobre o seu dinheiro</h2>
-              <div className="hint" style={{ marginBottom: 12 }}>Respondo com os dados que você registrou e mostro a conta.</div>
-              {SUGGESTED_QUESTIONS.map((q) => (<button key={q} className="row" onClick={() => ask(q)}><div className="mid"><div className="t" style={{ whiteSpace: 'normal' }}>{q}</div></div></button>))}
-            </div>
+            <>
+              <AiBrief o={o} />
+              {insights.slice(0, 2).map((i) => (
+                <button key={i.id} className={'ai-card ' + i.tone} onClick={() => (i.target === 'raiox' ? setView('raiox') : goInsight(nav, i.target))}>
+                  {i.tone === 'bad' || i.tone === 'warn' ? <TriangleAlert size={18} /> : i.tone === 'good' ? <CircleCheck size={18} /> : <Info size={18} />}
+                  <div><div className="t">{i.title}</div><div className="s">{i.text}</div></div>
+                </button>
+              ))}
+              <div className="ghead"><h2>Pergunte sobre o seu dinheiro</h2></div>
+              <div className="hint" style={{ margin: '-4px 4px 10px' }}>Respondo com os dados que você registrou e mostro a conta.</div>
+              <div className="qchips">{SUGGESTED_QUESTIONS.map((q) => (<button key={q} onClick={() => ask(q)}>{q}</button>))}</div>
+            </>
           )}
-          <div className="chat">
+          <div className="chat" aria-live="polite">
             {msgs.map((m, i) => (
               <div key={i} className={'msg ' + (m.role === 'user' ? 'me' : 'ai')}>
                 {m.content}
-                {m.calc && m.calc.length > 0 && <div className="calc num">{m.calc.map((c, k) => (<div key={k}>{c}</div>))}</div>}
+                {m.calc && m.calc.length > 0 && <details className="calc" open={i === msgs.length - 1}><summary>Ver a conta</summary><div className="num">{m.calc.map((c, k) => (<div key={k}>{c}</div>))}</div></details>}
                 {m.via && <div className="calc">{m.via}</div>}
+                {m.doc && m.doc.kind !== 'unknown' && <DocCard guess={m.doc} />}
+                {m.read && <details className="calc"><summary>Texto lido</summary><div style={{ whiteSpace: 'pre-wrap' }}>{m.read}</div></details>}
               </div>
             ))}
-            {busy && <div className="msg ai mut">{settings.ai.nano ? 'Pensando…' : 'Calculando…'}</div>}
+            {busy && <div className="msg ai typing" role="status" aria-label="Analisando seus dados"><i /><i /><i /><span>Analisando seus dados</span></div>}
             <div ref={end} />
           </div>
+          {msgs.length > 0 && !busy && <div className="qchips small">{SUGGESTED_QUESTIONS.filter((q) => !msgs.some((m) => m.content === q)).slice(0, 4).map((q) => (<button key={q} onClick={() => ask(q)}>{q}</button>))}</div>}
+          {attach && <button className="attach-scrim" aria-label="Fechar menu" onClick={() => setAttach(false)} />}
+          {attach && (
+            <div className="attach-menu" role="menu">
+              <button role="menuitem" onClick={() => void sendPhoto()}><ImageIco size={18} /> Foto ou print<small>investimento, boleto, cupom</small></button>
+              <button role="menuitem" onClick={() => { setAttach(false); nav.go('transactions', 'importar'); }}><FileUp size={18} /> Arquivo de extrato<small>OFX ou CSV do banco</small></button>
+            </div>
+          )}
           <form className="composer" onSubmit={(e) => { e.preventDefault(); void ask(text); }}>
+            <button type="button" className="iconbtn attach" aria-label="Anexar foto ou arquivo" aria-expanded={attach} onClick={() => (isNative() ? setAttach((v) => !v) : nav.go('transactions', 'importar'))}><Paperclip size={18} /></button>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Escreva sua pergunta" aria-label="Pergunta" />
-            <button className="iconbtn" style={{ background: 'var(--gold)', color: 'var(--gold-ink)', width: 46, height: 46 }} aria-label="Enviar"><Send size={18} /></button>
+            {isNative() && !text.trim()
+              ? <button type="button" className="iconbtn send" disabled={busy} aria-label="Falar a pergunta" onClick={async () => { try { const said = await listen(); if (said) void ask(said); } catch (e) { toast(e instanceof Error ? e.message : 'Não foi possível ouvir agora.'); } }}><Mic size={18} /></button>
+              : <button className="iconbtn send" disabled={busy || !text.trim()} aria-label="Enviar"><Send size={18} /></button>}
           </form>
         </>
       )}
     </div>
+  );
+}
+
+/** Resumo do dia da assistente: números reais do app (nada estimado sem dizer). */
+function AiBrief({ o }: { o: ReturnType<typeof computeOverview> }) {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const pace = useMemo(() => monthPace(data, today), [data, today]);
+  const diff = pace.spentCents - pace.lastMonthSameDayCents;
+  return (
+    <section className="ai-brief" aria-label="Resumo de hoje">
+      <div className="ai-brief-title"><Sparkles size={16} /> Resumo de hoje</div>
+      <div className="ai-stats">
+        <div><span>Livre para gastar</span><b className={'num ' + (o.spend.remainingCents < 0 ? 'neg' : '')}>{formatBRL(o.spend.remainingCents)}</b>{o.spend.perDayCents > 0 && <small className="num">{formatBRL(o.spend.perDayCents)} por dia até o fim do mês</small>}</div>
+        <div><span>Gasto no mês</span><b className="num">{formatBRL(pace.spentCents)}</b>{pace.lastMonthSameDayCents > 0 && <small className={diff > 0 ? 'neg' : 'pos'}>{diff > 0 ? `${formatBRL(diff)} a mais` : `${formatBRL(-diff)} a menos`} que no mês passado</small>}</div>
+        <div><span>Previsão do mês</span><b className="num">{formatBRL(pace.projectedCents)}</b><small>de gastos</small></div>
+        <div><span>Fim do mês</span><b className={'num ' + (o.projectedEndBalanceCents < 0 ? 'neg' : '')}>{formatBRL(o.projectedEndBalanceCents)}</b><small>saldo previsto</small></div>
+      </div>
+    </section>
   );
 }
 

@@ -116,3 +116,22 @@ export function pctChange(current: number, previous: number): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
   return ((current - previous) / Math.abs(previous)) * 100;
 }
+
+const fmtInput = (cents: number) => (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/**
+ * Campo de valor "estilo caixa eletrônico": ao digitar, os números entram pela direita (6 → 0,06; 66648 → 666,48),
+ * sem precisar de vírgula. Colar ou preencher um valor inteiro de uma vez (ex.: "3500" ou "1.209,50") vale como digitado.
+ */
+export function maskMoneyInput(prev: string, raw: string): string {
+  const neg = raw.trim().startsWith('-');
+  const typedOne = (raw.length === prev.length + 1 && raw.startsWith(prev)) || (raw.length === prev.length - 1 && prev.startsWith(raw));
+  if (typedOne) {
+    const digits = raw.replace(/\D/g, '').replace(/^0+/, '');
+    if (!digits) return neg ? '-' : '';
+    return (neg ? '-' : '') + fmtInput(Number(digits.slice(0, 13)));
+  }
+  const cleaned = raw.replace(/[^0-9.,-]/g, '');
+  if (!cleaned || cleaned === '-') return cleaned;
+  const c = parseMoney(cleaned);
+  return c === null ? cleaned : fmtInput(c);
+}

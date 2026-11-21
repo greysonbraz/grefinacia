@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // plugins do próprio app precisam ser registrados antes de a ponte do Capacitor subir
         registerPlugin(GeminiNanoPlugin.class);
+        registerPlugin(GrefinaciaPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

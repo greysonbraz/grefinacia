@@ -34,10 +34,10 @@ export function PassivePanel() {
         <h2>Evolução da renda passiva</h2>
         <ChartBox kind="bar" stacked labels={d.months.map((m) => monthShort(m.ym))} series={[
           { label: 'Recebido', data: d.months.map((m) => m.receivedCents), color: cssVar('--s4') },
-          { label: 'Anunciado', data: d.months.map((m) => m.announcedCents), color: cssVar('--gold') },
+          { label: 'Anunciado', data: d.months.map((m) => m.announcedCents), color: cssVar('--accent') },
           { label: 'Estimado', data: d.months.map((m) => m.estimatedCents), color: cssVar('--sother') },
         ]} />
-        <Legend items={[{ label: 'Recebido (confirmado)', color: cssVar('--s4') }, { label: 'Anunciado', color: cssVar('--gold') }, { label: 'Estimado pelo histórico', color: cssVar('--sother'), dashed: true }]} />
+        <Legend items={[{ label: 'Recebido (confirmado)', color: cssVar('--s4') }, { label: 'Anunciado', color: cssVar('--accent') }, { label: 'Estimado pelo histórico', color: cssVar('--sother'), dashed: true }]} />
         <Note>12 meses para trás e 6 para a frente. Só a parte "Recebido" é dinheiro que caiu e foi confirmado (por você ou pelo extrato importado). Estimativas não são garantidas.</Note>
       </div>
 

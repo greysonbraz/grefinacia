@@ -1,10 +1,13 @@
+import { repairCardInstallments } from '../domain/installments';
+import { planCardMerge } from '../domain/cardmerge';
 import { useSyncExternalStore } from 'react';
-import type { AppData, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, ISODate, Goal } from '../lib/types';
+import type { AppData, Cents, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, Transfer, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
 import { todayISO, monthOf, nowISOTime, makeDate } from '../lib/dates';
 import { uid } from '../lib/ids';
 import * as db from '../db/db';
-import { materializeRecurrences, cardInvoiceDue } from '../domain/ledger';
+import { materializeRecurrences, cardInvoiceDue, setCardMonthMode } from '../domain/ledger';
+import { notify } from '../services/haptics';
 import { makeSnapshot } from '../domain/networth';
 import { evaluateAlerts, planNotifications, salaryReceivedAlert, type ImmediateAlert } from '../domain/notifications';
 import { cancelEvent, dividendRows, mergeEvents, reactivateEvent } from '../domain/dividends';
@@ -13,13 +16,17 @@ import { computePositions, operationsAreValid, quantityAt } from '../domain/port
 import { goalProgress } from '../domain/goals';
 import { fetchDividends, fetchQuotes, resolveDividendProvider, type FetchError } from '../services/quotes';
 import { isNative } from '../services/platform';
+import { forgetPluggyKey, getItem, listAccounts, listBills, listInvestments, listTransactions, pluggyApiKey, type PluggyAccount } from '../services/pluggy';
+import { mergeInvestments } from '../domain/bankInvest';
+import { applyBankCategories, autoSelect, localDay, neutralKind, pixOnCreditPairs, newAccountFor, newCardFor, syncFrom, targetFor, toStatement } from '../domain/bankSync';
+import { buildPreview, buildTransactions, makeBatch } from '../domain/importer';
 import { ensureChannels, fireNow, syncScheduled } from '../services/notify';
 import { syncRunnerConfig } from '../services/background';
 import { setPrivacyScreen } from '../services/security';
 import { clearSecrets, extractSecrets, hydrateSecrets, settingsForDb } from '../services/secrets';
 import { formatBRL } from '../lib/money';
 import { historyId, localDate, mergePoints } from '../domain/market';
-import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, type IndexName } from '../services/market';
+import { fetchB3History, fetchBcbSeries, fetchCryptoHistory, fetchCryptoQuotes, fetchIbovespa, fetchUsQuotes, type IndexName } from '../services/market';
 import { brapiQuota, initUsage, type Usage } from '../services/usage';
 import { addDays, addMonths } from '../lib/dates';
 
@@ -32,7 +39,27 @@ export interface State {
   toast: { id: number; text: string; tone: 'ok' | 'err' } | null;
   /** Saúde da fonte de proventos neste aparelho (não sincroniza). */
   divHealth: DivHealth;
+  /** Conexão bancária neste aparelho (não sincroniza): contas vistas na Pluggy, situação e última busca. */
+  bank: BankState;
 }
+
+export interface BankState {
+  lastAttempt?: string;
+  lastOkAt?: string;
+  error?: string;
+  items: Record<string, { name: string; status: string; consentExpiresAt?: string; lastUpdatedAt?: string; error?: string }>;
+  accounts: (PluggyAccount & { bankName: string })[];
+  lastSyncByAccount: Record<string, string>;
+  /** Resumo da última sincronização, por conta (para mostrar o que veio e por que algo ficou de fora). */
+  report?: SyncReport[];
+  /** Faturas informadas pelo banco, por conta de cartão da Pluggy (para conferir com o app). */
+  bills?: Record<string, { id: string; dueDate: ISODate; closingDate?: ISODate; totalCents: Cents }[]>;
+  /** Investimentos: quantos vieram de cada banco na última sincronização, ou o erro. */
+  investReport?: { bank: string; count: number; foreign: number; error?: string }[];
+}
+const BANK_META = 'bankState';
+/** Sincronização bancária automática: no máximo a cada 12 h (o Meu Pluggy atualiza a cada 24 h). */
+export const AUTO_BANK_HOURS = 12;
 
 export interface DivHealth {
   lastAttempt?: string; // última busca (automática ou pelo botão)
@@ -44,10 +71,14 @@ const DIV_HEALTH_META = 'divHealth';
 /** Busca automática de proventos: no máximo a cada 20 h, só no app Android (no navegador os sites recusam). */
 export const AUTO_DIVIDEND_HOURS = 20;
 
-let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS, today: todayISO(), locked: false, toast: null, divHealth: {} };
+let state: State = { ready: false, data: emptyData(), settings: DEFAULT_SETTINGS, today: todayISO(), locked: false, toast: null, divHealth: {}, bank: { items: {}, accounts: [], lastSyncByAccount: {} } };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch };
+  if (patch.settings) {
+    setCardMonthMode(patch.settings.cardMonth);
+    if (typeof document !== 'undefined') document.documentElement.dataset.hide = patch.settings.hideValues ? '1' : '0';
+  }
   listeners.forEach((l) => l());
 };
 export const getState = () => state;
@@ -56,6 +87,7 @@ export function useStore<T>(sel: (s: State) => T): T {
 }
 
 export function toast(text: string, tone: 'ok' | 'err' = 'ok') {
+  notify(tone);
   const id = Date.now();
   set({ toast: { id, text, tone } });
   setTimeout(() => state.toast?.id === id && set({ toast: null }), 3200);
@@ -133,7 +165,7 @@ export async function applyRemote(upserts: { collection: string; id: string; val
   if (remoteSettings) {
     const merged = db.mergeSettings(remoteSettings);
     // o PIN e os segredos são de cada aparelho
-    settings = { ...merged, security: state.settings.security, onboarded: true, api: { ...merged.api, brapiToken: state.settings.api.brapiToken }, ai: { ...merged.ai, apiKey: state.settings.ai.apiKey } };
+    settings = { ...merged, security: state.settings.security, onboarded: true, api: { ...merged.api, brapiToken: state.settings.api.brapiToken }, ai: { ...merged.ai, apiKey: state.settings.ai.apiKey }, bank: { ...merged.bank, clientId: state.settings.bank.clientId, clientSecret: state.settings.bank.clientSecret } };
     await db.saveSettings(await settingsForDb(settings));
     applyTheme(settings.theme);
   }
@@ -222,7 +254,7 @@ export async function init(): Promise<void> {
   void db.requestPersistentStorage();
   void setPrivacyScreen(settings.security.enabled && settings.security.hideInRecents);
   await ensureChannels().catch(() => undefined);
-  set({ divHealth: (await db.getMeta<DivHealth>(DIV_HEALTH_META)) ?? {} });
+  set({ divHealth: (await db.getMeta<DivHealth>(DIV_HEALTH_META)) ?? {}, bank: { items: {}, accounts: [], lastSyncByAccount: {}, ...((await db.getMeta<BankState>(BANK_META)) ?? {}) } });
   // uma vez: quem estava na brapi gratuita (que não traz proventos) passa para a fonte automática
   if (!(await db.getMeta<boolean>('divAutoV1'))) {
     const api = state.settings.api;
@@ -230,7 +262,10 @@ export async function init(): Promise<void> {
     await db.setMeta('divAutoV1', true);
   }
   await rollDay();
-  if (isNative()) void autoRefreshDividends();
+  await ensureLinkedCards();
+  await mergeBankCards();
+  await repairInstallments();
+  if (isNative()) void autoRefreshDividends().then(() => autoSyncBank()).then(() => ((state.data.usdHoldings ?? []).length || (state.data.bankInvestments ?? []).some((i) => i.currency === 'USD') ? refreshDollar() : undefined)).catch(() => undefined);
 }
 
 /**
@@ -366,7 +401,7 @@ const findHistory = (id: string) => state.data.marketHistory.find((h) => h.id ==
 function mergedHistory(kind: MarketHistory['kind'], symbol: string, points: HistoryPoint[], source: string, fetched: boolean): MarketHistory {
   const id = historyId(kind, symbol);
   const old = findHistory(id);
-  return { id, kind, symbol, unit: kind === 'indice' ? 'pct' : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
+  return { id, kind, symbol, unit: kind === 'indice' ? (symbol === 'USD' ? 'brl' : symbol === 'IBOV' ? 'pts' : 'pct') : 'cents', points: mergePoints(old?.points ?? [], points), source, updatedAt: fetched ? nowISOTime() : (old?.updatedAt ?? '') };
 }
 
 /** Cada cotação buscada vira um ponto do dia no histórico (sem gastar consulta a mais). */
@@ -399,6 +434,55 @@ export async function refreshIndices(force = false): Promise<FetchError[]> {
     else out.push(mergedHistory('indice', name, r.points, r.source, true));
   }
   await saveHistoryLocal(out);
+  return errors;
+}
+
+/** Cotação do dólar (PTAX do Banco Central): no máximo uma busca por dia; na primeira vez, 1 ano de histórico. */
+export async function refreshDollar(force = false): Promise<FetchError[]> {
+  const id = historyId('indice', 'USD');
+  const old = findHistory(id);
+  if (!force && fetchedToday(id) && old?.points.length) return [];
+  const from = old?.points.length ? addDays(old.points[old.points.length - 1][0], -10) : addMonths(state.today, -12);
+  const r = await fetchBcbSeries('USD', from, state.today);
+  if ('message' in r) return [r];
+  await saveHistoryLocal([mergedHistory('indice', 'USD', r.points, r.source, true)]);
+  return [];
+}
+
+/** Faixa "Mercado hoje": Selic, CDI, IPCA 12 meses (Banco Central), dólar (PTAX) e Ibovespa. No máximo 1 busca por dia cada. */
+export async function refreshMarketStrip(force = false): Promise<FetchError[]> {
+  const errors: FetchError[] = [];
+  const out: MarketHistory[] = [];
+  for (const name of ['SELIC', 'CDIA', 'IPCA12'] as IndexName[]) {
+    const id = historyId('indice', name);
+    if (!force && fetchedToday(id) && findHistory(id)?.points.length) continue;
+    const r = await fetchBcbSeries(name, addMonths(state.today, name === 'IPCA12' ? -3 : -1), addDays(state.today, 60));
+    if ('message' in r) errors.push(r);
+    else out.push(mergedHistory('indice', name, r.points, r.source, true));
+  }
+  const ib = historyId('indice', 'IBOV');
+  if (force || !fetchedToday(ib)) {
+    const r = await fetchIbovespa();
+    if ('message' in r) errors.push(r);
+    else out.push(mergedHistory('indice', 'IBOV', r.points, r.source, true));
+  }
+  if (out.length) await saveHistoryLocal(out);
+  errors.push(...(await refreshDollar(force)));
+  return errors;
+}
+
+/** Cotações dos ativos americanos cadastrados na aba Dólar (respeita "cotação manual" nos Ajustes). */
+export async function refreshUsQuotes(): Promise<FetchError[]> {
+  if (state.settings.api.quoteProvider === 'manual') return [];
+  const assets = (state.data.usdHoldings ?? []).filter((h) => h.ticker && h.kind !== 'conta' && h.kind !== 'outro');
+  if (!assets.length) return [];
+  const { quotes, errors } = await fetchUsQuotes(assets.map((h) => h.ticker!));
+  const now = new Date().toISOString();
+  const upd = assets.flatMap((h) => {
+    const q = quotes.find((x) => x.ticker === h.ticker!.toUpperCase());
+    return q ? [{ ...h, priceUsdCents: q.priceUsdCents, priceTime: q.time, changePct: q.changePct, name: h.name || q.name || h.ticker!, updatedAt: now }] : [];
+  });
+  if (upd.length) await upsert('usdHoldings', upd);
   return errors;
 }
 
@@ -568,8 +652,9 @@ export async function confirmDividend(eventId: string, accountId?: string): Prom
  * Grava uma importação: guarda antes uma cópia de segurança de tudo, depois os lançamentos e o registro da importação
  * (para poder desfazer), e as regras de categoria que você ensinou na prévia.
  */
-export async function applyImport(batch: ImportBatch, txs: Transaction[], rules: Settings['importRules']): Promise<void> {
-  await db.createSafetyCopy('importacao', state.data, state.settings);
+export async function applyImport(batch: ImportBatch, txs: Transaction[], rules: Settings['importRules'], opts: { safetyCopy?: boolean } = {}): Promise<void> {
+  // a sincronização bancária diária não gira as cópias de segurança: só acrescenta e cada lote tem "Desfazer"
+  if (opts.safetyCopy !== false) await db.createSafetyCopy('importacao', state.data, state.settings);
   await upsert('transactions', txs);
   await upsert('imports', batch);
   if (JSON.stringify(rules) !== JSON.stringify(state.settings.importRules)) await updateSettings({ importRules: rules });
@@ -581,8 +666,277 @@ export async function undoImport(id: string): Promise<number> {
   await db.createSafetyCopy('importacao', state.data, state.settings);
   const ids = state.data.transactions.filter((t) => t.importId === id).map((t) => t.id);
   await remove('transactions', ids);
+  const moves = (state.data.transfers ?? []).filter((t) => t.importId === id).map((t) => t.id);
+  if (moves.length) await remove('transfers', moves);
   await upsert('imports', { ...batch, undoneAt: new Date().toISOString() });
   return ids.length;
+}
+
+// ---------- conexão bancária (Meu Pluggy) ----------
+export interface SyncReport { account: string; from: string; received: number; imported: number; moved?: number; pixCredit?: number; already: number; similar: number; invoice: number; pending: number; payments: number; foreign: number; error?: string }
+async function saveBank(patch: Partial<BankState>): Promise<void> {
+  const bank = { ...state.bank, ...patch };
+  set({ bank });
+  await db.setMeta(BANK_META, bank).catch(() => undefined);
+}
+export const bankConfigured = (): boolean => !!(state.settings.bank.clientId && state.settings.bank.clientSecret && state.settings.bank.items.length);
+
+/** Busca na Pluggy as contas de cada banco (sem importar nada) para você vincular. */
+export async function loadBankAccounts(): Promise<{ errors: string[] }> {
+  const b = state.settings.bank;
+  const errors: string[] = [];
+  const key = await pluggyApiKey(b.clientId, b.clientSecret);
+  const items: BankState['items'] = {};
+  const accounts: BankState['accounts'] = [];
+  for (const it of b.items) {
+    try {
+      const item = await getItem(key, it.itemId);
+      const bankName = it.label || item.connector?.name || 'Banco';
+      items[it.itemId] = { name: bankName, status: item.status, consentExpiresAt: item.consentExpiresAt, lastUpdatedAt: item.lastUpdatedAt, error: item.error?.message ?? undefined };
+      for (const a of await listAccounts(key, it.itemId)) accounts.push({ ...a, bankName });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      items[it.itemId] = { name: it.label || 'Banco', status: 'ERRO', error: msg };
+      errors.push(`${it.label || it.itemId}: ${msg}`);
+    }
+  }
+  await saveBank({ items, accounts });
+  return { errors };
+}
+
+/** Vincula uma conta do banco: "novo" cria conta (ou cartão) no app; ou liga a uma existente; ou ignora. */
+export async function linkBankAccount(pluggyAccountId: string, choice: string): Promise<void> {
+  const acc = state.bank.accounts.find((a) => a.id === pluggyAccountId);
+  if (!acc) return;
+  let link: Settings['bank']['links'][string];
+  if (choice === 'ignorar') link = { kind: 'ignorar' };
+  else if (choice.startsWith('conta:')) link = { kind: 'conta', id: choice.slice(6) };
+  else if (choice.startsWith('cartao:')) link = { kind: 'cartao', id: choice.slice(7) };
+  else if (acc.type === 'CREDIT' && Object.entries(state.settings.bank.links).some(([id, l]) => l.kind === 'cartao' && l.id && state.data.cards.some((c) => c.id === l.id) && state.bank.accounts.find((x) => x.id === id)?.itemId === acc.itemId)) {
+    // um cartão só por banco: outro cartão do mesmo banco entra no cartão que já existe
+    const same = Object.entries(state.settings.bank.links).find(([id, l]) => l.kind === 'cartao' && l.id && state.data.cards.some((c) => c.id === l.id) && state.bank.accounts.find((x) => x.id === id)?.itemId === acc.itemId)!;
+    link = { kind: 'cartao', id: same[1].id };
+  } else if (acc.type === 'CREDIT') {
+    // o cartão é pago pela conta do mesmo banco, se ela já estiver vinculada
+    const sameBank = state.bank.accounts.find((a) => a.itemId === acc.itemId && a.type !== 'CREDIT' && state.settings.bank.links[a.id]?.kind === 'conta');
+    const card = newCardFor(acc, acc.bankName, uid('cd_'), (sameBank && state.settings.bank.links[sameBank.id]?.id) || defaultAccountId());
+    await upsert('cards', card);
+    link = { kind: 'cartao', id: card.id };
+  } else {
+    const account = newAccountFor(acc, acc.bankName, localDay(state.bank.items[acc.itemId]?.lastUpdatedAt), uid('ac_'));
+    await upsert('accounts', account);
+    link = { kind: 'conta', id: account.id };
+  }
+  await updateSettings({ bank: { ...state.settings.bank, links: { ...state.settings.bank.links, [pluggyAccountId]: link } } });
+}
+
+/**
+ * Sincroniza: para cada conta vinculada, busca as transações novas e importa pelo mesmo caminho da importação de
+ * extrato (sem duplicar, com categorias e "Desfazer"). O que a prévia marcaria para conferir fica de fora.
+ * Um banco com erro não impede os outros.
+ */
+export async function syncBank(): Promise<{ imported: number; accounts: number; errors: string[] }> {
+  const attempt = new Date().toISOString();
+  const errors: string[] = [];
+  let imported = 0, accountsDone = 0;
+  try {
+    const loaded = await loadBankAccounts();
+    errors.push(...loaded.errors);
+    await ensureLinkedCards();
+    await mergeBankCards();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await saveBank({ lastAttempt: attempt, error: msg });
+    return { imported: 0, accounts: 0, errors: [msg] };
+  }
+  const b = state.settings.bank;
+  const key = await pluggyApiKey(b.clientId, b.clientSecret);
+  const cardsSynced = state.bank.accounts.some((a) => b.links[a.id]?.kind === 'cartao');
+  const lastByAcc = { ...state.bank.lastSyncByAccount };
+  const report: SyncReport[] = [];
+  const bills: NonNullable<BankState['bills']> = { ...(state.bank.bills ?? {}) };
+  for (const acc of state.bank.accounts) {
+    const target = targetFor(b.links[acc.id]);
+    if (!target) continue;
+    const name = `${acc.bankName} · ${acc.marketingName || acc.name}`;
+    const from = syncFrom(lastByAcc[acc.id], b.historyDays, state.today);
+    try {
+      const txs = await listTransactions(key, acc.id, from);
+      // cartão: a fatura de cada compra vem do banco (billId → vencimento); sem isso, o app usa o dia de fechamento
+      let billDue: Record<string, ISODate> = {};
+      if (acc.type === 'CREDIT') {
+        try {
+          const list = await listBills(key, acc.id);
+          bills[acc.id] = list.filter((x) => typeof x.dueDate === 'string').map((x) => ({ id: x.id, dueDate: x.dueDate.slice(0, 10), closingDate: x.billClosingDate ? x.billClosingDate.slice(0, 10) : undefined, totalCents: Math.round((x.totalAmount ?? 0) * 100) }));
+          billDue = Object.fromEntries(bills[acc.id].map((x) => [x.id, x.dueDate]));
+          // dias de fechamento e vencimento do cartão pela última fatura do banco (o que vem no cadastro do cartão pode estar desatualizado)
+          if (target.kind === 'cartao') await syncCardDays(target.cardId, bills[acc.id]);
+        } catch {
+          /* sem faturas: segue pelo dia de fechamento */
+        }
+      }
+      const st = toStatement(acc, txs, billDue);
+      if (target.kind === 'cartao') await fixCardDueDates(target.cardId, st.rows);
+      const pre = autoSelect(applyBankCategories(buildPreview(st, target, state.data, state.settings)), cardsSynced);
+      const pixCredit = target.kind === 'conta' && cardsSynced ? pixOnCreditPairs(pre) : new Set<string>();
+      const preview = pre.map((r) => (pixCredit.has(r.key) ? { ...r, include: false } : r));
+      const count = (f: string) => preview.filter((r) => r.flag === f && !r.include).length;
+      const id = uid('imp_');
+      // entre contas suas e aplicação/resgate de investimento: viram transferência (mexem no saldo, não em receitas/despesas)
+      const moves: Transfer[] = [];
+      const rows = preview.map((r) => {
+        const kind = target.kind === 'conta' && r.include ? neutralKind(r.row.bankCategory, r.row.description) : null;
+        if (!kind || target.kind !== 'conta') return r;
+        if (!(r.row.fitId && (state.data.transfers ?? []).some((t) => t.fitId === r.row.fitId))) {
+          const out = r.type === 'expense';
+          moves.push({ id: uid('tr_'), fromAccountId: out ? target.accountId : '', toAccountId: out ? '' : target.accountId, amountCents: r.amountCents, date: r.row.date, note: r.row.description.slice(0, 80), kind, importId: id, fitId: r.row.fitId, createdAt: Date.now() + moves.length });
+        }
+        return { ...r, include: false };
+      });
+      const built = buildTransactions(rows, target, state.data, id, () => uid('t_'), state.today);
+      if (built.length || moves.length) {
+        if (moves.length) await upsert('transfers', moves);
+        await applyImport(makeBatch(id, `Meu Pluggy · ${acc.bankName} · ${acc.marketingName || acc.name}`, st, target, rows), built, state.settings.importRules ?? [], { safetyCopy: false });
+        imported += built.length + moves.length;
+      }
+      report.push({ account: name, from, received: txs.length, imported: built.length, moved: moves.length, pixCredit: pixCredit.size, already: count('importado') + count('repetido'), similar: count('possivel'), invoice: count('fatura'), ...st.skipped });
+      // Banco ainda sem transações (o Meu Pluggy pode estar coletando): não avança a data, para o histórico vir depois.
+      if (txs.length || lastByAcc[acc.id]) lastByAcc[acc.id] = attempt;
+      accountsDone++;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      report.push({ account: name, from, received: 0, imported: 0, already: 0, similar: 0, invoice: 0, pending: 0, payments: 0, foreign: 0, error: msg });
+      errors.push(`${name}: ${msg}`);
+    }
+  }
+  // investimentos de cada banco (foto das posições; um banco com erro não apaga o que já estava salvo)
+  const investReport: NonNullable<BankState['investReport']> = [];
+  for (const it of b.items) {
+    const bankName = it.label || state.bank.items[it.itemId]?.name || 'Banco';
+    try {
+      const got = await listInvestments(key, it.itemId);
+      const prev = (state.data.bankInvestments ?? []).filter((x) => x.itemId === it.itemId);
+      const { list, skippedForeign } = mergeInvestments(prev, got, it.itemId, bankName, state.data, attempt);
+      const gone = prev.filter((p) => !list.some((x) => x.id === p.id)).map((p) => p.id);
+      if (gone.length) await remove('bankInvestments', gone);
+      if (list.length) await upsert('bankInvestments', list);
+      investReport.push({ bank: bankName, count: list.length, foreign: skippedForeign });
+    } catch (e) {
+      investReport.push({ bank: bankName, count: 0, foreign: 0, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  await repairInstallments();
+  await saveBank({ bills, investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
+  return { imported, accounts: accountsDone, errors };
+}
+
+/** Acerta fechamento e vencimento do cartão pela fatura mais recente informada pelo banco; refaz o vencimento das compras sem fatura do banco. */
+async function syncCardDays(cardId: string, list: { dueDate: ISODate; closingDate?: ISODate }[]): Promise<void> {
+  const card = state.data.cards.find((c) => c.id === cardId);
+  const last = [...list].filter((b) => b.closingDate).sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+  if (!card || !last?.closingDate) return;
+  const closingDay = Number(last.closingDate.slice(8, 10));
+  const dueDay = Number(last.dueDate.slice(8, 10));
+  if (card.closingDay === closingDay && card.dueDay === dueDay) return;
+  const fixed = { ...card, closingDay, dueDay };
+  await upsert('cards', fixed);
+  // compras pendentes que o banco ainda não pôs em fatura: vencimento recalculado com os dias certos
+  const known = new Set(list.map((b) => b.dueDate));
+  const upd = state.data.transactions.filter((t) => t.cardId === cardId && t.status === 'pending' && t.type === 'expense' && (!t.dueDate || !known.has(t.dueDate))).map((t) => ({ ...t, dueDate: cardInvoiceDue(fixed, t.date).dueDate }));
+  if (upd.length) await upsert('transactions', upd);
+}
+
+/**
+ * Lançamentos do cartão já importados que o banco passou para outra fatura (ex.: fatura que fechou, parcela futura):
+ * acerta o vencimento e a situação (paga se a fatura já venceu, pendente se não). Nada é apagado.
+ */
+async function fixCardDueDates(cardId: string, rows: { fitId?: string; dueDate?: ISODate }[]): Promise<void> {
+  const card = state.data.cards.find((c) => c.id === cardId);
+  const byFit = new Map(rows.filter((r) => r.fitId && r.dueDate).map((r) => [r.fitId!, r.dueDate!]));
+  if (!byFit.size) return;
+  const today = state.today;
+  const upd = state.data.transactions.flatMap((t) => {
+    const due = t.cardId === cardId && t.fitId ? byFit.get(t.fitId) : undefined;
+    if (!due || t.dueDate === due) return [];
+    if (t.type === 'income') return [{ ...t, dueDate: due }];
+    return [due < today ? { ...t, dueDate: due, status: 'paid' as const, paidDate: due, accountId: card?.accountId } : { ...t, dueDate: due, status: 'pending' as const, paidDate: undefined, accountId: undefined }];
+  });
+  if (upd.length) await upsert('transactions', upd);
+}
+
+/** Soma um câmbio na conta em dólar escolhida (valor em centavos de dólar informado ou estimado pela PTAX). */
+export async function applyCambio(transferId: string, holdingId: string, usdCents: number): Promise<void> {
+  const tr = (state.data.transfers ?? []).find((x) => x.id === transferId);
+  const h = (state.data.usdHoldings ?? []).find((x) => x.id === holdingId);
+  if (!tr || !h || usdCents <= 0) return;
+  await upsert('usdHoldings', { ...h, balanceUsdCents: Math.round((h.balanceUsdCents ?? 0) + usdCents), updatedAt: new Date().toISOString() });
+  await upsert('transfers', { ...tr, usdApplied: true });
+}
+export async function dismissCambio(transferId: string): Promise<void> {
+  const tr = (state.data.transfers ?? []).find((x) => x.id === transferId);
+  if (tr) await upsert('transfers', { ...tr, usdApplied: true });
+}
+
+/** Conta (ou não) um investimento do banco no patrimônio. A escolha fica guardada nas próximas sincronizações. */
+export async function setBankInvestmentCounted(id: string, counted: boolean): Promise<void> {
+  const inv = (state.data.bankInvestments ?? []).find((x) => x.id === id);
+  if (inv) await upsert('bankInvestments', { ...inv, counted, countedReason: 'voce' });
+}
+
+/**
+ * A conta do app passa a começar com o saldo do banco (soma das contas do banco ligadas a ela), no dia seguinte à
+ * última atualização da Pluggy. Nada é apagado: o histórico continua nos relatórios, só deixa de mexer no saldo de hoje.
+ */
+export async function startAccountAtBankBalance(appAccountId: string): Promise<void> {
+  const acc = state.data.accounts.find((a) => a.id === appAccountId);
+  if (!acc) return;
+  const linked = state.bank.accounts.filter((a) => { const l = state.settings.bank.links[a.id]; return l?.kind === 'conta' && l.id === appAccountId; });
+  if (!linked.length) return;
+  const cents = linked.reduce((s, a) => s + Math.round(a.balance * 100), 0);
+  const days = linked.map((a) => localDay(state.bank.items[a.itemId]?.lastUpdatedAt)).sort();
+  const balanceDay = days[days.length - 1];
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  await upsert('accounts', { ...acc, initialCents: cents, initialDate: addDays(balanceDay, 1) });
+}
+
+/**
+ * Refaz o que veio pela conexão com as regras novas: desfaz as importações do Meu Pluggy (com cópia de segurança
+ * antes) e busca de novo o histórico escolhido. Lançamentos que você criou à mão não são tocados.
+ */
+export async function reimportBank(): Promise<{ imported: number; accounts: number; errors: string[] }> {
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  for (const b of state.data.imports.filter((x) => !x.undoneAt && x.fileName.startsWith('Meu Pluggy'))) {
+    const ids = state.data.transactions.filter((t) => t.importId === b.id).map((t) => t.id);
+    if (ids.length) await remove('transactions', ids);
+    const moves = (state.data.transfers ?? []).filter((t) => t.importId === b.id).map((t) => t.id);
+    if (moves.length) await remove('transfers', moves);
+    await upsert('imports', { ...b, undoneAt: new Date().toISOString() });
+  }
+  await saveBank({ lastSyncByAccount: {} });
+  return syncBank();
+}
+
+/** Sincroniza sozinho ao abrir o app (Android), no máximo a cada 12 h, se houver conta vinculada. */
+export async function autoSyncBank(now = Date.now()): Promise<boolean> {
+  if (!bankConfigured() || !Object.values(state.settings.bank.links).some((l) => l.kind !== 'ignorar')) return false;
+  const last = state.bank.lastAttempt ? Date.parse(state.bank.lastAttempt) : 0;
+  if (now - last < AUTO_BANK_HOURS * 3_600_000) return false;
+  try {
+    await syncBank();
+  } catch {
+    /* registrado em bank.error */
+  }
+  return true;
+}
+
+/** Remove a conexão deste aparelho: apaga as credenciais do cofre e os vínculos. Os lançamentos já importados ficam. */
+export async function disconnectBank(): Promise<void> {
+  forgetPluggyKey();
+  // investimentos do banco são só uma foto da conexão: saem junto (nada que você lançou é tocado)
+  const invIds = (state.data.bankInvestments ?? []).map((x) => x.id);
+  if (invIds.length) await remove('bankInvestments', invIds);
+  await updateSettings({ bank: { ...DEFAULT_SETTINGS.bank } });
+  await saveBank({ items: {}, accounts: [], lastSyncByAccount: {}, report: undefined, error: undefined, lastAttempt: undefined, lastOkAt: undefined });
 }
 
 // ---------- metas ----------
@@ -612,6 +966,7 @@ export async function restoreAll(data: AppData, settings: Omit<Settings, 'securi
     ...merged,
     api: { ...merged.api, brapiToken: merged.api.brapiToken || current.brapiToken },
     ai: { ...merged.ai, apiKey: merged.ai.apiKey || current.aiApiKey },
+    bank: { ...merged.bank, clientId: merged.bank.clientId || current.pluggyClientId, clientSecret: merged.bank.clientSecret || current.pluggyClientSecret },
     security: state.settings.security,
     onboarded: true,
   };
@@ -646,6 +1001,51 @@ export async function wipeAll(): Promise<void> {
   sync = emptySyncState();
   await db.replaceEverything(d, DEFAULT_SETTINGS);
   await db.setMeta(SYNC_META, sync);
-  set({ data: d, settings: DEFAULT_SETTINGS, locked: false });
+  forgetPluggyKey();
+  await db.setMeta(BANK_META, { items: {}, accounts: [], lastSyncByAccount: {} });
+  set({ data: d, settings: DEFAULT_SETTINGS, locked: false, bank: { items: {}, accounts: [], lastSyncByAccount: {} } });
   applyTheme('dark');
+}
+
+/** Parcelas do cartão vindas do banco: cada uma na sua fatura (cópia de segurança antes, se algo mudar). */
+export async function repairInstallments(): Promise<number> {
+  const fix = repairCardInstallments(state.data, state.today);
+  if (!fix.length) return 0;
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  await upsert('transactions', fix);
+  return fix.length;
+}
+
+/**
+ * Cartão vinculado na conexão bancária que não existe mais no app (apagado ou nunca chegou deste aparelho):
+ * é recriado com o mesmo código, pelos dados do banco, para as compras voltarem a entrar no cartão.
+ */
+export async function ensureLinkedCards(): Promise<number> {
+  const links = state.settings.bank.links ?? {};
+  const missing = Object.entries(links).filter(([, l]) => l.kind === 'cartao' && l.id && !state.data.cards.some((c) => c.id === l.id));
+  const cards = missing.map(([accId, l]) => {
+    const acc = state.bank.accounts.find((a) => a.id === accId);
+    const sameBank = acc ? state.bank.accounts.find((a) => a.itemId === acc.itemId && a.type !== 'CREDIT' && links[a.id]?.kind === 'conta') : undefined;
+    const pay = (sameBank && links[sameBank.id]?.id) || defaultAccountId();
+    return acc ? newCardFor(acc, acc.bankName, l.id!, pay) : { id: l.id!, name: 'Cartão do banco', closingDay: 1, dueDay: 10, accountId: pay };
+  });
+  if (cards.length) await upsert('cards', cards);
+  return cards.length;
+}
+
+/** Um cartão só por banco: junta cartões repetidos do mesmo banco no cartão ligado à conexão (cópia de segurança antes). */
+export async function mergeBankCards(): Promise<number> {
+  const { map, links } = planCardMerge(state.data, state.settings.bank.links, state.bank.accounts);
+  if (!map.size) return 0;
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  const to = (id?: string) => (id && map.has(id) ? map.get(id)! : id);
+  const txs = state.data.transactions.filter((t) => t.cardId && map.has(t.cardId)).map((t) => ({ ...t, cardId: to(t.cardId) }));
+  const recs = state.data.recurrences.filter((r) => r.cardId && map.has(r.cardId)).map((r) => ({ ...r, cardId: to(r.cardId) }));
+  const imps = state.data.imports.filter((b) => b.cardId && map.has(b.cardId)).map((b) => ({ ...b, cardId: to(b.cardId) }));
+  if (txs.length) await upsert('transactions', txs);
+  if (recs.length) await upsert('recurrences', recs);
+  if (imps.length) await upsert('imports', imps);
+  if (JSON.stringify(links) !== JSON.stringify(state.settings.bank.links)) await updateSettings({ bank: { ...state.settings.bank, links } });
+  await remove('cards', [...map.keys()].filter((id) => state.data.cards.some((c) => c.id === id)));
+  return map.size;
 }

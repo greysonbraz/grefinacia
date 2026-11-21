@@ -4,4 +4,5 @@
     <string name="title_activity_main">Grefinacia</string>
     <string name="package_name">br.com.grefinacia.app</string>
     <string name="custom_url_scheme">br.com.grefinacia.app</string>
+    <string name="widget_description">Quanto ainda dá para gastar no mês e o saldo disponível</string>
 </resources>

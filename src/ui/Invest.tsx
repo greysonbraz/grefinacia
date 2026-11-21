@@ -13,18 +13,28 @@ import { Cripto, PerformanceCard, PriceChart } from './Market';
 import { DividendHistory, PassivePanel, SourceHealth, TotalReturnCard } from './Proventos';
 import { resolveDividendProvider } from '../services/quotes';
 import { historyId } from '../domain/market';
+import { BankInTab, BankInvestments } from './BankInvest';
+import { bankTab } from '../domain/bankInvest';
+import { formatUSD, usdRate } from '../domain/dollar';
+import { depositOutlook } from '../domain/docread';
+import { DollarHome } from './Dollar';
+import { InvestOverview } from './InvestOverview';
 
 const TYPE_LABEL: Record<AssetType, string> = { acao: 'Ação', fii: 'FII', etf: 'ETF' };
-type Sub = 'bolsa' | 'fixa' | 'cripto' | 'dividendos';
+type Sub = 'geral' | 'bancos' | 'bolsa' | 'fixa' | 'dolar' | 'cripto' | 'dividendos';
 
 export function Invest({ initial }: { initial?: string }) {
-  const [sub, setSub] = useState<Sub>((initial as Sub) ?? 'bolsa');
+  const hasBank = useStore((s) => (s.data.bankInvestments ?? []).length > 0 || !!s.settings.bank.items.length);
+  const [sub, setSub] = useState<Sub>((initial as Sub) ?? 'geral');
   return (
     <div className="screen">
       <div className="head"><h1>Investimentos</h1></div>
-      <Seg value={sub} onChange={setSub} options={[['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
+      <Seg value={sub} onChange={setSub} options={[['geral', 'Visão geral'], ...(hasBank ? [['bancos', 'Nos bancos'] as [Sub, string]] : []), ['bolsa', 'Bolsa (B3)'], ['fixa', 'Renda fixa'], ['dolar', 'Exterior (US$)'], ['cripto', 'Cripto'], ['dividendos', 'Dividendos']]} />
+      {sub === 'geral' && <InvestOverview go={(s) => setSub(s as Sub)} />}
+      {sub === 'bancos' && <BankInvestments />}
+      {sub === 'dolar' && <DollarHome />}
       {sub === 'bolsa' && <Bolsa />}
-      {sub === 'fixa' && <Fixa />}
+      {sub === 'fixa' && <Fixa onDollar={() => setSub('dolar')} />}
       {sub === 'cripto' && <Cripto />}
       {sub === 'dividendos' && <Dividendos />}
     </div>
@@ -41,6 +51,8 @@ function Bolsa() {
   const positions = useMemo(() => computePositions(data.assets, data.operations), [data.assets, data.operations]);
   const totals = portfolioTotals(positions, []);
   const held = positions.filter((p) => p.quantity > 0).sort((a, b) => b.valueCents - a.valueCents);
+  const fromBank = (data.bankInvestments ?? []).filter((i) => !i.currency && bankTab(i) === 'bolsa').sort((a, b) => b.balanceCents - a.balanceCents);
+  const bankTotal = fromBank.filter((i) => i.counted).reduce((s, i) => s + i.balanceCents, 0);
   const pal = seriesColors();
   const refresh = async () => {
     setBusy(true);
@@ -63,13 +75,17 @@ function Bolsa() {
           <div><div className="lbl">Valor da carteira</div><div className="big num" style={{ fontSize: 30 }}>{formatBRL(totals.equityValueCents)}</div></div>
           <button className="iconbtn" onClick={refresh} disabled={busy || data.assets.length === 0} aria-label="Atualizar cotações"><RefreshCw size={18} style={busy ? { animation: 'spin 1s linear infinite' } : undefined} /></button>
         </div>
-        <div className="kv"><span>Total investido</span><b className="num">{formatBRL(totals.investedCents)}</b></div>
+        {bankTotal > 0 && <div className="kv"><span>Cadastrados por você</span><b className="num">{formatBRL(totals.equityValueCents)}</b></div>}
+        {bankTotal > 0 && <div className="kv"><span>Pelo banco (conexão)</span><b className="num">{formatBRL(bankTotal)}</b></div>}
+        {bankTotal > 0 && <div className="kv"><span><b>Total na bolsa</b></span><b className="num">{formatBRL(totals.equityValueCents + bankTotal)}</b></div>}
+        <div className="kv"><span>Total investido{bankTotal > 0 ? ' (cadastrados)' : ''}</span><b className="num">{formatBRL(totals.investedCents)}</b></div>
         <div className="kv"><span>Lucro ou prejuízo</span><b className={'num ' + (totals.pnlCents > 0 ? 'pos' : totals.pnlCents < 0 ? 'neg' : '')}>{totals.pnlPct === null ? '—' : `${formatBRL(totals.pnlCents)} (${formatPct(totals.pnlPct, true)})`}</b></div>
         {totals.realizedCents !== 0 && <div className="kv"><span>Resultado já realizado em vendas</span><b className="num">{formatBRL(totals.realizedCents)}</b></div>}
         <Note>{api.quoteProvider === 'manual' ? 'Cotação automática desligada: os preços são os que você informar.' : api.lastQuoteRefresh ? `Cotações de ${api.quoteProvider === 'brapi' ? 'brapi.dev' : 'Yahoo Finance (não oficial)'}, buscadas em ${new Date(api.lastQuoteRefresh).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}. Podem ter atraso de 15 minutos ou mais; não são tempo real.` : 'Toque em atualizar para buscar as cotações. Sem cotação, o app usa o preço médio e não calcula lucro.'}</Note>
         {errors.map((e) => (<div className="note neg" key={e}>{e}</div>))}
       </div>
-      {held.length === 0 ? <div className="card"><Empty title="Carteira vazia" text="Cadastre suas ações, FIIs e ETFs com quantidade, preço e data da compra." action="Adicionar ativo" onAction={() => setAdd(true)} /></div> : (
+      <BankInTab items={fromBank} title="Pelo banco" />
+      {held.length === 0 ? (fromBank.length ? null : <div className="card"><Empty title="Carteira vazia" text="Cadastre suas ações, FIIs e ETFs com quantidade, preço e data da compra." action="Adicionar ativo" onAction={() => setAdd(true)} /></div>) : (
         <>
           <div className="card" style={{ padding: '4px 14px' }}>
             {held.map((p) => (
@@ -194,13 +210,18 @@ function AssetDetail({ p, onClose }: { p: Position; onClose: () => void }) {
 }
 
 // ------------------------- RENDA FIXA -------------------------
-function Fixa() {
+function Fixa({ onDollar }: { onDollar: () => void }) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const [edit, setEdit] = useState<FixedIncome | 'new' | null>(null);
   const [sim, setSim] = useState({ ini: '1000', mes: '200', taxa: '10', anos: '5' });
   const invested = data.fixedIncomes.reduce((s, f) => s + f.investedCents, 0);
   const current = data.fixedIncomes.reduce((s, f) => s + f.currentCents, 0);
+  const fromBank = (data.bankInvestments ?? []).filter((i) => !i.currency && bankTab(i) === 'fixa').sort((a, b) => b.balanceCents - a.balanceCents);
+  const bankTotal = fromBank.filter((i) => i.counted).reduce((s, i) => s + i.balanceCents, 0);
+  const usdDeps = (data.usdHoldings ?? []).filter((h) => h.kind === 'deposito');
+  const rate = usdRate(data);
+  const usdTotal = usdDeps.reduce((s, h) => s + (h.balanceUsdCents ?? 0), 0);
   const g = simulateGrowth(parseMoney(sim.ini) ?? 0, parseMoney(sim.mes) ?? 0, parseDecimal(sim.taxa) ?? 0, Math.min(Math.max(Math.round((parseDecimal(sim.anos) ?? 0) * 12), 1), 600));
   const last = g[g.length - 1];
   const pal = seriesColors();
@@ -210,7 +231,32 @@ function Fixa() {
         <div className="tile"><div className="lbl">Aplicado</div><div className="val num">{formatBRL(invested)}</div></div>
         <div className="tile"><div className="lbl">Valor atual informado</div><div className="val num">{formatBRL(current)}</div></div>
       </div>
-      {data.fixedIncomes.length === 0 ? <div className="card"><Empty title="Nenhum título" text="Cadastre Tesouro Direto, CDB, LCI, LCA, poupança e outros." action="Adicionar renda fixa" onAction={() => setEdit('new')} /></div> : data.fixedIncomes.map((f) => {
+      {(bankTotal > 0 || usdTotal > 0) && (
+        <div className="group">
+          <div className="kv"><span>Cadastrados por você</span><b className="num">{formatBRL(current)}</b></div>
+          {bankTotal > 0 && <div className="kv"><span>Pelo banco (conexão)</span><b className="num">{formatBRL(bankTotal)}</b></div>}
+          {usdTotal > 0 && <div className="kv"><span>Em dólar</span><b className="num">{formatUSD(usdTotal)}{rate ? ` ≈ ${formatBRL(Math.round(usdTotal * rate.rate))}` : ''}</b></div>}
+          <div className="kv"><span><b>Total em renda fixa</b></span><b className="num">{formatBRL(current + bankTotal + (rate ? Math.round(usdTotal * rate.rate) : 0))}</b></div>
+        </div>
+      )}
+      <BankInTab items={fromBank} title="Pelo banco" />
+      {usdDeps.length > 0 && (
+        <>
+          <div className="section">Em dólar · {formatUSD(usdTotal)}</div>
+          <div className="card" style={{ padding: '4px 14px' }}>
+            {usdDeps.map((h) => {
+              const o = depositOutlook(h, today);
+              return (
+                <button key={h.id} className="row" onClick={onDollar}>
+                  <div className="mid"><div className="t">{h.name}</div><div className="s">{[h.ratePct ? `${String(h.ratePct).replace('.', ',')}% a.a.` : '', h.maturityDate ? `vence ${formatDateBR(h.maturityDate)}` : '', o ? `faltam ${o.daysLeft} dias` : ''].filter(Boolean).join(' · ') || 'renda fixa em dólar'}</div></div>
+                  <div className="end"><div className="num">{formatUSD(h.balanceUsdCents ?? 0)}</div>{rate && <div className="s num">≈ {formatBRL(Math.round((h.balanceUsdCents ?? 0) * rate.rate))}</div>}</div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {data.fixedIncomes.length === 0 ? (fromBank.length || usdDeps.length ? null : <div className="card"><Empty title="Nenhum título" text="Cadastre Tesouro Direto, CDB, LCI, LCA, poupança e outros." action="Adicionar renda fixa" onAction={() => setEdit('new')} /></div>) : data.fixedIncomes.map((f) => {
         const e = estimateFixed(f, today);
         return (
           <button className="card" key={f.id} style={{ width: '100%', textAlign: 'left' }} onClick={() => setEdit(f)}>
@@ -340,7 +386,7 @@ function Dividendos() {
             return its ? <button key={i} className={cls} onClick={() => setDay(iso === day ? null : iso)} aria-label={`${d}: ${its.length} pagamento(s)`}>{d}</button> : <span key={i} className={cls}>{d}</span>;
           })}
         </div>
-        <Legend items={[{ label: 'Anunciado', color: cssVar('--gold') }, { label: 'Estimativa', color: cssVar('--gold'), dashed: true }]} />
+        <Legend items={[{ label: 'Anunciado', color: cssVar('--accent') }, { label: 'Estimativa', color: cssVar('--accent'), dashed: true }]} />
         {dayItems.map((i, k) => (<div className="kv" key={k}><span>{formatDayMonth(i.date)} · {i.ticker} {i.official ? '' : '(estimativa)'}</span><b className="num">{formatBRL(i.cents)}</b></div>))}
       </div>
 

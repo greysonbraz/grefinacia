@@ -43,8 +43,12 @@ jobs:
       - name: Conferir que nenhum segredo foi parar no repositório
         run: node scripts/check-secrets.mjs
 
-      - name: Auditar dependências (falha em vulnerabilidade alta ou crítica)
-        run: npm audit --audit-level=high
+      - name: Auditar dependências do app (falha em vulnerabilidade alta ou crítica)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Ferramentas de build e teste não vão no APK: bloqueia se já houver versão corrigida; sem correção, só avisa.
+      - name: Auditar ferramentas de build e teste
+        run: node scripts/audit-tools.mjs
 
       - name: Testes de regras e de segurança
         run: npm test

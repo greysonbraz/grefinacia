@@ -4,7 +4,7 @@ import { deleteTransaction, toast, updateSettings, useStore } from '../state/sto
 import { cashForecast, CLASS_LABEL, detectSubscriptions, findDuplicates, portfolioXray, simulateLoan, unusualSpending, type LoanResult } from '../domain/analysis';
 import { formatBRL, formatPct, parseDecimal, parseMoney } from '../lib/money';
 import { formatDateBR, monthShortYear } from '../lib/dates';
-import { ChartBox, Field, Full, Legend, MoneyInput, Note, Progress, Seg, seriesColors } from './kit';
+import { BrandMark, ChartBox, Field, Full, Legend, MoneyInput, Note, Progress, Seg, seriesColors } from './kit';
 
 const ddmm = (d: string) => d.slice(8, 10) + '/' + d.slice(5, 7);
 
@@ -72,7 +72,7 @@ export function Xray() {
             </div>
             {subs.map((s) => (
               <div className="kv" key={s.key}>
-                <span>{s.name} {s.source === 'detectada' ? <span className="badge">detectada</span> : null} {s.increasedFromCents ? <span className="badge bad">era {formatBRL(s.increasedFromCents)}</span> : null}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><BrandMark name={s.name} size={32} /><span>{s.name} {s.source === 'detectada' ? <span className="badge">detectada</span> : null} {s.increasedFromCents ? <span className="badge bad">era {formatBRL(s.increasedFromCents)}</span> : null}</span></span>
                 <b className="num">{formatBRL(s.monthlyCents)}</b>
               </div>
             ))}

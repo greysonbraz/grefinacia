@@ -201,8 +201,8 @@ describe('dados: banco, backup e sincronização', () => {
   it('importações viajam entre aparelhos e vão no backup; regras ficam nas configurações', () => {
     expect(SYNCED.has('imports')).toBe(true);
     expect(DATA_KEYS).toContain('imports');
-    expect(DB_VERSION).toBe(5);
-    expect(DATA_SCHEMA).toBe(4);
+    expect(DB_VERSION).toBeGreaterThanOrEqual(5);
+    expect(DATA_SCHEMA).toBeGreaterThanOrEqual(4);
     const v = validateImported({ schema: 4, data: { imports: [{ id: 'i1' }] }, settings: { importRules: 'quebrado' } });
     expect(v.data.imports).toHaveLength(1);
     expect('importRules' in v.settings).toBe(false);

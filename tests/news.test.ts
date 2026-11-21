@@ -65,7 +65,7 @@ describe('fontes', () => {
       expect(s.url.startsWith('https://')).toBe(true);
       expect(NEWS_HOSTS).toContain(new URL(s.url).origin);
     }
-    for (const t of ['economia', 'bolsa', 'cripto', 'juros', 'educacao']) expect(NEWS_SOURCES.some((s) => s.topic === t)).toBe(true);
+    for (const t of ['economia', 'bolsa', 'eua', 'cripto', 'juros', 'educacao']) expect(NEWS_SOURCES.some((s) => s.topic === t)).toBe(true);
   });
 });
 

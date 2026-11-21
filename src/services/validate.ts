@@ -5,12 +5,12 @@ import { DATA_KEYS, emptyData } from '../lib/defaults';
  * Versão do formato dos dados dentro de um backup. Sobe quando entram coleções ou campos que uma versão
  * antiga do app não saberia guardar; assim um app antigo recusa o arquivo em vez de restaurar pela metade.
  */
-export const DATA_SCHEMA = 4; // 2: transferências entre contas · 3: carteira de cripto e histórico de preços · 4: importações de extratos
+export const DATA_SCHEMA = 6; // 6: dólar · 2: transferências entre contas · 3: carteira de cripto e histórico de preços · 4: importações de extratos · 5: investimentos pelo banco
 
 export class ImportError extends Error {}
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const NESTED_SETTINGS = ['salary', 'notifications', 'api', 'ai', 'freedom', 'budgets', 'news', 'analysis'];
+const NESTED_SETTINGS = ['salary', 'notifications', 'api', 'ai', 'freedom', 'budgets', 'news', 'analysis', 'bank'];
 const MAX_DEPTH = 12;
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -61,5 +61,6 @@ export function validateImported(parsed: unknown): { data: AppData; settings: Om
   delete settings.security; // o PIN de bloqueio nunca vem de um arquivo
   for (const k of NESTED_SETTINGS) if (settings[k] !== undefined && !isPlainObject(settings[k])) delete settings[k];
   if (settings.importRules !== undefined && !Array.isArray(settings.importRules)) delete settings.importRules;
+  if (settings.challenges !== undefined && !Array.isArray(settings.challenges)) delete settings.challenges;
   return { data, settings: settings as unknown as Omit<Settings, 'security'> };
 }

@@ -12,8 +12,10 @@ const DB_NAME = 'grefinacia';
  *   3 — + "transfers" (transferências entre contas)
  *   4 — + "cryptoAssets", "cryptoOps" (carteira de cripto) e "marketHistory" (histórico de preços e índices)
  *   5 — + "imports" (importações de extratos)
+ *   6 — + "bankInvestments" (investimentos lidos do banco pela conexão)
+ *   7 — + "usdHoldings" (dinheiro e investimentos em dólar)
  */
-export const DB_VERSION = 5;
+export const DB_VERSION = 7;
 const SAFETY = 'safety';
 /** Quantas cópias automáticas ficam guardadas; a mais antiga sai quando entra uma nova. */
 export const MAX_SAFETY_COPIES = 3;
@@ -69,6 +71,13 @@ export function mergeSettings(saved: Partial<Settings> | undefined): Settings {
     ai: { ...DEFAULT_SETTINGS.ai, ...s.ai },
     freedom: { ...DEFAULT_SETTINGS.freedom, ...s.freedom },
     news: { disabledSources: Array.isArray(s.news?.disabledSources) ? s.news.disabledSources.filter((x) => typeof x === 'string') : [] },
+    bank: {
+      ...DEFAULT_SETTINGS.bank,
+      ...s.bank,
+      items: Array.isArray(s.bank?.items) ? s.bank.items.filter((i) => i && typeof i.itemId === 'string' && i.itemId.trim()).slice(0, 10) : [],
+      links: s.bank?.links && typeof s.bank.links === 'object' && !Array.isArray(s.bank.links) ? s.bank.links : {},
+    },
+    challenges: Array.isArray(s.challenges) ? s.challenges.filter((c) => c && typeof c.id === 'string' && ['sem-gasto', 'limite', 'guardar'].includes(c.kind) && typeof c.start === 'string' && Number.isFinite(c.days) && c.days > 0).slice(-50) : [],
     importRules: Array.isArray(s.importRules) ? s.importRules.filter((r) => r && typeof r.pattern === 'string' && r.pattern && typeof r.categoryId === 'string').slice(-300) : [],
     analysis: { ignoredDuplicates: Array.isArray(s.analysis?.ignoredDuplicates) ? s.analysis.ignoredDuplicates.filter((x) => typeof x === 'string').slice(-500) : [] },
     budgets: { ...s.budgets },

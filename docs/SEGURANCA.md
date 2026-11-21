@@ -31,6 +31,9 @@ Com os Secrets cadastrados, o fluxo *Gerar APK* publica o artefato `grefinacia-a
 | Atualização do banco | Versões novas só acrescentam estruturas, nunca apagam; uma cópia é guardada na primeira abertura |
 | Código da página | Content-Security-Policy: só scripts do próprio app, sem `eval`, conexões só com os sites listados em `src/lib/csp.ts` |
 | Nuvem | Criptografia ponta a ponta (a chave fica no aparelho) e RLS: cada linha só é lida pelo dono; sem login, nada |
+| Câmera (escanear cupom) | Só quando você toca em "Escanear cupom"; a foto é lida no aparelho (ML Kit) e não é guardada nem enviada |
+| Widget da tela inicial | Mostra só livre para gastar, saldo e a próxima conta; com "ocultar valores" ligado mostra "•••"; tocar abre o app (PIN/biometria valem) |
+| Conexão bancária (Meu Pluggy) | Só leitura. Client ID e Client Secret no cofre do Android, fora da nuvem, do backup e das cópias; a API key da Pluggy (2 h) só em memória. A Pluggy recomenda guardar o Secret em servidor: como o app é de um usuário só e lê só os dados dele, o cofre do aparelho é a alternativa sem custo. A varredura de segredos reconhece `pluggy_sk_…`. A autorização pode ser revogada no app do banco ou no Meu Pluggy |
 | Importação de extrato | Arquivo lido só no aparelho, limite de 5 MB, cópia de segurança antes de importar e de desfazer |
 | IA no aparelho | Gemini Nano desligado por padrão; o texto não sai do celular; o app avisa das métricas de uso que o ML Kit envia ao Google |
 | Rede | Só HTTPS; backup automático do Google desligado |
@@ -63,3 +66,10 @@ Com os Secrets cadastrados, o fluxo *Gerar APK* publica o artefato `grefinacia-a
 ## Custo zero
 
 A IA externa paga está desligada por código (`src/lib/flags.ts`). A verificação de proventos em segundo plano não consulta a brapi no plano gratuito e roda a cada ~6 h.
+
+## Auditoria de dependências (17/11/2026)
+
+- Dependências do app (o que vai no APK): `npm audit --omit=dev --audit-level=high` bloqueia o build em qualquer alerta alto ou crítico.
+- Ferramentas de build e teste (Vite, Vitest e plugins): `scripts/audit-tools.mjs` bloqueia quando já existe versão corrigida publicada; sem correção, só avisa no log.
+- Motivo: alerta GHSA-fc5q-39xc-vjpf (ReDoS no `picomatch` ≤ 4.0.7, usado só pelas ferramentas de build) sem versão corrigida travava todos os APKs. Autorizado pelo dono em 17/11/2026. Quando sair a correção, o build volta a bloquear até atualizar.
+

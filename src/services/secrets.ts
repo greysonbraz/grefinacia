@@ -6,7 +6,7 @@ import { isNative } from './platform';
 export { extractSecrets, withoutSecrets, withSecrets, type Secrets };
 
 /**
- * Segredos do usuário: token da brapi e chave de IA.
+ * Segredos do usuário: token da brapi, chave de IA e credenciais da Pluggy.
  *
  * No Android eles ficam no cofre do sistema (cifrados com uma chave do Android Keystore), fora do banco
  * do app. No navegador (desenvolvimento) não existe cofre, então continuam no banco local, como antes.
@@ -18,7 +18,8 @@ export interface SecretStore {
   remove(key: string): Promise<void>;
 }
 
-const KEYS: Record<keyof Secrets, string> = { brapiToken: 'brapi_token', aiApiKey: 'ai_api_key' };
+const KEYS: Record<keyof Secrets, string> = { brapiToken: 'brapi_token', aiApiKey: 'ai_api_key', pluggyClientId: 'pluggy_client_id', pluggyClientSecret: 'pluggy_client_secret' };
+const NAMES = Object.keys(KEYS) as (keyof Secrets)[];
 
 const nativeStore: SecretStore = {
   get: (k) => SecureStorage.getItem(k),
@@ -41,7 +42,7 @@ let lastSaved: Secrets | null = null;
 async function saveSecrets(x: Secrets): Promise<boolean> {
   const store = getStore();
   if (!store) return false;
-  if (lastSaved && lastSaved.brapiToken === x.brapiToken && lastSaved.aiApiKey === x.aiApiKey) return true;
+  if (lastSaved && NAMES.every((n) => lastSaved![n] === x[n])) return true;
   try {
     for (const name of Object.keys(KEYS) as (keyof Secrets)[]) {
       if (x[name]) await store.set(KEYS[name], x[name]);
@@ -71,15 +72,15 @@ export async function hydrateSecrets(fromDb: Settings): Promise<{ settings: Sett
   const store = getStore();
   if (!store) return { settings: fromDb, migrated: false };
   const inDb = extractSecrets(fromDb);
-  let vault: Partial<Secrets> = {};
+  const vault: Partial<Secrets> = {};
   try {
-    vault = { brapiToken: (await store.get(KEYS.brapiToken)) ?? '', aiApiKey: (await store.get(KEYS.aiApiKey)) ?? '' };
+    for (const n of NAMES) vault[n] = (await store.get(KEYS[n])) ?? '';
   } catch {
     return { settings: fromDb, migrated: false };
   }
   // o que está no banco é mais recente (instalação antiga ou cofre que falhou ao gravar); senão vale o cofre
-  const merged: Secrets = { brapiToken: inDb.brapiToken || vault.brapiToken || '', aiApiKey: inDb.aiApiKey || vault.aiApiKey || '' };
-  return { settings: withSecrets(fromDb, merged), migrated: Boolean(inDb.brapiToken || inDb.aiApiKey) };
+  const merged = Object.fromEntries(NAMES.map((n) => [n, inDb[n] || vault[n] || ''])) as unknown as Secrets;
+  return { settings: withSecrets(fromDb, merged), migrated: NAMES.some((n) => Boolean(inDb[n])) };
 }
 
 /** Apaga os segredos do cofre (usado em "Apagar todos os meus dados"). */

@@ -17,7 +17,7 @@ export interface PreviewRow {
   type: 'income' | 'expense';
   amountCents: number; // sempre positivo
   categoryId: string;
-  categorySource: 'regra' | 'historico' | 'palavra' | 'padrao';
+  categorySource: 'regra' | 'historico' | 'banco' | 'palavra' | 'padrao';
   /** Situação que pede atenção: já importado, parecido com um lançamento existente, pagamento de fatura, repetido no arquivo. */
   flag?: 'importado' | 'possivel' | 'fatura' | 'repetido';
   flagNote?: string;
@@ -99,7 +99,9 @@ export function buildPreview(st: Statement, target: Target, data: AppData, setti
       pr.flag = 'fatura';
       pr.flagNote = target.kind === 'conta' ? 'Pagamento de fatura: os gastos já vêm da fatura do cartão. Marque só se não for importar a fatura.' : 'Pagamento da fatura anterior, não é compra';
     } else {
-      const match = data.transactions.find((t) => t.type === type && t.amountCents === amountCents && Math.abs(diffDays(t.date, row.date)) <= 2 && (normDesc(t.description) === n || (n && normDesc(t.description).split(' ')[0] === n.split(' ')[0]) || sameTarget(t)));
+      // identificador estável do banco (Open Finance) diferente do que já existe: é outra transação, mesmo parecida
+      const distinct = (t: Transaction) => !!row.fitId && !!t.fitId && row.fitId.startsWith('of:') && t.fitId.startsWith('of:') && t.fitId !== row.fitId;
+      const match = data.transactions.find((t) => !distinct(t) && t.type === type && t.amountCents === amountCents && Math.abs(diffDays(t.date, row.date)) <= 2 && (normDesc(t.description) === n || (n && normDesc(t.description).split(' ')[0] === n.split(' ')[0]) || sameTarget(t)));
       if (match) {
         pr.flag = 'possivel';
         pr.flagNote = `Parece com "${match.description}" de ${match.date.split('-').reverse().slice(0, 2).join('/')}`;
@@ -167,8 +169,9 @@ export function buildTransactions(rows: PreviewRow[], target: Target, data: AppD
     };
     if (target.kind === 'conta') return { ...base, accountId: target.accountId };
     if (!card) return base;
-    const due = cardInvoiceDue(card, r.row.date).dueDate;
-    if (income) return { ...base, paymentMethod: 'outro', cardId: card.id, accountId: undefined, paidDate: r.row.date }; // estorno ou crédito na fatura
+    // fatura informada pelo banco (Open Finance) vale mais que a conta pelo dia de fechamento
+    const due = r.row.dueDate ?? cardInvoiceDue(card, r.row.date).dueDate;
+    if (income) return { ...base, paymentMethod: 'outro', cardId: card.id, accountId: undefined, dueDate: due, paidDate: r.row.date }; // estorno ou crédito na fatura
     return due < today
       ? { ...base, cardId: card.id, dueDate: due, paidDate: due, accountId: card.accountId }
       : { ...base, cardId: card.id, dueDate: due, status: 'pending', paidDate: undefined, accountId: undefined };

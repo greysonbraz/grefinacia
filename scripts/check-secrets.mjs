@@ -22,6 +22,7 @@ const SECRET_PATTERNS = [
   { name: 'chave secreta do Supabase', re: /\bsb_secret_[A-Za-z0-9_-]{20,}/ },
   { name: 'JWT (ex.: service_role do Supabase)', re: /\beyJ[A-Za-z0-9_-]{15,}\.eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}/ },
   { name: 'segredo de cliente OAuth do Google', re: /\bGOCSPX-[A-Za-z0-9_-]{20,}/ },
+  { name: 'Client Secret da Pluggy', re: /\bpluggy_sk_[A-Za-z0-9]{20,}/ },
 ];
 
 const BINARY = /\.(png|jpe?g|gif|webp|ico|jar|aar|woff2?|ttf|zip|pdf|gfbackup)$/i;

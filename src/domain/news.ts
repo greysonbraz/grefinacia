@@ -1,5 +1,5 @@
 /** Leitura de feeds de notícias (RSS 2.0 e Atom). Regras puras: recebem o texto do feed e devolvem itens limpos. */
-export type NewsTopic = 'economia' | 'bolsa' | 'cripto' | 'juros' | 'educacao';
+export type NewsTopic = 'economia' | 'bolsa' | 'eua' | 'cripto' | 'juros' | 'educacao';
 
 export interface NewsSource {
   id: string;
@@ -18,7 +18,7 @@ export interface NewsItem {
   date: string; // ISO; '' quando o feed não informa
 }
 
-export const TOPIC_LABEL: Record<NewsTopic, string> = { economia: 'Economia', bolsa: 'Bolsa e FIIs', cripto: 'Cripto', juros: 'Juros e inflação', educacao: 'Educação' };
+export const TOPIC_LABEL: Record<NewsTopic, string> = { economia: 'Economia', bolsa: 'Bolsa e FIIs', eua: 'EUA e Wall Street', cripto: 'Cripto', juros: 'Juros e inflação', educacao: 'Educação' };
 
 /** Fontes gratuitas por RSS, conferidas em 15/11/2026. Só título, resumo e link: a matéria abre no site de origem. */
 export const NEWS_SOURCES: NewsSource[] = [
@@ -29,6 +29,12 @@ export const NEWS_SOURCES: NewsSource[] = [
   { id: 'suno', name: 'Suno Notícias', topic: 'bolsa', url: 'https://www.suno.com.br/noticias/feed/' },
   { id: 'investnews', name: 'InvestNews', topic: 'bolsa', url: 'https://investnews.com.br/feed/' },
   { id: 'seudinheiro', name: 'Seu Dinheiro', topic: 'bolsa', url: 'https://www.seudinheiro.com/feed/' },
+  // EUA e Wall Street (Etapa 16; conferidas em 17/11/2026). As em inglês avisam no nome.
+  { id: 'infomoney-ws', name: 'InfoMoney Wall Street', topic: 'eua', url: 'https://www.infomoney.com.br/tudo-sobre/wall-street/feed/' },
+  { id: 'moneytimes-int', name: 'Money Times Internacional', topic: 'eua', url: 'https://www.moneytimes.com.br/internacional/feed/' },
+  { id: 'investing-br', name: 'Investing.com Brasil (ações)', topic: 'eua', url: 'https://br.investing.com/rss/news_25.rss' },
+  { id: 'cnbc-markets', name: 'CNBC Markets (em inglês)', topic: 'eua', url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20409666' },
+  { id: 'marketwatch', name: 'MarketWatch (em inglês)', topic: 'eua', url: 'https://feeds.content.dowjones.io/public/rss/mw_marketpulse' },
   { id: 'portaldobitcoin', name: 'Portal do Bitcoin', topic: 'cripto', url: 'https://portaldobitcoin.uol.com.br/feed/' },
   { id: 'livecoins', name: 'Livecoins', topic: 'cripto', url: 'https://livecoins.com.br/feed/' },
   { id: 'bcb', name: 'Banco Central', topic: 'juros', url: 'https://www.bcb.gov.br/api/feed/sitebcb/sitefeeds/noticias' },

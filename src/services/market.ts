@@ -178,6 +178,10 @@ export async function searchCoins(query: string): Promise<CoinHit[] | FetchError
 export const BCB_SERIES = {
   CDI: { code: 12, label: 'CDI', note: '% ao dia, dias úteis' },
   IPCA: { code: 433, label: 'IPCA', note: '% no mês' },
+  USD: { code: 1, label: 'Dólar (PTAX venda)', note: 'reais por dólar, dias úteis' },
+  SELIC: { code: 432, label: 'Selic (meta)', note: '% ao ano' },
+  IPCA12: { code: 13522, label: 'IPCA em 12 meses', note: '% acumulado' },
+  CDIA: { code: 4389, label: 'CDI', note: '% ao ano' },
 } as const;
 export type IndexName = keyof typeof BCB_SERIES;
 
@@ -214,5 +218,48 @@ export async function fetchBcbSeries(name: IndexName, from: ISODate, to: ISODate
     return { points, source: 'Banco Central (SGS)' };
   } catch (e) {
     return { ticker: name, message: 'Banco Central: ' + explain(e) };
+  }
+}
+
+// ============================ AÇÕES E ETFs DOS EUA (Yahoo Finance, não oficial) ============================
+
+export interface UsQuote { ticker: string; priceUsdCents: number; time: string; changePct?: number; name?: string }
+/** Cotação de ativos americanos (em dólar). Mesma fonte não oficial usada para a B3 no modo Yahoo. */
+export async function fetchUsQuotes(tickers: string[]): Promise<{ quotes: UsQuote[]; errors: FetchError[] }> {
+  const quotes: UsQuote[] = [];
+  const errors: FetchError[] = [];
+  for (const raw of [...new Set(tickers.map((t) => t.trim().toUpperCase()))]) {
+    if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(raw)) {
+      errors.push({ ticker: raw, message: 'Código inválido.' });
+      continue;
+    }
+    try {
+      countRequest('yahoo');
+      const { status, json } = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(raw)}?range=1d&interval=1d`);
+      const meta = json?.chart?.result?.[0]?.meta;
+      if (!meta || typeof meta.regularMarketPrice !== 'number') throw new Error(status === 404 ? 'ativo não encontrado' : `resposta sem preço (HTTP ${status})`);
+      if (meta.currency && meta.currency !== 'USD') throw new Error(`cotado em ${meta.currency}, não em dólar`);
+      const prev = meta.chartPreviousClose ?? meta.previousClose;
+      quotes.push({ ticker: raw, priceUsdCents: Math.round(meta.regularMarketPrice * 100), time: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : new Date().toISOString(), changePct: prev ? ((meta.regularMarketPrice - prev) / prev) * 100 : undefined, name: meta.shortName });
+    } catch (e) {
+      errors.push({ ticker: raw, message: 'Yahoo Finance: ' + explain(e) });
+    }
+  }
+  return { quotes, errors };
+}
+
+/** Ibovespa (pontos), pelo mesmo Yahoo Finance não oficial usado nas cotações. */
+export async function fetchIbovespa(): Promise<{ points: HistoryPoint[]; source: string } | FetchError> {
+  try {
+    countRequest('yahoo');
+    const { status, json } = await getJson('https://query1.finance.yahoo.com/v8/finance/chart/%5EBVSP?range=1mo&interval=1d');
+    const r = json?.chart?.result?.[0];
+    const ts: number[] = r?.timestamp ?? [];
+    const close: (number | null)[] = r?.indicators?.quote?.[0]?.close ?? [];
+    const points: HistoryPoint[] = ts.flatMap((t, i) => (typeof close[i] === 'number' ? [[localDate(t * 1000), Math.round(close[i] as number)] as HistoryPoint] : []));
+    if (!points.length) return { ticker: 'IBOV', message: `Yahoo Finance: sem dados do Ibovespa (HTTP ${status}).` };
+    return { points, source: 'Yahoo Finance (não oficial)' };
+  } catch (e) {
+    return { ticker: 'IBOV', message: 'Yahoo Finance: ' + explain(e) };
   }
 }

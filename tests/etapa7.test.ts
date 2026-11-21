@@ -193,7 +193,7 @@ describe('cota da brapi', () => {
     expect(brapiQuota('startup').exhausted).toBe(false);
   });
   it('mês novo começa do zero', () => {
-    initUsage({ month: '2020-01', counts: { brapi: 15000, yahoo: 0, coingecko: 0, bcb: 0 } }, () => undefined);
+    initUsage({ month: '2020-01', counts: { brapi: 15000, yahoo: 0, coingecko: 0, bcb: 0, pluggy: 0 } }, () => undefined);
     expect(getUsage().counts.brapi).toBe(0);
   });
   it('histórico sem token só para os ativos de teste, sem gastar consulta', async () => {

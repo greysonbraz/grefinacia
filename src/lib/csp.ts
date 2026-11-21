@@ -13,6 +13,9 @@ export const NEWS_HOSTS: string[] = [
   'https://portaldobitcoin.uol.com.br',
   'https://livecoins.com.br',
   'https://www.bcb.gov.br',
+  'https://br.investing.com',
+  'https://search.cnbc.com',
+  'https://feeds.content.dowjones.io',
 ];
 
 /** Endereços com que o app pode falar. Qualquer fonte nova precisa entrar aqui de propósito. */
@@ -21,10 +24,14 @@ export const ALLOWED_HOSTS: string[] = [
   'https://query1.finance.yahoo.com', // cotações e proventos (não oficial)
   'https://api.coingecko.com', // criptomoedas: preço e histórico (API pública, sem chave)
   'https://api.bcb.gov.br', // Banco Central: CDI e IPCA (dados abertos, sem chave)
+  'https://api.pluggy.ai', // conexão bancária pelo Meu Pluggy (Open Finance, uso pessoal gratuito)
   SUPABASE_URL, // nuvem: login e cópia cifrada dos dados
   ...NEWS_HOSTS, // notícias (feeds públicos)
   ...(PAID_AI_ENABLED ? ['https://api.anthropic.com'] : []),
 ];
+
+/** Conexões ao vivo (WebSocket). Só dados públicos de mercado; abertas apenas enquanto a tela que usa está aberta. */
+export const LIVE_HOSTS: string[] = ['wss://data-stream.binance.vision'];
 
 /**
  * Content-Security-Policy do app compilado.
@@ -44,7 +51,7 @@ export function buildCsp(): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${ALLOWED_HOSTS.join(' ')}`,
+    `connect-src 'self' ${[...ALLOWED_HOSTS, ...LIVE_HOSTS].join(' ')}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "frame-src 'none'",

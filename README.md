@@ -39,7 +39,8 @@ Conferido pelo dono num Galaxy S26 Ultra a cada etapa. Roteiro completo de teste
 | Notícias por RSS | Funcional no app Android |
 | Fechamento mensal, PDF e CSV, exportação JSON | Funcional |
 | PIN, biometria, bloqueio automático, backup AES-256, cópias automáticas | Funcional |
-| Open Finance e pagamentos automáticos | **Não incluído**: exige provedor pago e servidor |
+| Conexão bancária (Meu Pluggy, Open Finance) | Saldos, extratos e cartões entrando sozinhos; gratuito para uso pessoal |
+| Pagamentos automáticos | **Não incluído**: o app só lê |
 
 ## Limites que você precisa conhecer
 
@@ -50,7 +51,7 @@ Conferido pelo dono num Galaxy S26 Ultra a cada etapa. Roteiro completo de teste
 - **Cripto (CoinGecko, API pública sem chave):** preços em reais com alguns minutos de atraso e até 12 meses de histórico.
   O limite por minuto é por endereço de internet; se aparecer "espere um minuto", é só tentar de novo.
 - **IA no aparelho (Gemini Nano):** opcional e experimental, só em celulares compatíveis; o texto não sai do celular, mas o ML Kit envia métricas de uso ao Google. App exige Android 8 ou mais novo.
-- **Importar extrato:** OFX e CSV, lidos só no aparelho. PDF não é lido; Open Finance (conexão automática) não existe.
+- **Importar extrato:** OFX e CSV, lidos só no aparelho. PDF não é lido. A conexão automática com o banco é feita pelo Meu Pluggy (Ajustes → Conexão bancária).
 - **Desempenho contra CDI e IPCA** usa os dados abertos do Banco Central. O IPCA sai uma vez por mês, então o mês
   corrente fica de fora até a divulgação.
 - **brapi.dev, plano gratuito:** 1 ativo por consulta e **sem dados de dividendos** (exigem Startup ou Pro).

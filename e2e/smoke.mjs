@@ -15,16 +15,20 @@ const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, de
 const page = await ctx.newPage();
 const errors = [];
 let expectCspBlock = false; // durante o teste da CSP, o bloqueio aparece no console e é o resultado esperado
-page.on('console', (m) => m.type() === 'error' && !(expectCspBlock && /Content Security Policy/i.test(m.text())) && errors.push(m.text()));
+// queda do canal ao vivo da Binance (rede externa) não é erro do app: a tela cai para a CoinGecko
+const externalNet = (t) => /WebSocket connection to 'wss:\/\/data-stream\.binance\.vision/.test(t);
+page.on('console', (m) => m.type() === 'error' && !(expectCspBlock && /Content Security Policy/i.test(m.text())) && !externalNet(m.text()) && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 const ok = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); console.log('FALHOU:', msg); } else console.log('ok:', msg); };
 const shot = (n) => page.screenshot({ path: `shots/${n}.png` });
-const tab = (n) => page.locator('nav.nav button', { hasText: n }).click();
+const tab = (n) => page.getByRole('navigation', { name: 'Principal' }).getByRole('button', { name: n, exact: true }).click();
 const seg = (n) => page.locator('.seg button', { hasText: n }).first().click();
 const text = async () => (await page.locator('body').innerText()).replace(/ /g, ' ');
 try {
   await page.goto('http://localhost:4173/');
   // onboarding
+  await page.waitForSelector('.logomark');
+  await shot('00-boas-vindas');
   await page.fill('input[name=saldo]', '2.500,00');
   await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByText('Agora não, entrar sem PIN').click();
@@ -54,11 +58,42 @@ try {
   ok((await text()).includes('R$ 1.700,00'), 'despesas do mês somam 1.700');
   await seg('Recorrentes');
   ok((await text()).includes('Aluguel'), 'despesa fixa virou recorrente');
+  await seg('Calendário');
+  await page.waitForTimeout(300);
+  ok((await text()).includes('Contas e faturas no mês') && (await text()).includes('Aluguel'), 'calendário financeiro mostra as contas do mês');
+  await shot('03b-calendario');
   await seg('Gráficos');
   await page.waitForTimeout(600);
   await shot('03-movimentacoes-graficos');
+  // tocar numa categoria abre os lançamentos dela; marcar e mover
+  await page.locator('.catrow').first().click();
+  ok(await page.locator('.full').isVisible() && (await page.locator('.full .selrow').count()) > 0, 'categoria abre com os lançamentos');
+  await page.locator('.full .selrow input[type=checkbox]').first().check();
+  ok(await page.getByText(/Mover 1 para/).isVisible(), 'marcar mostra a troca de categoria');
+  await page.waitForTimeout(300);
+  await shot('03c-categoria');
+  await page.locator('.full').getByRole('button', { name: 'Voltar', exact: true }).click();
+  await page.getByRole('button', { name: 'Grupos' }).click();
+  ok((await text()).includes('Moradia e contas'), 'gráficos por grupos');
+  await page.getByRole('button', { name: 'Categorias', exact: true }).click();
+  await seg('Recorrentes');
+  await page.waitForTimeout(300);
+  ok((await text()).includes('Parcelamentos em andamento'), 'recorrentes: assinaturas e parcelamentos');
+  await shot('03d-recorrentes');
   await seg('Lançamentos');
   await shot('02-movimentacoes');
+  // detalhe em tela própria
+  await page.locator('.screen .group button.row').filter({ hasText: /−|\+/ }).first().click();
+  ok(await page.getByRole('dialog', { name: 'Movimentação' }).isVisible(), 'detalhe da movimentação em tela própria');
+  await page.waitForTimeout(600);
+  await shot('02b-detalhe');
+  await page.getByRole('dialog', { name: 'Movimentação' }).getByRole('button', { name: 'Voltar', exact: true }).click();
+  // filtro por período
+  await page.getByRole('button', { name: 'Filtros' }).click();
+  await page.getByLabel('Período').selectOption('90');
+  await page.getByRole('button', { name: 'Aplicar' }).click();
+  ok(await page.getByRole('button', { name: /Últimos 90 dias/ }).isVisible(), 'filtro: últimos 90 dias');
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
 
   // plano: 3500 - 1500 = 2000 → 20% 400, 20% 400, livre 1200, restante 1000
   await tab('Planejamento');
@@ -102,6 +137,7 @@ try {
 
   // investimentos
   await tab('Investimentos');
+  await seg('Bolsa (B3)');
   const addOp = async (tk, type, q, p) => {
     await page.locator('.fab').click();
     await page.fill('input[name=ticker]', tk);
@@ -118,6 +154,12 @@ try {
   ok(t.includes('R$ 3.000,00') && t.includes('sem cotação'), 'carteira: investido 3.000 e ativos marcados "sem cotação" (sem dados inventados)');
   ok(t.includes('Desempenho') && t.includes('CDI') && t.includes('IPCA'), 'bolsa: quadro de desempenho comparando com CDI e IPCA');
   await shot('04-investimentos');
+  await seg('Visão geral');
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Seus investimentos hoje') && t.includes('Maiores posições') && t.includes('Fundos imobiliários'), 'visão geral dos investimentos');
+  await shot('04a-visao-geral');
+  await seg('Bolsa (B3)');
   // cripto: compra fracionada informando o total pago
   await seg('Cripto');
   await page.locator('.fab').click();
@@ -132,7 +174,8 @@ try {
   t = await text();
   ok(t.includes('Bitcoin') && t.includes('0,01 BTC') && t.includes('R$ 3.000,00') && t.includes('sem cotação'), 'cripto: 0,01 BTC por R$ 3.000, marcado "sem cotação"');
   await shot('04b-cripto');
-  await page.locator('.row', { hasText: 'Bitcoin' }).click();
+  ok(t.includes('Mercado agora') && t.includes('Ethereum') && t.includes('Dogecoin'), 'cripto: mercado agora com as principais moedas');
+  await page.locator('.row', { hasText: 'Bitcoin' }).first().click();
   t = await text();
   ok(t.includes('Preço médio') && t.includes('R$ 300.000,00'), 'cripto: detalhe com preço médio');
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
@@ -164,6 +207,8 @@ try {
 
   // chat
   await tab('Grefinacia AI');
+  await page.waitForTimeout(300);
+  await shot('09a-ai-inicio');
   await page.getByText('Quanto posso gastar até o próximo salário?').click();
   await page.waitForTimeout(500);
   t = await text();
@@ -229,13 +274,58 @@ try {
   await seg('Liberdade');
   await page.waitForTimeout(500);
   await shot('11-liberdade');
+  ok((await text()).includes('Meu futuro') && (await text()).includes('Para chegar a R$ 1 milhão'), 'liberdade: meu futuro e R$ 1 milhão');
+  await seg('Desafios');
+  await page.getByRole('button', { name: /7 dias sem comer fora/ }).click();
+  await page.waitForTimeout(400);
+  ok((await text()).includes('7 dias sem alimentação fora'), 'desafio começou');
+  await shot('11b-desafios');
 
   // início + notificações planejadas
   await tab('Início');
   await page.waitForTimeout(900);
   await shot('01-inicio');
+  // resto do Início (a tela rola dentro de .screen)
+  for (const [i, y] of [[2, 900], [3, 1800], [4, 2700], [5, 3600]]) {
+    await page.evaluate((top) => document.querySelector('.screen')?.scrollTo(0, top), y);
+    await page.waitForTimeout(250);
+    await shot(`01-inicio-${i}`);
+  }
+  await page.evaluate(() => document.querySelector('.screen')?.scrollTo(0, 0));
   t = await text();
-  ok(t.includes('Patrimônio total') && t.includes('Total de dívidas') && t.includes('R$ 10.000,00'), 'painel mostra patrimônio e dívidas');
+  ok(t.includes('Patrimônio total') && t.includes('Dívidas') && t.includes('R$ 10.000,00') && t.includes('Saúde financeira'), 'painel mostra patrimônio, dívidas e saúde financeira');
+  // ocultar valores (olho) e mostrar de novo
+  await page.getByRole('button', { name: 'Ocultar valores' }).click();
+  ok((await page.evaluate(() => document.documentElement.dataset.hide)) === '1', 'olho oculta os valores');
+  await page.getByRole('button', { name: 'Mostrar valores' }).click();
+  ok(t.includes('Gastos de') && t.includes('Previsão de'), 'início mostra gastos do mês e previsão do mês que vem');
+  // aba Dólar: conta em dólar e ETF
+  await seg('US$ Dólar');
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await page.locator('.sheet input').nth(0).fill('Conta Global Inter');
+  await page.locator('.sheet input').nth(1).fill('250,00');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await page.waitForTimeout(300);
+  t = await text();
+  ok(t.includes('Total em dólar') && t.includes('$250.00'), 'aba Dólar soma a conta em dólar');
+  await shot('01b-dolar');
+  // renda fixa em dólar (Porquinho): vencimento e estimativa
+  await page.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await page.locator('.sheet select').first().selectOption('deposito');
+  await page.getByLabel('Nome').fill('TD Meu Porquinho 90 dias');
+  await page.getByLabel('Valor de hoje (US$)').fill('10,95');
+  await page.getByLabel('Valor aplicado (US$)').fill('10,90');
+  await page.getByLabel('Rentabilidade (% ao ano)').fill('3,8');
+  await page.getByLabel('Aplicação').fill('2026-10-05');
+  await page.getByLabel('Vencimento').fill('2027-01-03');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await page.waitForTimeout(300);
+  t = await text();
+  ok(t.includes('03/01/2027') && t.includes('Rendeu até agora') && t.includes('No vencimento'), 'Porquinho: vencimento, rendimento e estimativa');
+  await page.locator('.deposit').scrollIntoViewIfNeeded();
+  await shot('01c-porquinho');
+  await seg('R$ Reais');
   // tema claro + persistência
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await seg('Claro');
@@ -246,6 +336,17 @@ try {
   t = await text();
   ok(t.includes('Só funciona no app Android') && t.includes('métricas de uso'), 'Gemini Nano: opção com aviso de métricas; no navegador avisa que é só no Android');
   await shot('12-gemini-nano');
+  await page.locator('.kv', { hasText: 'Conexão bancária (Meu Pluggy)' }).getByRole('button', { name: 'Abrir' }).click();
+  await page.waitForTimeout(400);
+  t = await text();
+  ok(t.includes('Chaves da sua aplicação na Pluggy') && t.includes('Um Item ID por banco'.replace('Um', 'um')) && t.includes('No navegador a conexão não funciona'), 'conexão bancária: tela com chaves, bancos e aviso de que só funciona no Android');
+  await page.fill('input[name=pluggy_item]', 'nao-e-um-id');
+  await page.getByRole('button', { name: 'Adicionar banco' }).click();
+  await page.waitForTimeout(300);
+  ok((await text()).includes('O Item ID tem o formato'), 'conexão bancária: recusa Item ID em formato errado');
+  await shot('13-conexao-bancaria');
+  await page.getByRole('button', { name: 'Voltar', exact: true }).last().click(); // fecha a tela de cima
+  await page.waitForTimeout(300);
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await page.waitForTimeout(500);
   await shot('12-inicio-claro');
@@ -253,7 +354,7 @@ try {
   await page.waitForSelector('nav.nav');
   await page.waitForTimeout(500);
   t = await text();
-  ok(t.includes('Total de dívidas') && (await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'dados e tema persistem após recarregar');
+  ok(t.includes('Patrimônio total') && t.includes('R$ 10.000,00') && (await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'dados e tema persistem após recarregar');
   // segurança: a política de conteúdo está no app compilado e bloqueia script embutido e eval
   const csp = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') ?? '');
   ok(csp.includes("script-src 'self'") && !csp.includes('unsafe-eval') && csp.includes("object-src 'none'"), 'CSP presente, sem eval e sem plugins');
@@ -276,6 +377,26 @@ try {
   ok(!tried.evalRan, 'eval é bloqueado pela CSP');
   // overflow horizontal
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'sem rolagem horizontal em 412px');
+  // celular pequeno (360px) e "reduzir movimento": nada vaza para os lados em nenhuma aba
+  await page.setViewportSize({ width: 360, height: 760 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const name of ['Início', 'Movimentações', 'Investimentos', 'Grefinacia AI', 'Planejamento']) {
+    await tab(name);
+    await page.waitForTimeout(250);
+    const wide = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      return [...document.querySelectorAll('.screen *')].filter((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0) return false;
+        // faixas que rolam de propósito (abas, atalhos, mercado) ficam de fora
+        if (el.closest('.seg, .shortcuts, .mstrip, .chips, .qchips')) return false;
+        return r.right > vw + 1;
+      }).map((el) => el.className || el.tagName).slice(0, 3);
+    });
+    ok(wide.length === 0, `360px sem vazamento em ${name}${wide.length ? ': ' + wide.join(', ') : ''}`);
+  }
+  await tab('Início');
+  await shot('99-inicio-360');
 } catch (e) { errors.push('EXCEPTION ' + e.message); await shot('erro'); }
 console.log('\nERROS:', errors.length ? errors : 'nenhum');
 await browser.close(); srv.kill();

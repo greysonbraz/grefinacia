@@ -19,10 +19,13 @@ import { brapiQuota, getUsage } from '../services/usage';
 import { PinPad } from './Lock';
 import { nanoDownload, nanoStatus, NANO_STATE_LABEL, type NanoStatus } from '../services/nano';
 import { ImportStatement } from './Import';
+import { BankConnect } from './Bank';
 
 const NOTIF: [keyof S['notifications']['types'], string, string][] = [
   ['salary', 'Salário', 'No dia do pagamento e ao confirmar o recebimento'],
   ['billsDue', 'Contas perto do vencimento', 'Dias antes e no dia'],
+  ['cardInvoice', 'Fatura do cartão', 'Vencimento (com o valor) e o dia antes de fechar'],
+  ['monthlyReport', 'Relatório do mês', 'No dia 1, quanto entrou, saiu e sobrou no mês que fechou'],
   ['overdue', 'Contas atrasadas', 'Lembrete diário por 3 dias'],
   ['dividendAnnounced', 'Proventos anunciados', 'Quando a fonte de dados trouxer um anúncio novo'],
   ['dividendSoon', 'Proventos perto do pagamento', 'Dias antes da data'],
@@ -43,8 +46,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [card, setCard] = useState<Card | 'new' | null>(null);
   const [cat, setCat] = useState<Category | 'new' | null>(null);
   const [transfer, setTransfer] = useState(false);
-  const accName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? 'conta removida';
+  const accName = (id: string) => (!id ? 'fora do app' : data.accounts.find((a) => a.id === id)?.name ?? 'conta removida');
   const [pin, setPin] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [bk, setBk] = useState<'create' | 'restore' | null>(null);
   const [perm, setPerm] = useState<string>('');
@@ -71,7 +75,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <div className="card" style={{ padding: '4px 14px' }}>
           {[...data.transfers].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 5).map((t) => (
             <div className="row" key={t.id}>
-              <div className="mid"><div className="t">{accName(t.fromAccountId)} → {accName(t.toAccountId)}</div><div className="s">{formatDateBR(t.date)}{t.note ? ' · ' + t.note : ''}</div></div>
+              <div className="mid"><div className="t">{accName(t.fromAccountId)} → {accName(t.toAccountId)}</div><div className="s">{formatDateBR(t.date)}{t.kind === 'investimento' ? ' · investimento' : t.kind === 'propria' ? ' · entre contas suas' : t.kind === 'cambio' ? ' · câmbio (dólar)' : ''}{t.note ? ' · ' + t.note : ''}</div></div>
               <div className="end num">{formatBRL(t.amountCents)}</div>
               <button className="btn danger sm" onClick={async () => { if (confirm('Desfazer esta transferência?')) { await remove('transfers', t.id); toast('Transferência desfeita'); } }}>Desfazer</button>
             </div>
@@ -82,6 +86,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ padding: '4px 14px' }}>
         {data.cards.map((c) => (<button className="row" key={c.id} onClick={() => setCard(c)}><div className="mid"><div className="t">{c.name}</div><div className="s">Fecha dia {c.closingDay} · vence dia {c.dueDay}{c.limitCents ? ` · usado ${formatBRL(cardUsedCents(c.id, data))} de ${formatBRL(c.limitCents)}` : ''}</div></div></button>))}
         <button className="row link" onClick={() => setCard('new')}>+ Adicionar cartão</button>
+        <SwitchRow title="Compra no cartão conta no mês da fatura" sub={st.cardMonth === 'compra' ? 'Desligado: conta no mês da compra' : 'O gasto entra no mês em que a fatura vence (quando o dinheiro sai). O que você compra agora aparece como previsão do mês da fatura.'} on={st.cardMonth !== 'compra'} onChange={(on) => void updateSettings({ cardMonth: on ? 'fatura' : 'compra' })} />
       </div>
       <div className="section">Categorias</div>
       <div className="card" style={{ padding: '4px 14px' }}>
@@ -111,7 +116,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <Field label="Avisar contas com"><select value={n.billsDaysBefore} onChange={(e) => setN({ billsDaysBefore: Number(e.target.value) })}>{[0, 1, 2, 3, 5, 7].map((d) => (<option key={d} value={d}>{d === 0 ? 'só no dia' : `${d} ${d === 1 ? 'dia' : 'dias'} antes`}</option>))}</select></Field>
         </div>
         <Field label="Avisar proventos com"><select value={n.dividendDaysBefore} onChange={(e) => setN({ dividendDaysBefore: Number(e.target.value) })}>{[1, 2, 3, 5].map((d) => (<option key={d} value={d}>{d} {d === 1 ? 'dia' : 'dias'} antes</option>))}</select></Field>
-        {NOTIF.map(([k, t, s]) => (<SwitchRow key={k} title={t} sub={s} on={n.types[k]} onChange={(on) => setN({ types: { ...n.types, [k]: on } })} />))}
+        {NOTIF.map(([k, t, s]) => (<SwitchRow key={k} title={t} sub={s} on={n.types[k] !== false} onChange={(on) => setN({ types: { ...n.types, [k]: on } })} />))}
         <Note>Lembretes com data (contas, salário, proventos) são agendados no Android e chegam com o app fechado. Alertas de orçamento e saldo são calculados quando você usa o app. Na Samsung, deixe o Grefinacia como "Não restrito" em Bateria para não atrasar avisos.</Note>
       </div>
 
@@ -145,9 +150,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div className="section">Bancos e pagamentos (Open Finance)</div>
       <div className="card">
         <div className="kv"><span>Importar extrato (OFX ou CSV)</span><button className="btn sm" onClick={() => setImporting(true)}>Importar</button></div>
-        <div className="kv"><span>Conexão bancária automática</span><b>Não disponível nesta versão</b></div>
+        <div className="kv"><span>Conexão bancária (Meu Pluggy){st.bank.items.length ? ` · ${st.bank.items.length} ${st.bank.items.length === 1 ? 'banco' : 'bancos'}` : ''}</span><button className="btn sm" onClick={() => setBankOpen(true)}>Abrir</button></div>
         <div className="kv"><span>Pagamentos automáticos</span><b>Não disponível nesta versão</b></div>
-        <Note>Ler saldos e extratos ou iniciar pagamentos exige contrato com um provedor autorizado pelo Banco Central (por exemplo Pluggy ou Belvo) e um servidor para guardar as credenciais do provedor. Enquanto isso não existir, você cadastra ou importa o extrato exportado pelo banco; o app só lembra dos vencimentos e nunca movimenta dinheiro. Nenhuma senha bancária é pedida ou armazenada.</Note>
+        <Note>A leitura de saldos e extratos usa o Meu Pluggy, gratuito para uso pessoal e regulado pelo Banco Central: você autoriza cada banco no Open Finance e pode revogar quando quiser. Pagamentos automáticos não existem: o app só lê e nunca movimenta dinheiro. Nenhuma senha bancária é pedida ou armazenada.</Note>
       </div>
 
       <div className="section">Backup e outros aparelhos</div>
@@ -173,6 +178,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {pin && <PinSheet onClose={() => setPin(false)} />}
       {bk && <BackupSheet mode={bk} onClose={() => setBk(null)} />}
       {importing && <ImportStatement onClose={() => setImporting(false)} />}
+      {bankOpen && <BankConnect onClose={() => setBankOpen(false)} />}
     </Full>
   );
 }
@@ -253,7 +259,7 @@ function CategoryForm({ c, onClose }: { c: Category | null; onClose: () => void 
       <Field label="Nome"><input name="categoria" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Pets" /></Field>
       <Field label="Ícone">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {CATEGORY_ICONS.map((i) => (<button key={i} type="button" className="iconbtn" aria-label={i} aria-pressed={icon === i} style={icon === i ? { borderColor: 'var(--gold)', color: 'var(--gold)' } : undefined} onClick={() => setIcon(i)}><Ico name={i} /></button>))}
+          {CATEGORY_ICONS.map((i) => (<button key={i} type="button" className="iconbtn" aria-label={i} aria-pressed={icon === i} style={icon === i ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : undefined} onClick={() => setIcon(i)}><Ico name={i} /></button>))}
         </div>
       </Field>
       <div className="btnrow">
@@ -265,7 +271,7 @@ function CategoryForm({ c, onClose }: { c: Category | null; onClose: () => void 
   );
 }
 
-function TransferForm({ onClose }: { onClose: () => void }) {
+export function TransferForm({ onClose }: { onClose: () => void }) {
   const data = useStore((s) => s.data);
   const today = useStore((s) => s.today);
   const accounts = data.accounts.filter((a) => !a.archived);

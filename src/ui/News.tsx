@@ -4,7 +4,7 @@ import { updateSettings, useStore } from '../state/store';
 import { NEWS_SOURCES, TOPIC_LABEL, type NewsItem, type NewsTopic } from '../domain/news';
 import { loadNews, type NewsResult } from '../services/news';
 import { isNative } from '../services/platform';
-import { Full, Note, Seg, SwitchRow } from './kit';
+import { Full, Note, Seg, SwitchRow, Skeleton } from './kit';
 
 const TOPICS = Object.entries(TOPIC_LABEL) as [NewsTopic, string][];
 
@@ -18,9 +18,9 @@ function when(iso: string): string {
 }
 
 /** Notícias do mercado financeiro: título, resumo e link para a matéria no site de origem. */
-export function News({ onClose }: { onClose: () => void }) {
+export function News({ onClose, initialTopic = 'economia' }: { onClose: () => void; initialTopic?: NewsTopic }) {
   const disabled = useStore((s) => s.settings.news.disabledSources);
-  const [topic, setTopic] = useState<NewsTopic>('economia');
+  const [topic, setTopic] = useState<NewsTopic>(initialTopic);
   const [res, setRes] = useState<NewsResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [sources, setSources] = useState(false);
@@ -47,7 +47,7 @@ export function News({ onClose }: { onClose: () => void }) {
           {NEWS_SOURCES.filter((s) => s.topic === topic).map((s) => (<SwitchRow key={s.id} title={s.name} on={!disabled.includes(s.id)} onChange={(on) => void toggle(s.id, on)} />))}
         </div>
       )}
-      {busy && <div className="empty">Buscando notícias…</div>}
+      {busy && (<div role="status" aria-label="Buscando notícias">{[0, 1, 2, 3].map((i) => (<div className="news-skel" key={i}><Skeleton w="40%" h={11} /><Skeleton h={16} /><Skeleton w="85%" h={16} /><Skeleton w="65%" h={12} /></div>))}</div>)}
       {res && !busy && res.items.length === 0 && (
         <div className="empty">{isNative() ? 'Não foi possível buscar notícias agora. Confira a internet e tente de novo em alguns minutos.' : 'As notícias só carregam no app Android (o navegador bloqueia a leitura dos sites).'}</div>
       )}
