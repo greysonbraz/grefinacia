@@ -42,9 +42,10 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
     if (read === null) return;
     const guess = readDocument(read, today);
     const content = guess.kind === 'td' ? `Li o print: ${guess.items.length === 1 ? 'um investimento' : `${guess.items.length} investimentos`} de renda fixa em dólar. Confira e confirme:`
+      : guess.kind === 'carteira' ? `Li ${guess.items.length === 1 ? 'um ativo' : `${guess.items.length} ativos`} da sua carteira. Confira e confirme:`
       : guess.kind === 'boleto' ? 'Li um boleto. Quer que eu crie a conta a pagar?'
       : guess.kind === 'receipt' ? 'Li um cupom ou nota. Quer lançar a despesa?'
-      : read.trim() ? 'Não reconheci este tipo de imagem ainda. Hoje eu entendo: prints do Time Deposit / Meu Porquinho do Inter, boletos e cupons fiscais. Abaixo, o que consegui ler.' : 'Não consegui ler texto nesta imagem. Tente um print ou uma foto mais nítida.';
+      : read.trim() ? 'Não reconheci este tipo de imagem ainda. Hoje eu entendo: prints do Time Deposit / Meu Porquinho do Inter, da carteira (B3 e EUA), boletos e cupons fiscais. Abaixo, o que consegui ler.' : 'Não consegui ler texto nesta imagem. Tente um print ou uma foto mais nítida.';
     setMsgs((m) => [...m, { role: 'user', content: '📎 Foto enviada' }, { role: 'assistant', content, doc: guess, read: guess.kind === 'unknown' ? read.slice(0, 600) : undefined }]);
     setTimeout(() => end.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
@@ -135,7 +136,7 @@ export function Assistant({ nav, initial }: { nav: Nav; initial?: string }) {
           {attach && <button className="attach-scrim" aria-label="Fechar menu" onClick={() => setAttach(false)} />}
           {attach && (
             <div className="attach-menu" role="menu">
-              <button role="menuitem" onClick={() => void sendPhoto()}><ImageIco size={18} /> Foto ou print<small>investimento, boleto, cupom</small></button>
+              <button role="menuitem" onClick={() => void sendPhoto()}><ImageIco size={18} /> Foto ou print<small>investimento, carteira, boleto, cupom</small></button>
               <button role="menuitem" onClick={() => { setAttach(false); nav.go('transactions', 'importar'); }}><FileUp size={18} /> Arquivo de extrato<small>OFX ou CSV do banco</small></button>
             </div>
           )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
-import type { DocGuess, TdGuess } from '../domain/docread';
+import type { DocGuess, HoldingGuess, TdGuess } from '../domain/docread';
 import { matchHolding } from '../domain/docread';
 import { formatUSD } from '../domain/dollar';
 import { suggestCategory } from '../domain/importer';
@@ -8,11 +8,14 @@ import { formatBRL } from '../lib/money';
 import { formatDateBR } from '../lib/dates';
 import { uid } from '../lib/ids';
 import type { PaymentMethod, Transaction, UsdHolding } from '../lib/types';
-import { defaultAccountId, saveTransaction, toast, upsert, useStore } from '../state/store';
+import { defaultAccountId, refreshUsQuotes, saveOperation, saveTransaction, toast, upsert, useStore } from '../state/store';
+import { computePositions } from '../domain/portfolio';
+import { formatQty } from '../lib/money';
 
 /** Cartão de confirmação do que a AI leu numa foto: nada é salvo sem o seu toque. */
 export function DocCard({ guess }: { guess: DocGuess }) {
   if (guess.kind === 'td') return <TdCard items={guess.items} />;
+  if (guess.kind === 'carteira') return <HoldingsCard items={guess.items} />;
   if (guess.kind === 'boleto') return <BoletoCard g={guess} />;
   if (guess.kind === 'receipt') return <ReceiptCard g={guess} />;
   return null;
@@ -115,5 +118,55 @@ function ReceiptCard({ g }: { g: Extract<DocGuess, { kind: 'receipt' }> }) {
         </>
       )}
     </div></div>
+  );
+}
+
+/** Print de carteira: B3 entra como compra pelo preço médio (data de hoje); EUA entra/atualiza na aba Exterior. */
+function HoldingsCard({ items }: { items: HoldingGuess[] }) {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const held = new Set(computePositions(data.assets, data.operations).filter((p) => p.quantity > 0).map((p) => p.asset.ticker));
+  const fromBank = new Set((data.bankInvestments ?? []).map((i) => (i.code ?? '').toUpperCase()));
+  const usHeld = (t: string) => (data.usdHoldings ?? []).find((h) => h.ticker === t);
+  const mark = (t: string) => setDone((d) => new Set(d).add(t));
+  const addB3 = async (g: HoldingGuess) => {
+    let a = data.assets.find((x) => x.ticker === g.ticker);
+    if (!a) { a = { id: uid('as_'), ticker: g.ticker, type: /11$/.test(g.ticker) ? 'fii' : 'acao' }; await upsert('assets', a); }
+    const err = await saveOperation({ id: uid('op_'), assetId: a.id, side: 'buy', quantity: g.quantity!, priceCents: g.avgPriceCents!, feesCents: 0, date: today, broker: 'Print da carteira', createdAt: Date.now() });
+    if (err) return toast(err, 'err');
+    mark(g.ticker);
+    toast(`${g.ticker} adicionado na Bolsa`);
+  };
+  const addUs = async (g: HoldingGuess) => {
+    const old = usHeld(g.ticker);
+    const cost = g.avgPriceCents ?? (g.valueCents && g.quantity ? Math.round(g.valueCents / g.quantity) : undefined);
+    await upsert('usdHoldings', { ...(old ?? {}), id: old?.id ?? uid('us_'), kind: old?.kind ?? 'acao', name: old?.name ?? g.ticker, ticker: g.ticker, quantity: g.quantity, avgCostUsdCents: cost, balanceUsdCents: undefined, updatedAt: new Date().toISOString() });
+    void refreshUsQuotes();
+    mark(g.ticker);
+    toast(old ? `${g.ticker} atualizado em Exterior (US$)` : `${g.ticker} adicionado em Exterior (US$)`);
+  };
+  return (
+    <div className="doccard">
+      {items.map((g) => {
+        const isB3 = g.market === 'b3';
+        const already = isB3 && (held.has(g.ticker) || fromBank.has(g.ticker));
+        const canB3 = isB3 && !!g.quantity && !!g.avgPriceCents;
+        const fmt = (c: number) => (isB3 ? formatBRL(c) : formatUSD(c));
+        return (
+          <div className="docitem" key={g.ticker}>
+            <div className="t">{g.ticker} <span className="mut" style={{ fontWeight: 400, fontSize: 12.5 }}>{isB3 ? 'B3' : 'EUA'}</span></div>
+            {g.quantity !== undefined && <div className="kv"><span>Quantidade</span><b className="num">{formatQty(g.quantity)}</b></div>}
+            {g.avgPriceCents !== undefined && <div className="kv"><span>Preço médio</span><b className="num">{fmt(g.avgPriceCents)}</b></div>}
+            {g.valueCents !== undefined && <div className="kv"><span>Valor no print</span><b className="num">{fmt(g.valueCents)}</b></div>}
+            {done.has(g.ticker) ? <div className="docdone"><Check size={16} /> Salvo</div>
+              : already ? <div className="hint">Já está no app{fromBank.has(g.ticker) ? ' (vem pelo banco)' : ''}: não adiciono de novo para não contar duas vezes.</div>
+              : isB3 ? (canB3 ? <><button className="btn sm" onClick={() => void addB3(g)}>Adicionar na Bolsa</button><div className="hint" style={{ marginTop: 6 }}>Entra como compra de hoje pelo preço médio. Se souber a data da compra, ajuste em Investimentos → Bolsa.</div></> : <div className="hint">Faltou o preço médio no print. Cadastre em Investimentos → Bolsa.</div>)
+              : g.quantity ? <><button className="btn sm" onClick={() => void addUs(g)}>{usHeld(g.ticker) ? 'Atualizar' : 'Adicionar'} em Exterior (US$)</button>{!g.avgPriceCents && <div className="hint" style={{ marginTop: 6 }}>Sem preço médio no print: o custo fica pelo valor de hoje (ajuste depois se quiser).</div>}</>
+              : <div className="hint">Faltou a quantidade no print.</div>}
+          </div>
+        );
+      })}
+    </div>
   );
 }

@@ -20,6 +20,7 @@ export interface TdGuess {
 
 export type DocGuess =
   | { kind: 'td'; items: TdGuess[] }
+  | { kind: 'carteira'; items: HoldingGuess[] }
   | { kind: 'boleto'; boleto: BoletoInfo }
   | { kind: 'receipt'; receipt: ReceiptGuess }
   | { kind: 'unknown' };
@@ -83,6 +84,8 @@ export function findBoleto(text: string, today: ISODate): BoletoInfo | null {
 export function readDocument(text: string, today: ISODate): DocGuess {
   const td = parseTimeDeposits(text, today);
   if (td.length) return { kind: 'td', items: td };
+  const h = parseHoldings(text);
+  if (h.length) return { kind: 'carteira', items: h };
   const b = findBoleto(text, today);
   if (b) return { kind: 'boleto', boleto: b };
   const r = parseReceipt(text, today);
@@ -108,4 +111,56 @@ export function depositOutlook(h: UsdHolding, today: ISODate): { daysLeft: numbe
   const atMaturityUsdCents = h.ratePct && bal ? Math.round(bal * Math.pow(1 + h.ratePct / 100, daysLeft / 365)) : undefined;
   const gainSoFarUsdCents = h.appliedUsdCents !== undefined && bal ? bal - h.appliedUsdCents : undefined;
   return { daysLeft, totalDays, pct, atMaturityUsdCents, gainSoFarUsdCents };
+}
+
+// ---------- Carteira (print da corretora/banco): ações, FIIs e ETFs da B3 e ações/ETFs dos EUA ----------
+export interface HoldingGuess {
+  market: 'b3' | 'us';
+  ticker: string;
+  quantity?: number;
+  avgPriceCents?: number; // preço médio (R$ na B3; centavos de dólar nos EUA)
+  valueCents?: number; // valor total mostrado
+}
+const B3 = /\b([A-Z]{4}(?:3|4|5|6|7|8|11|12|13|31|32|33|34|35))\b/;
+const US = /\b([A-Z]{1,5})\b/;
+const NOT_TICKER = new Set(['US', 'USD', 'BRL', 'BRA', 'TD', 'CDB', 'LCI', 'LCA', 'ETF', 'ETFS', 'REIT', 'REITS', 'IOF', 'IR', 'PM', 'R', 'S', 'SA', 'S/A', 'INC', 'LTD', 'CORP', 'TOTAL', 'VALOR', 'HOJE', 'DE', 'DO', 'DA', 'E', 'A', 'O', 'EM', 'NYSE', 'NASDAQ', 'B3', 'BDR', 'FII', 'FIIS', 'QTD', 'PRECO', 'PREÇO', 'MEDIO', 'MÉDIO', 'INTER', 'GLOBAL', 'APP', 'OK', 'VER', 'MAIS']);
+const num = (s: string) => Number(/,\d{1,2}$/.test(s) || /\.\d{3}/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s.replace(',', '.'));
+const BRL = /R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/;
+const USDV = /U\s?S\s?[$S5]\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/;
+const QTY = /(?:(?:qtd|quant(?:idade)?|cotas?|a[çc][õo]es|shares|unidades)\.?\s*:?\s*(\d+(?:[.,]\d+)?))|(?:(\d+(?:[.,]\d+)?)\s*(?:cotas?|a[çc][õo]es|shares|unidades|un\b))/i;
+const AVG = /(?:pre[çc]o\s*m[ée]dio|\bPM\b|avg\.?\s*price|custo\s*m[ée]dio)\s*:?\s*(?:R\$|U\s?S\s?\$)?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i;
+const moneyCents = (s: string) => { const v = s.replace(/[.,](\d{2})$/, '|$1').replace(/[.,]/g, '').replace('|', '.'); return Math.round(Number(v) * 100); };
+
+/** Ativos lidos de um print de carteira. Cada ativo pega quantidade, preço médio e valor nas linhas logo abaixo dele. */
+export function parseHoldings(text: string): HoldingGuess[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const isUsText = /U\s?S\s?\$|NYSE|NASDAQ|exterior|global/i.test(text);
+  const out: HoldingGuess[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < lines.length; i++) {
+    const b3 = lines[i].match(B3)?.[1];
+    let us: string | undefined;
+    if (!b3 && isUsText) {
+      const m = lines[i].match(US)?.[1];
+      // código americano: a linha é só o código (ou código + nome curto) e há valor em US$ por perto
+      if (m && !NOT_TICKER.has(m) && /^[A-Z]{1,5}(\s|$)/.test(lines[i]) && lines.slice(i, i + 4).some((l) => USDV.test(l))) us = m;
+    }
+    const ticker = b3 ?? us;
+    if (!ticker || seen.has(ticker)) continue;
+    // o bloco do ativo vai até o próximo código (ou 5 linhas)
+    let end = Math.min(i + 6, lines.length);
+    for (let k = i + 1; k < end; k++) if (B3.test(lines[k]) || (isUsText && /^[A-Z]{1,5}$/.test(lines[k]) && !NOT_TICKER.has(lines[k]))) { end = k; break; }
+    const blockLines = lines.slice(i, end);
+    const block = blockLines.join('\n').replace(ticker, '');
+    const q = block.match(QTY);
+    const qty = q ? num(q[1] ?? q[2]) : undefined;
+    const avg = block.match(AVG)?.[1];
+    // valor total: um valor em linha que não é a do preço médio
+    const valueLine = blockLines.find((l) => !AVG.test(l) && (b3 ? BRL : USDV).test(l));
+    const val = valueLine ? (b3 ? valueLine.match(BRL) : valueLine.match(USDV))?.[1] : undefined;
+    if (qty === undefined && !val) continue;
+    seen.add(ticker);
+    out.push({ market: b3 ? 'b3' : 'us', ticker, quantity: qty && qty > 0 ? qty : undefined, avgPriceCents: avg ? moneyCents(avg) : undefined, valueCents: val ? moneyCents(val) : undefined });
+  }
+  return out;
 }

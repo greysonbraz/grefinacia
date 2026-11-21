@@ -41,3 +41,27 @@ describe('renda fixa em dólar', () => {
     expect(matchHolding(list, 'TD 1 ano')).toBeUndefined();
   });
 });
+
+describe('print da carteira', () => {
+  it('B3: código, quantidade, preço médio e valor', async () => {
+    const { parseHoldings } = await import('../src/domain/docread');
+    const text = ['Minha carteira', 'BBAS3', 'Banco do Brasil', '4 ações', 'Preço médio R$ 22,50', 'R$ 84,72', 'SNEL11', '12 cotas', 'PM R$ 9,80', 'R$ 117,81'].join('\n');
+    expect(parseHoldings(text)).toEqual([
+      { market: 'b3', ticker: 'BBAS3', quantity: 4, avgPriceCents: 2250, valueCents: 8472 },
+      { market: 'b3', ticker: 'SNEL11', quantity: 12, avgPriceCents: 980, valueCents: 11781 },
+    ]);
+  });
+  it('EUA: código com valor em US$', async () => {
+    const { parseHoldings } = await import('../src/domain/docread');
+    const text = ['Investimentos no exterior', 'VOO', 'Vanguard S&P 500 ETF', 'Qtd 0,5', 'Preço médio US$ 480.00', 'US$ 265.30', 'AAPL', 'Apple Inc', '2 shares', 'US$ 450.10'].join('\n');
+    expect(parseHoldings(text)).toEqual([
+      { market: 'us', ticker: 'VOO', quantity: 0.5, avgPriceCents: 48000, valueCents: 26530 },
+      { market: 'us', ticker: 'AAPL', quantity: 2, avgPriceCents: undefined, valueCents: 45010 },
+    ]);
+  });
+  it('texto comum não vira carteira', async () => {
+    const { parseHoldings, readDocument } = await import('../src/domain/docread');
+    expect(parseHoldings('SUPERMERCADO BOM\nTOTAL R$ 52,30')).toEqual([]);
+    expect(readDocument('Conta Global US$ 5,47\nTD Meu Porquinho 90 dias\nUS$ 10,95', '2026-11-21').kind).toBe('td');
+  });
+});
