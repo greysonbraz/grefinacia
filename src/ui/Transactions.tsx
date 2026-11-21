@@ -482,7 +482,7 @@ function TxDetail({ id, onClose, onEdit, onOpen }: { id: string; onClose: () => 
         {t.dueDate && t.dueDate !== t.date && <div className="kv"><span>Vencimento</span><b>{formatDateBR(t.dueDate)}</b></div>}
         {t.paidDate && t.status === 'paid' && t.paidDate !== t.date && <div className="kv"><span>{t.type === 'income' ? 'Recebido em' : 'Pago em'}</span><b>{formatDateBR(t.paidDate)}</b></div>}
         <div className="kv"><span>Forma</span><b>{PAYMENT_LABEL[t.paymentMethod]}</b></div>
-        {card ? <div className="kv"><span>Cartão</span><b>{card}{t.dueDate ? ` · fatura ${monthShort(costMonth(t))}` : ''}</b></div> : acc && <div className="kv"><span>Conta</span><b>{acc}</b></div>}
+        {t.cardId ? <div className="kv"><span>Cartão</span><b>{card ?? 'cartão não encontrado'}{t.dueDate ? ` · fatura ${monthShort(costMonth(t))}` : ''}</b></div> : acc && <div className="kv"><span>Conta</span><b>{acc}</b></div>}
         <div className="kv"><span>Tipo</span><b>{KIND_LABEL[t.kind]}</b></div>
         {t.installment && <div className="kv"><span>Parcela</span><b>{t.installment.number} de {t.installment.total}</b></div>}
         {t.recurrenceId && <div className="kv"><span>Repete</span><b>todo mês</b></div>}

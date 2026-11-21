@@ -9,6 +9,16 @@ const t = (p: Partial<Transaction>): Transaction => ({ id: 'p' + n++, type: 'exp
 const base = (): AppData => { const d = emptyData(); d.cards = [card]; return d; };
 
 describe('parcelas do cartão vindas do banco', () => {
+  it('cartão recriado (id antigo) e vencimento igual à data da compra: acha o cartão e corrige', () => {
+    const d = base();
+    d.imports = [{ id: 'imp1', cardId: 'c' } as never];
+    d.transactions = Array.from({ length: 10 }, (_, i) => t({ description: `EBN TIKTOK SH SAO PAULO BRA (${i + 1}/10)`, cardId: 'velho', importId: 'imp1', dueDate: '2026-11-07', status: 'paid', paidDate: '2026-11-07' }));
+    const fix = repairCardInstallments(d, '2026-11-21').sort((a, b) => a.installment!.number - b.installment!.number);
+    expect(fix).toHaveLength(10);
+    expect(fix.every((x) => x.cardId === 'c')).toBe(true);
+    expect(fix.map((x) => x.dueDate).slice(0, 3)).toEqual(['2026-12-07', '2027-01-07', '2027-02-07']);
+    expect(fix.every((x) => x.status === 'pending')).toBe(true);
+  });
   it('lê "(n/m)" da descrição', () => {
     expect(parcelOf('EBN TIKTOK SH SAO P (2/10)')).toEqual({ n: 2, m: 10, base: 'EBN TIKTOK SH SAO P' });
     expect(parcelOf('Mercado')).toBeNull();

@@ -17,34 +17,51 @@ export function parcelOf(desc: string): { n: number; m: number; base: string } |
 
 const hash = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h.toString(36); };
 
-/** Lançamentos que precisam de ajuste (só muda vencimento, situação e a marca de parcela; nada é apagado). */
+/**
+ * Cartão da compra: o do lançamento; se ele não existir mais (cartão recriado), o da importação que trouxe o
+ * lançamento; senão, o único cartão cadastrado.
+ */
+function cardFor(data: AppData, t: Transaction) {
+  const byId = data.cards.find((c) => c.id === t.cardId);
+  if (byId) return byId;
+  const batch = t.importId ? data.imports.find((b) => b.id === t.importId) : undefined;
+  const byBatch = batch?.cardId ? data.cards.find((c) => c.id === batch.cardId) : undefined;
+  if (byBatch) return byBatch;
+  return data.cards.length === 1 ? data.cards[0] : undefined;
+}
+
+/** Lançamentos que precisam de ajuste (só muda vencimento, situação, cartão e a marca de parcela; nada é apagado). */
 export function repairCardInstallments(data: AppData, today: ISODate): Transaction[] {
   const groups = new Map<string, { t: Transaction; n: number; m: number; base: string }[]>();
   for (const t of data.transactions) {
-    if (t.type !== 'expense' || !t.cardId || t.source !== 'import') continue;
+    if (t.type !== 'expense' || t.source !== 'import' || (!t.cardId && t.paymentMethod !== 'credito')) continue;
     const p = parcelOf(t.description);
     if (!p) continue;
-    const key = `${t.cardId}|${p.base.toLowerCase()}|${t.date}|${p.m}`;
+    const key = `${t.cardId ?? ''}|${p.base.toLowerCase()}|${t.date}|${p.m}`;
     groups.set(key, [...(groups.get(key) ?? []), { t, ...p }]);
   }
   const out: Transaction[] = [];
   for (const [key, list] of groups) {
     // só quando o banco mandou várias parcelas da mesma compra com a mesma data (senão a data já é a da parcela)
     if (new Set(list.map((x) => x.n)).size < 2) continue;
-    const card = data.cards.find((c) => c.id === list[0].t.cardId);
+    const card = cardFor(data, list[0].t);
     if (!card) continue;
+    // vencimentos já diferentes entre si vieram da fatura do banco: ficam como estão
+    const dues = list.map((x) => x.t.dueDate ?? '');
+    const allSame = new Set(dues).size === 1;
     const first = cardInvoiceDue(card, list[0].t.date).dueDate;
     const groupId = 'imp:' + hash(key);
     for (const { t, n, m } of list) {
-      const naive = first;
-      const right = makeDate(addMonthsYM(monthOf(first), n - 1), card.dueDay);
       let next: Transaction = t;
       if (!t.installment) next = { ...next, installment: { groupId, number: n, total: m } };
-      // vencimento que veio da fatura do banco é mantido; o calculado pela data da compra é corrigido
-      if (n > 1 && (!t.dueDate || t.dueDate === naive)) {
-        next = right < today
-          ? { ...next, dueDate: right, status: 'paid', paidDate: right, accountId: card.accountId }
-          : { ...next, dueDate: right, status: 'pending', paidDate: undefined, accountId: undefined };
+      if (t.cardId !== card.id) next = { ...next, cardId: card.id };
+      if (allSame) {
+        const right = makeDate(addMonthsYM(monthOf(first), n - 1), card.dueDay);
+        if (t.dueDate !== right) {
+          next = right < today
+            ? { ...next, dueDate: right, status: 'paid', paidDate: right, accountId: card.accountId }
+            : { ...next, dueDate: right, status: 'pending', paidDate: undefined, accountId: undefined };
+        }
       }
       if (next !== t) out.push(next);
     }
