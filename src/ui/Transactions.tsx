@@ -15,6 +15,7 @@ import { uid } from '../lib/ids';
 import { suggestCategory } from '../domain/importer';
 import { PERIOD_LABEL, periodRange, txContext, type Period } from '../domain/period';
 import { categoryTxs, GROUPS, groupOf, recategorize } from '../domain/catview';
+import { parcelOf } from '../domain/installments';
 import { scanReceipt } from '../services/native';
 import { isNative } from '../services/platform';
 import { BrandMark, ChartBox, cssVar, Empty, Field, Full, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
@@ -50,6 +51,8 @@ export function Transactions({ initial }: { initial?: string } = {}) {
   const range = periodRange(extra.period, today, extra.from, extra.to);
   const extraCount = [extra.categoryId, extra.accountId, extra.cardId, extra.origin, range].filter(Boolean).length;
   const [detail, setDetail] = useState<Transaction | null>(null);
+  // parcela do cartão: a 1ª aparece no mês da compra; as outras, no mês da fatura delas (uma por mês, não todas juntas)
+  const listDate = (t: Transaction | Transfer) => ('installment' in t && t.cardId && t.installment && t.installment.number > 1 && t.dueDate ? t.dueDate : t.date);
   const items = useMemo<Item[]>(() => {
     const needle = q.trim().toLowerCase();
     const inScope = (date: string, text: string) => (needle ? text.toLowerCase().includes(needle) : true) && (range ? date >= range.from && date <= range.to : needle ? true : monthOf(date) === ym);
@@ -58,12 +61,12 @@ export function Transactions({ initial }: { initial?: string } = {}) {
       (!extra.categoryId || t.categoryId === extra.categoryId) && (!extra.accountId || t.accountId === extra.accountId) && (!extra.cardId || t.cardId === extra.cardId) &&
       (!extra.origin || (extra.origin === 'import' ? t.source === 'import' : t.source !== 'import'));
     const trOk = (t: Transfer) => (filter === 'todas' || filter === 'transferencias') && !extra.categoryId && !extra.cardId && (!extra.accountId || t.fromAccountId === extra.accountId || t.toAccountId === extra.accountId) && (!extra.origin || (extra.origin === 'import' ? !!t.importId : !t.importId));
-    const tx: Item[] = filter === 'transferencias' ? [] : data.transactions.filter((t) => inScope(t.date, t.description) && txOk(t)).map((t) => ({ kind: 'tx', t }));
+    const tx: Item[] = filter === 'transferencias' ? [] : data.transactions.filter((t) => inScope(listDate(t), t.description) && txOk(t)).map((t) => ({ kind: 'tx', t }));
     const tr: Item[] = (data.transfers ?? []).filter((t) => inScope(t.date, t.note ?? '') && trOk(t)).map((t) => ({ kind: 'tr', t }));
-    return [...tx, ...tr].sort((a, b) => b.t.date.localeCompare(a.t.date) || b.t.createdAt - a.t.createdAt);
+    return [...tx, ...tr].sort((a, b) => listDate(b.t).localeCompare(listDate(a.t)) || b.t.createdAt - a.t.createdAt);
   }, [data.transactions, data.transfers, ym, filter, q, extra, range?.from, range?.to]);
   const invoices = useMemo(() => openInvoices(data), [data]);
-  const groups = useMemo(() => { const m = new Map<string, Item[]>(); for (const it of items) m.set(it.t.date, [...(m.get(it.t.date) ?? []), it]); return [...m.entries()]; }, [items]);
+  const groups = useMemo(() => { const m = new Map<string, Item[]>(); for (const it of items) m.set(listDate(it.t), [...(m.get(listDate(it.t)) ?? []), it]); return [...m.entries()]; }, [items]);
   const dayNet = (list: Item[]) => list.reduce((s, it) => (it.kind === 'tx' ? s + (it.t.type === 'income' ? it.t.amountCents : -it.t.amountCents) : s), 0);
 
   return (
@@ -147,7 +150,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
                     return (
                       <button className="row" key={t.id} onClick={() => setDetail(t)}>
                         {t.categoryId === 'assinaturas' || t.kind === 'assinatura' ? <BrandMark name={t.description} /> : <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>}
-                        <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
+                        <div className="mid"><div className="t">{t.installment && t.installment.total > 1 ? <span className="xbadge">{t.installment.number === 1 ? `${t.installment.total}x` : `${t.installment.number}/${t.installment.total}`}</span> : null}{parcelOf(t.description)?.base ?? t.description}</div><div className="s">{t.installment && t.installment.number === 1 && t.installment.total > 1 ? `${t.installment.total}x de ${formatBRL(t.amountCents)} · ` : ''}{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
                         <div className="end">
                           <div className={'num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
                           {t.status === 'pending' && <span className={'badge ' + (late ? 'bad' : 'warn')}>{late ? 'atrasada' : t.type === 'income' ? 'a receber' : `vence ${formatDayMonth(effectiveDue(t))}`}</span>}

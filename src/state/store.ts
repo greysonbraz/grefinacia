@@ -1,3 +1,4 @@
+import { repairCardInstallments } from '../domain/installments';
 import { useSyncExternalStore } from 'react';
 import type { AppData, Cents, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, Transfer, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
@@ -260,6 +261,7 @@ export async function init(): Promise<void> {
     await db.setMeta('divAutoV1', true);
   }
   await rollDay();
+  await repairInstallments();
   if (isNative()) void autoRefreshDividends().then(() => autoSyncBank()).then(() => ((state.data.usdHoldings ?? []).length || (state.data.bankInvestments ?? []).some((i) => i.currency === 'USD') ? refreshDollar() : undefined)).catch(() => undefined);
 }
 
@@ -814,6 +816,7 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
       investReport.push({ bank: bankName, count: 0, foreign: 0, error: e instanceof Error ? e.message : String(e) });
     }
   }
+  if (imported) await repairInstallments();
   await saveBank({ bills, investReport, report, lastAttempt: attempt, lastSyncByAccount: lastByAcc, ...(errors.length && !accountsDone ? { error: errors[0] } : { lastOkAt: attempt, error: undefined }) });
   return { imported, accounts: accountsDone, errors };
 }
@@ -993,4 +996,13 @@ export async function wipeAll(): Promise<void> {
   await db.setMeta(BANK_META, { items: {}, accounts: [], lastSyncByAccount: {} });
   set({ data: d, settings: DEFAULT_SETTINGS, locked: false, bank: { items: {}, accounts: [], lastSyncByAccount: {} } });
   applyTheme('dark');
+}
+
+/** Parcelas do cartão vindas do banco: cada uma na sua fatura (cópia de segurança antes, se algo mudar). */
+export async function repairInstallments(): Promise<number> {
+  const fix = repairCardInstallments(state.data, state.today);
+  if (!fix.length) return 0;
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  await upsert('transactions', fix);
+  return fix.length;
 }
