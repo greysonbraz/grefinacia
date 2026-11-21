@@ -419,3 +419,27 @@ div.bigamount { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line
 .docitem .kv { padding: 5px 0; font-size: 13.5px; }
 .docitem .btn { margin-top: 8px; width: 100%; }
 .docdone { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--good); font-weight: 600; font-size: 14px; }
+
+.nowrap { white-space: nowrap; flex: none; }
+
+/* marca das assinaturas */
+.brandmark { flex: none; border-radius: 28%; }
+.row .brandmark { width: 40px; height: 40px; }
+.ghead-total { font-size: 15px; font-weight: 600; color: var(--muted); }
+
+/* gráficos: categorias e grupos tocáveis */
+.catlist { display: flex; flex-direction: column; margin-top: 12px; }
+.catrow { display: grid; grid-template-columns: auto 1fr auto auto 16px; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 2px; border-bottom: 1px solid var(--line); text-align: left; color: var(--text); font-size: 14px; }
+.catrow .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catrow .mut { font-size: 13px; } .catrow svg { color: var(--muted); }
+.catrow:active { background: var(--surface2); }
+.catrow.sub { grid-template-columns: 16px 1fr auto 16px; padding-left: 12px; font-size: 13.5px; }
+.gic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: #0b0914; }
+.catgroup.open .chev { transform: rotate(180deg); }
+.catsub { display: flex; flex-direction: column; padding: 2px 0 8px; } .catsub .link { align-self: flex-start; margin: 6px 0 0 12px; min-height: 40px; }
+/* lista da categoria com marcação */
+.selbar { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 8px; } .selbar .mut { font-size: 13px; }
+.selrow { gap: 0; padding: 0; } .selrow .check { display: grid; place-items: center; width: 48px; min-height: 56px; flex: none; }
+.selrow .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.selmain { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 56px; padding: 8px 14px 8px 0; text-align: left; color: inherit; }
+.movebar { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; margin: 12px -4px 0; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35); }

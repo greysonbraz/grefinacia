@@ -11,7 +11,8 @@ import { accountBalance } from '../../domain/ledger';
 import { capFirst, formatDayMonth, monthShort, relativeDays } from '../../lib/dates';
 import { formatBRL, formatPct, pctChange } from '../../lib/money';
 import type { Nav } from '../App';
-import { ChartBox, CountMoney, cssVar, Delta, Legend, Seg } from '../kit';
+import { BrandMark, ChartBox, CountMoney, cssVar, Delta, Legend, Seg } from '../kit';
+import { monthSubscriptions } from '../../domain/catview';
 
 /** Patrimônio: o número principal da tela, a evolução e do que ele é feito. */
 export function Hero({ o }: { o: Overview }) {
@@ -127,6 +128,28 @@ export function Upcoming({ nav }: { nav: Nav }) {
             </button>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+/** Assinaturas do mês com a marca de cada serviço (desenho próprio do app). */
+export function Subscriptions({ nav }: { nav: Nav }) {
+  const data = useStore((s) => s.data);
+  const today = useStore((s) => s.today);
+  const subs = useMemo(() => monthSubscriptions(data, today), [data, today]);
+  if (!subs.items.length) return null;
+  return (
+    <section aria-labelledby="h-assinaturas">
+      <div className="ghead"><h2 id="h-assinaturas">Assinaturas do mês</h2><span className="num ghead-total">{formatBRL(subs.totalCents)}</span></div>
+      <div className="group">
+        {subs.items.slice(0, 6).map((s) => (
+          <button key={s.key} className="row" onClick={() => nav.go('ai', 'raiox')}>
+            <BrandMark name={s.name} />
+            <div className="mid"><div className="t">{s.name}</div><div className="s">{formatDayMonth(s.date)} · {s.paid ? 'pago' : relativeDays(s.date, today)}</div></div>
+            <div className="end"><div className="num">{formatBRL(s.cents)}</div></div>
+          </button>
+        ))}
       </div>
     </section>
   );

@@ -65,6 +65,17 @@ try {
   await seg('Gráficos');
   await page.waitForTimeout(600);
   await shot('03-movimentacoes-graficos');
+  // tocar numa categoria abre os lançamentos dela; marcar e mover
+  await page.locator('.catrow').first().click();
+  ok(await page.locator('.full').isVisible() && (await page.locator('.full .selrow').count()) > 0, 'categoria abre com os lançamentos');
+  await page.locator('.full .selrow input[type=checkbox]').first().check();
+  ok(await page.getByText(/Mover 1 para/).isVisible(), 'marcar mostra a troca de categoria');
+  await page.waitForTimeout(300);
+  await shot('03c-categoria');
+  await page.locator('.full').getByRole('button', { name: 'Voltar', exact: true }).click();
+  await page.getByRole('button', { name: 'Grupos' }).click();
+  ok((await text()).includes('Moradia e contas'), 'gráficos por grupos');
+  await page.getByRole('button', { name: 'Categorias', exact: true }).click();
   await seg('Lançamentos');
   await shot('02-movimentacoes');
   // detalhe em tela própria

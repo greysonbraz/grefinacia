@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Chart, LineController, BarController, DoughnutController, LineElement, PointElement, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Filler, type ChartConfiguration } from 'chart.js';
 import * as L from 'lucide-react';
+import { brandMark } from '../domain/catview';
 import { formatBRL, formatCompact, formatPct } from '../lib/money';
 import { addMonthsYM, capFirst, monthLong } from '../lib/dates';
 import { quoteFreshness } from '../domain/market';
@@ -245,4 +246,27 @@ export function LogoMark({ size = 44 }: { size?: number }) {
 /** Logotipo completo: marca + nome. */
 export function Logo({ size = 44 }: { size?: number }) {
   return <div className="logo"><LogoMark size={size} /><span>Gre<i>finacia</i></span></div>;
+}
+
+/**
+ * Marca de um serviço (assinaturas) no desenho do Grefinacia: quadrado arredondado na cor do serviço, com brilho
+ * e a letra em branco, e o pontinho lilás da nossa marca. Não usa logos de terceiros.
+ */
+export function BrandMark({ name, size = 40 }: { name: string; size?: number }) {
+  const b = brandMark(name);
+  const id = 'bm' + b.color.slice(1);
+  const dark = b.color === '#ffe600' || b.color === '#f5b301';
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden className="brandmark">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={b.color} /><stop offset="1" stopColor={b.color} stopOpacity="0.62" /></linearGradient>
+        <radialGradient id={id + 'g'} cx="0.28" cy="0.2" r="0.75"><stop offset="0" stopColor="#fff" stopOpacity="0.35" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+      </defs>
+      <rect width="100" height="100" rx="28" fill="#0b0914" />
+      <rect width="100" height="100" rx="28" fill={`url(#${id})`} />
+      <rect width="100" height="100" rx="28" fill={`url(#${id}g)`} />
+      <text x="50" y="50" dy="0.35em" textAnchor="middle" fontSize={b.letter.length > 1 ? 40 : 52} fontWeight="750" fill={dark ? '#1a1300' : '#fff'} fontFamily="inherit">{b.letter}</text>
+      <circle cx="81" cy="19" r="7" fill="#f5d0fe" stroke="#0b0914" strokeWidth="3" />
+    </svg>
+  );
 }

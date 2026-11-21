@@ -45,7 +45,7 @@ export function InvestOverview({ go }: { go: (sub: string) => void }) {
       </div>
 
       {v.bankGainCents !== null && (
-        <div className="group"><div className="kv"><span>Rendeu nos bancos (sobre o aplicado)</span><b className={'num ' + (v.bankGainCents >= 0 ? 'pos' : 'neg')}>{formatBRL(v.bankGainCents)}</b></div></div>
+        <div className="group"><div className="kv"><span>Rendeu nos bancos (sobre o aplicado)</span><b className={'num nowrap ' + (v.bankGainCents >= 0 ? 'pos' : 'neg')}>{formatBRL(v.bankGainCents)}</b></div></div>
       )}
 
       <div className="ghead"><h2>Maiores posições</h2></div>

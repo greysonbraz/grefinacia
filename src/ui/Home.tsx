@@ -12,7 +12,7 @@ import type { Nav } from './App';
 import { News } from './News';
 import { DollarHome } from './Dollar';
 import { Money, Seg } from './kit';
-import { Health, Hero, InvestSummary, MarketStrip, MonthPulse, Shortcuts, Upcoming } from './home/Blocks';
+import { Health, Hero, InvestSummary, MarketStrip, MonthPulse, Shortcuts, Subscriptions, Upcoming } from './home/Blocks';
 import { NextMonthCard, SpendingCard } from './home/Month';
 import { Analyses } from './home/Analyses';
 
@@ -90,6 +90,7 @@ export function Home({ nav }: { nav: Nav }) {
           <MonthPulse o={o} nav={nav} />
           <SpendingCard onOpen={() => nav.go('transactions')} />
           <Upcoming nav={nav} />
+          <Subscriptions nav={nav} />
           <NextMonthCard onOpen={() => nav.go('planning', 'salario')} />
           <InvestSummary o={o} nav={nav} />
           <Health />

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronRight, SlidersHorizontal, X, ScanText } from 'lucide-react';
+import { Plus, Search, Repeat, CreditCard, FileUp, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronDown, ChevronRight, SlidersHorizontal, X, ScanText } from 'lucide-react';
 import { ImportStatement } from './Import';
 import { CardBills } from './CardBills';
 import { Agenda } from './Agenda';
 import { TransferForm } from './Settings';
-import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, remove, rollDay, saveTransaction, toast, upsert, useStore } from '../state/store';
+import { defaultAccountId, deleteRecurrence, deleteTransaction, markPaid, payInvoice, remove, rollDay, saveTransaction, toast, updateSettings, upsert, useStore } from '../state/store';
 import type { PaymentMethod, Transaction, Transfer, TxKind, TxType } from '../lib/types';
 import { KIND_DEFAULT_CATEGORY, KIND_LABEL, PAYMENT_LABEL } from '../lib/categories';
 import { formatBoletoLine, parseBoleto } from '../domain/boleto';
@@ -14,9 +14,10 @@ import { buildInstallments, costMonth, effectiveDue, monthSummary, openInvoices 
 import { uid } from '../lib/ids';
 import { suggestCategory } from '../domain/importer';
 import { PERIOD_LABEL, periodRange, txContext, type Period } from '../domain/period';
+import { categoryTxs, GROUPS, groupOf, recategorize } from '../domain/catview';
 import { scanReceipt } from '../services/native';
 import { isNative } from '../services/platform';
-import { ChartBox, cssVar, Empty, Field, Full, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
+import { BrandMark, ChartBox, cssVar, Empty, Field, Full, Ico, Legend, MoneyInput, MonthNav, Seg, seriesColors, Sheet, SwitchRow } from './kit';
 
 type Filter = 'todas' | 'receitas' | 'despesas' | 'transferencias' | 'pendentes';
 const INCOME_KINDS: TxKind[] = ['salario', 'hora_extra', 'adicional', 'outro_rendimento'];
@@ -145,7 +146,7 @@ export function Transactions({ initial }: { initial?: string } = {}) {
                     const late = t.type === 'expense' && t.status === 'pending' && effectiveDue(t) < today;
                     return (
                       <button className="row" key={t.id} onClick={() => setDetail(t)}>
-                        <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>
+                        {t.categoryId === 'assinaturas' || t.kind === 'assinatura' ? <BrandMark name={t.description} /> : <div className="ic"><Ico name={cat(t.categoryId)?.icon ?? 'Circle'} size={18} /></div>}
                         <div className="mid"><div className="t">{t.description}</div><div className="s">{cat(t.categoryId)?.name ?? '—'} · {PAYMENT_LABEL[t.paymentMethod]}{mode === 'fatura' && t.cardId && t.dueDate && monthOf(t.dueDate) !== monthOf(t.date) ? ` · fatura ${monthShort(monthOf(t.dueDate))}` : ''}</div></div>
                         <div className="end">
                           <div className={'num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
@@ -197,7 +198,15 @@ function TxCharts({ ym }: { ym: string }) {
   const total = ents.reduce((s, e) => s + e[1], 0);
   const top = ents.slice(0, 7);
   const rest = ents.slice(7).reduce((s, e) => s + e[1], 0);
-  const items = [...top.map(([id, v], i) => ({ label: name(id), v, color: pal[i] })), ...(rest > 0 ? [{ label: 'Outras', v: rest, color: cssVar('--sother') }] : [])];
+  const items = [...top.map(([id, v], i) => ({ label: name(id), v, color: pal[i], ids: [id] })), ...(rest > 0 ? [{ label: 'Outras', v: rest, color: cssVar('--sother'), ids: ents.slice(7).map((e) => e[0]) }] : [])];
+  const [by, setBy] = useState<'cat' | 'grupo'>('cat');
+  const [open, setOpen] = useState<{ title: string; ids: string[] } | null>(null);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const groups = GROUPS.map((g, i) => {
+    const cats = ents.filter(([id]) => groupOf(id) === g.id);
+    return { ...g, v: cats.reduce((s, e) => s + e[1], 0), cats, color: pal[i % pal.length] };
+  }).filter((g) => g.v > 0).sort((a, b) => b.v - a.v);
+  const pct = (v: number) => ((v / total) * 100).toFixed(1).replace('.', ',') + '%';
   return (
     <>
       <Seg value={mode} onChange={setMode} options={[['mensal', 'Este mês'], ['trimestre', 'Trimestre'], ['anual', '12 meses']]} />
@@ -205,13 +214,43 @@ function TxCharts({ ym }: { ym: string }) {
         <h2>Onde você gasta mais</h2>
         {items.length === 0 ? <Empty title="Sem despesas" text="Não há despesas no período." /> : (
           <>
-            <ChartBox kind="doughnut" labels={items.map((i) => i.label)} series={[{ label: 'Gastos', data: items.map((i) => i.v) }]} colors={items.map((i) => i.color)} />
-            <table className="tbl" style={{ marginTop: 12 }}>
-              <tbody>{items.map((i) => (<tr key={i.label}><td><i className="dot" style={{ background: i.color }} />{i.label}</td><td className="mut">{((i.v / total) * 100).toFixed(1).replace('.', ',')}%</td><td className="num">{formatBRL(i.v)}</td></tr>))}</tbody>
-            </table>
+            <Seg value={by} onChange={setBy} options={[['cat', 'Categorias'], ['grupo', 'Grupos']]} />
+            {by === 'cat' ? (
+              <>
+                <ChartBox kind="doughnut" labels={items.map((i) => i.label)} series={[{ label: 'Gastos', data: items.map((i) => i.v) }]} colors={items.map((i) => i.color)} onPick={(k) => setOpen({ title: items[k].label, ids: items[k].ids })} />
+                <div className="catlist">
+                  {items.map((i) => (
+                    <button key={i.label} className="catrow" onClick={() => setOpen({ title: i.label, ids: i.ids })}>
+                      <i className="dot" style={{ background: i.color }} /><span className="l">{i.label}</span><span className="mut">{pct(i.v)}</span><span className="num">{formatBRL(i.v)}</span><ChevronRight size={16} aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <ChartBox kind="doughnut" labels={groups.map((g) => g.name)} series={[{ label: 'Gastos', data: groups.map((g) => g.v) }]} colors={groups.map((g) => g.color)} onPick={(k) => setOpenGroup(groups[k].id)} />
+                <div className="catlist">
+                  {groups.map((g) => (
+                    <div key={g.id} className={'catgroup' + (openGroup === g.id ? ' open' : '')}>
+                      <button className="catrow" aria-expanded={openGroup === g.id} onClick={() => setOpenGroup(openGroup === g.id ? null : g.id)}>
+                        <span className="gic" style={{ background: g.color }}><Ico name={g.icon} size={16} /></span><span className="l">{g.name}</span><span className="mut">{pct(g.v)}</span><span className="num">{formatBRL(g.v)}</span><ChevronDown size={16} aria-hidden className="chev" />
+                      </button>
+                      {openGroup === g.id && (
+                        <div className="catsub">
+                          {g.cats.map(([id, v]) => (<button key={id} className="catrow sub" onClick={() => setOpen({ title: name(id), ids: [id] })}><Ico name={data.categories.find((c) => c.id === id)?.icon ?? 'Circle'} size={16} /><span className="l">{name(id)}</span><span className="num">{formatBRL(v)}</span><ChevronRight size={16} aria-hidden /></button>))}
+                          {g.cats.length > 1 && <button className="link" onClick={() => setOpen({ title: g.name, ids: g.cats.map(([id]) => id) })}>Ver todos os lançamentos do grupo</button>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="hint" style={{ marginTop: 8 }}>Toque numa categoria para ver os lançamentos e trocar de categoria o que estiver no lugar errado.</div>
           </>
         )}
       </div>
+      {open && <CategoryView title={open.title} ids={open.ids} months={months} onClose={() => setOpen(null)} />}
       {mode !== 'mensal' && (
         <div className="card">
           <h2>Receitas e despesas por mês</h2>
@@ -429,7 +468,7 @@ function TxDetail({ id, onClose, onEdit, onOpen }: { id: string; onClose: () => 
   return (
     <Full title="Movimentação" onBack={onClose} action={<button className="link" onClick={() => onEdit(t)}>Editar</button>}>
       <div className="txhead">
-        <span className={'txic ' + (t.type === 'income' ? 'in' : 'out')} aria-hidden><Ico name={c?.icon ?? 'Circle'} size={26} /></span>
+        {t.categoryId === 'assinaturas' || t.kind === 'assinatura' ? <BrandMark name={t.description} size={56} /> : <span className={'txic ' + (t.type === 'income' ? 'in' : 'out')} aria-hidden><Ico name={c?.icon ?? 'Circle'} size={26} /></span>}
         <div className="txdesc">{t.description}</div>
         <div className={'bigamount num ' + (t.type === 'income' ? 'pos' : '')}>{t.type === 'income' ? '+' : '−'}{formatBRL(t.amountCents)}</div>
         <span className={'badge ' + (t.status === 'paid' ? 'good' : late ? 'bad' : 'warn')}>{status}</span>
@@ -467,6 +506,69 @@ function TxDetail({ id, onClose, onEdit, onOpen }: { id: string; onClose: () => 
         <button className="btn ghost" onClick={() => onEdit(t)}>Editar</button>
         <button className="btn danger" onClick={async () => { if (typeof window.confirm === 'function' && !window.confirm('Excluir esta movimentação?')) return; await deleteTransaction(t); toast('Movimentação excluída'); onClose(); }}>Excluir</button>
       </div>
+    </Full>
+  );
+}
+
+/** Lançamentos de uma categoria (ou grupo) no período, com troca de categoria em lote e regra aprendida. */
+function CategoryView({ title, ids, months, onClose }: { title: string; ids: string[]; months: string[]; onClose: () => void }) {
+  const data = useStore((s) => s.data);
+  const rules = useStore((s) => s.settings.importRules);
+  const list = useMemo(() => categoryTxs(data, ids, months), [data, ids, months]);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [target, setTarget] = useState('');
+  const [learn, setLearn] = useState(true);
+  const [detail, setDetail] = useState<Transaction | null>(null);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const total = list.reduce((s, t) => s + t.amountCents, 0);
+  const expenseCats = data.categories.filter((c) => c.type === 'expense');
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const apply = async () => {
+    const chosen = list.filter((t) => sel.has(t.id));
+    if (!chosen.length || !target) return;
+    const r = recategorize(chosen, target, rules ?? [], learn);
+    if (r.txs.length) await upsert('transactions', r.txs);
+    if (learn) await updateSettings({ importRules: r.rules });
+    toast(`${chosen.length} ${chosen.length === 1 ? 'lançamento foi' : 'lançamentos foram'} para ${expenseCats.find((c) => c.id === target)?.name ?? 'a categoria'}`);
+    setSel(new Set());
+  };
+  const period = months.length === 1 ? monthShort(months[0]) : `${monthShort(months[0])} a ${monthShort(months[months.length - 1])}`;
+  return (
+    <Full title={title} onBack={onClose}>
+      <div className="txhead" style={{ paddingTop: 0 }}>
+        <div className="txdesc">{period} · {list.length} {list.length === 1 ? 'lançamento' : 'lançamentos'}</div>
+        <div className="bigamount num">{formatBRL(total)}</div>
+      </div>
+      {list.length === 0 ? <Empty title="Nada aqui" text="Sem despesas nesta categoria no período." /> : (
+        <>
+          <div className="selbar">
+            <button className="link" onClick={() => setSel(sel.size === list.length ? new Set() : new Set(list.map((t) => t.id)))}>{sel.size === list.length ? 'Desmarcar todos' : 'Marcar todos'}</button>
+            <span className="mut">{sel.size ? `${sel.size} marcados` : 'Marque para trocar de categoria'}</span>
+          </div>
+          <div className="group">
+            {list.map((t) => (
+              <div className="row selrow" key={t.id}>
+                <label className="check"><input type="checkbox" checked={sel.has(t.id)} onChange={() => toggle(t.id)} aria-label={`Marcar ${t.description}`} /></label>
+                <button className="selmain" onClick={() => setDetail(t)}>
+                  <div className="mid"><div className="t">{t.description}</div><div className="s">{formatDateBR(t.date)} · {data.categories.find((c) => c.id === t.categoryId)?.name ?? '—'}</div></div>
+                  <div className="end"><div className="num">−{formatBRL(t.amountCents)}</div></div>
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {sel.size > 0 && (
+        <div className="movebar">
+          <label className="field" style={{ margin: 0 }}><span>Mover {sel.size} para</span>
+            <select value={target} onChange={(e) => setTarget(e.target.value)}><option value="">Escolha a categoria</option>{expenseCats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select>
+          </label>
+          <SwitchRow title="Lembrar para os próximos" sub="Descrições parecidas já entram nessa categoria" on={learn} onChange={setLearn} />
+          <button className="btn" disabled={!target} onClick={() => void apply()}>Mover</button>
+        </div>
+      )}
+      {detail && <TxDetail id={detail.id} onClose={() => setDetail(null)} onEdit={(t) => { setDetail(null); setEditing(t); }} onOpen={setDetail} />}
+      {editing && <TxForm tx={editing} onClose={() => setEditing(null)} />}
     </Full>
   );
 }

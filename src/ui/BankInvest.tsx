@@ -66,7 +66,7 @@ export function BankInvestments() {
   );
 }
 
-function Row({ i, open, onToggle }: { i: BankInvestment; open: boolean; onToggle: () => void }) {
+export function Row({ i, open, onToggle }: { i: BankInvestment; open: boolean; onToggle: () => void }) {
   const rate = rateLabel(i);
   const profit = i.originalCents ? i.balanceCents - i.originalCents : null;
   return (
@@ -88,5 +88,23 @@ function Row({ i, open, onToggle }: { i: BankInvestment; open: boolean; onToggle
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Investimentos do banco que pertencem a uma aba (Bolsa ou Renda fixa): aparecem lá também, como estão no banco.
+ * O patrimônio não muda (cada item conta uma vez só, pela chave "Contar no patrimônio").
+ */
+export function BankInTab({ items, title }: { items: BankInvestment[]; title: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!items.length) return null;
+  const total = items.filter((i) => i.counted).reduce((s, i) => s + i.balanceCents, 0);
+  return (
+    <>
+      <div className="section">{title} · {formatBRL(total)}</div>
+      <div className="card" style={{ padding: '4px 14px' }}>
+        {items.map((i) => <Row key={i.id} i={i} open={open === i.id} onToggle={() => setOpen(open === i.id ? null : i.id)} />)}
+      </div>
+    </>
   );
 }

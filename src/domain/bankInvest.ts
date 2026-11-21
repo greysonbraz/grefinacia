@@ -107,3 +107,12 @@ export function groupByType(list: BankInvestment[]): { label: string; cents: Cen
   }
   return [...g.entries()].map(([label, items]) => ({ label, items: items.sort((a, b) => b.balanceCents - a.balanceCents), cents: items.filter((x) => x.counted).reduce((s, x) => s + x.balanceCents, 0) })).sort((a, b) => b.cents - a.cents);
 }
+
+const BOLSA_SUB = new Set(['STOCK', 'BDR', 'REAL_ESTATE_FUND', 'ETF', 'OPTION', 'DERIVATIVES']);
+const FIXA_SUB = new Set(['CDB', 'LCI', 'LCA', 'LC', 'CRI', 'CRA', 'LIG', 'LF', 'TREASURY', 'DEBENTURES']);
+/** Em qual aba de Investimentos o item do banco também aparece (Bolsa, Renda fixa ou nenhuma das duas). */
+export function bankTab(i: BankInvestment): 'bolsa' | 'fixa' | null {
+  if (BOLSA_SUB.has(i.subtype ?? '') || i.type === 'EQUITY' || i.type === 'ETF') return 'bolsa';
+  if (FIXA_SUB.has(i.subtype ?? '') || i.type === 'FIXED_INCOME') return 'fixa';
+  return null;
+}
