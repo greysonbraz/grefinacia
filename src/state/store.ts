@@ -1,4 +1,5 @@
 import { repairCardInstallments } from '../domain/installments';
+import { planCardMerge } from '../domain/cardmerge';
 import { useSyncExternalStore } from 'react';
 import type { AppData, Cents, CollectionName, CryptoOperation, ImportBatch, DividendEvent, HistoryPoint, MarketHistory, Operation, Settings, Transaction, Transfer, ISODate, Goal } from '../lib/types';
 import { DATA_KEYS, DEFAULT_SETTINGS, emptyData } from '../lib/defaults';
@@ -262,6 +263,7 @@ export async function init(): Promise<void> {
   }
   await rollDay();
   await ensureLinkedCards();
+  await mergeBankCards();
   await repairInstallments();
   if (isNative()) void autoRefreshDividends().then(() => autoSyncBank()).then(() => ((state.data.usdHoldings ?? []).length || (state.data.bankInvestments ?? []).some((i) => i.currency === 'USD') ? refreshDollar() : undefined)).catch(() => undefined);
 }
@@ -710,7 +712,11 @@ export async function linkBankAccount(pluggyAccountId: string, choice: string): 
   if (choice === 'ignorar') link = { kind: 'ignorar' };
   else if (choice.startsWith('conta:')) link = { kind: 'conta', id: choice.slice(6) };
   else if (choice.startsWith('cartao:')) link = { kind: 'cartao', id: choice.slice(7) };
-  else if (acc.type === 'CREDIT') {
+  else if (acc.type === 'CREDIT' && Object.entries(state.settings.bank.links).some(([id, l]) => l.kind === 'cartao' && l.id && state.data.cards.some((c) => c.id === l.id) && state.bank.accounts.find((x) => x.id === id)?.itemId === acc.itemId)) {
+    // um cartão só por banco: outro cartão do mesmo banco entra no cartão que já existe
+    const same = Object.entries(state.settings.bank.links).find(([id, l]) => l.kind === 'cartao' && l.id && state.data.cards.some((c) => c.id === l.id) && state.bank.accounts.find((x) => x.id === id)?.itemId === acc.itemId)!;
+    link = { kind: 'cartao', id: same[1].id };
+  } else if (acc.type === 'CREDIT') {
     // o cartão é pago pela conta do mesmo banco, se ela já estiver vinculada
     const sameBank = state.bank.accounts.find((a) => a.itemId === acc.itemId && a.type !== 'CREDIT' && state.settings.bank.links[a.id]?.kind === 'conta');
     const card = newCardFor(acc, acc.bankName, uid('cd_'), (sameBank && state.settings.bank.links[sameBank.id]?.id) || defaultAccountId());
@@ -737,6 +743,7 @@ export async function syncBank(): Promise<{ imported: number; accounts: number; 
     const loaded = await loadBankAccounts();
     errors.push(...loaded.errors);
     await ensureLinkedCards();
+    await mergeBankCards();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await saveBank({ lastAttempt: attempt, error: msg });
@@ -1024,4 +1031,21 @@ export async function ensureLinkedCards(): Promise<number> {
   });
   if (cards.length) await upsert('cards', cards);
   return cards.length;
+}
+
+/** Um cartão só por banco: junta cartões repetidos do mesmo banco no cartão ligado à conexão (cópia de segurança antes). */
+export async function mergeBankCards(): Promise<number> {
+  const { map, links } = planCardMerge(state.data, state.settings.bank.links, state.bank.accounts);
+  if (!map.size) return 0;
+  await db.createSafetyCopy('importacao', state.data, state.settings);
+  const to = (id?: string) => (id && map.has(id) ? map.get(id)! : id);
+  const txs = state.data.transactions.filter((t) => t.cardId && map.has(t.cardId)).map((t) => ({ ...t, cardId: to(t.cardId) }));
+  const recs = state.data.recurrences.filter((r) => r.cardId && map.has(r.cardId)).map((r) => ({ ...r, cardId: to(r.cardId) }));
+  const imps = state.data.imports.filter((b) => b.cardId && map.has(b.cardId)).map((b) => ({ ...b, cardId: to(b.cardId) }));
+  if (txs.length) await upsert('transactions', txs);
+  if (recs.length) await upsert('recurrences', recs);
+  if (imps.length) await upsert('imports', imps);
+  if (JSON.stringify(links) !== JSON.stringify(state.settings.bank.links)) await updateSettings({ bank: { ...state.settings.bank, links } });
+  await remove('cards', [...map.keys()].filter((id) => state.data.cards.some((c) => c.id === id)));
+  return map.size;
 }
