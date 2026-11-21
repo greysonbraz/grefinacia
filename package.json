@@ -1,7 +1,7 @@
 {
   "name": "grefinacia",
   "private": true,
-  "version": "1.27.1",
+  "version": "1.27.2",
   "type": "module",
   "description": "Controle financeiro pessoal e investimentos (B3) para Android",
   "scripts": {

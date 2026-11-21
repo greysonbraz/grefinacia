@@ -554,7 +554,7 @@ function CategoryView({ title, ids, months, onClose }: { title: string; ids: str
               <div className="row selrow" key={t.id}>
                 <label className="check"><input type="checkbox" checked={sel.has(t.id)} onChange={() => toggle(t.id)} aria-label={`Marcar ${t.description}`} /></label>
                 <button className="selmain" onClick={() => setDetail(t)}>
-                  <div className="mid"><div className="t">{t.description}</div><div className="s">{formatDateBR(t.date)} · {data.categories.find((c) => c.id === t.categoryId)?.name ?? '—'}</div></div>
+                  <div className="mid"><div className="t">{parcelOf(t.description)?.base ?? t.description}</div><div className="s">{(() => { const p = t.installment ?? (parcelOf(t.description) ? { number: parcelOf(t.description)!.n, total: parcelOf(t.description)!.m } : null); return p && p.total > 1 ? <span className="xbadge">{p.number}/{p.total}</span> : null; })()}{formatDateBR(t.date)} · {data.categories.find((c) => c.id === t.categoryId)?.name ?? '—'}</div></div>
                   <div className="end"><div className="num">−{formatBRL(t.amountCents)}</div></div>
                 </button>
               </div>

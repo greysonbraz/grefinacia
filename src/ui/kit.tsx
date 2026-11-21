@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Chart, LineController, BarController, DoughnutController, LineElement, PointElement, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Filler, type ChartConfiguration } from 'chart.js';
 import * as L from 'lucide-react';
 import { brandMark } from '../domain/catview';
-import { formatBRL, formatCompact, formatPct } from '../lib/money';
+import { formatBRL, formatCompact, formatPct, maskMoneyInput } from '../lib/money';
 import { addMonthsYM, capFirst, monthLong } from '../lib/dates';
 import { quoteFreshness } from '../domain/market';
 import { useStore } from '../state/store';
@@ -61,7 +61,7 @@ export function Field({ label, children, error, hint }: { label: string; childre
   );
 }
 export function MoneyInput({ value, onChange, placeholder = '0,00', name, autoFocus }: { value: string; onChange: (v: string) => void; placeholder?: string; name?: string; autoFocus?: boolean }) {
-  return <input name={name} inputMode="decimal" value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value.replace(/[^0-9.,-]/g, ''))} />;
+  return <input name={name} inputMode="numeric" value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(maskMoneyInput(value, e.target.value))} />;
 }
 export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="tog" onClick={() => onChange(!on)} />;
